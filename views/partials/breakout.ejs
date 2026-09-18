@@ -117,7 +117,7 @@
 <h2>Discussion</h2>
 </div>
 <div class="comment-list" data-breakout-comment-list>
-<% (group.comments || []).forEach(comment => { %>
+<% (group.comments || []).filter(comment => !comment.reported).forEach(comment => { %>
 <div class="comment-entry" data-comment-id="<%= comment.id %>">
 <strong>
 <%= comment.author %>
@@ -129,6 +129,7 @@
 </i>
 </button>
 </form>
+<% } else { %><form data-live-form action="/org/<%= selectedOrg.id %>/content-reports" method="post"><input type="hidden" name="contentId" value="<%= comment.id %>"><button class="icon-button" type="submit" aria-label="Report comment"><i data-lucide="flag"></i></button></form>
 <% } %>
 </div>
 <% }) %>

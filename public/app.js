@@ -9,7 +9,8 @@ function courseRoot() { return document.querySelector('[data-course-live]'); }
 function itemCard(item) {
   const typeClass = String(item.type || '').toLowerCase().replace(/[^a-z]/g, '-');
   const root = courseRoot(); const orgId = escapeHtml(root.dataset.orgId); const itemId = escapeHtml(item.id); const projectAction = item.type === 'Project' ? `<form data-live-form action="/groups" method="post"><input type="hidden" name="orgId" value="${orgId}"><input type="hidden" name="courseId" value="${escapeHtml(root.dataset.courseId)}"><input type="hidden" name="itemId" value="${itemId}"><button class="text-button breakout-action" type="submit"><i data-lucide="users-round"></i> Create Breakout Group</button></form>` : ''; const downvoteAction = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${orgId}/items/${itemId}/downvote" method="post"><button class="text-button" type="submit"><i data-lucide="thumbs-down"></i> <span data-downvote-count>${(item.downvotedBy || []).length}</span></button></form>` : '';
-  return `<article class="feed-card feed-item" data-item-id="${itemId}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(item.due)}</span><h3>${escapeHtml(item.title)}</h3></div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span></div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="text-button" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="text-button" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>0</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><button class="button primary" type="submit">Reply</button></form></div></details></div></article>`;
+  const dragHandle = root.dataset.canEdit === 'true' ? `<button class="icon-button course-drag-handle" type="button" aria-label="Move ${escapeHtml(item.title)}"><i data-lucide="grip-vertical"></i></button>` : '';
+  return `<article class="feed-card feed-item" data-item-id="${itemId}" data-position="${Number(item.position) || 0}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(item.due)}</span><h3>${escapeHtml(item.title)}</h3></div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="text-button" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="text-button" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>0</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><button class="button primary" type="submit">Reply</button></form></div></details></div></article>`;
 }
 
 function appendUniqueComment(itemId, comment) {
@@ -39,16 +40,42 @@ function connectLiveCourse() {
   const root = courseRoot(); if (!root || typeof io !== 'function') return;
   liveState.socket?.disconnect(); liveState.socket = io();
   liveState.socket.on('connect', () => { liveState.socket.emit('course:join', { orgId: root.dataset.orgId, courseId: root.dataset.courseId }); liveState.socket.emit('group:join', { orgId: root.dataset.orgId }); });
-  liveState.socket.on('course:item-created', ({ item }) => { const list = root.querySelector('[data-feed-list]'); if (!list || !item || list.querySelector(`[data-item-id="${CSS.escape(item.id)}"]`)) return; root.querySelector('[data-empty-feed]')?.remove(); list.insertAdjacentHTML('afterbegin', itemCard(item)); bindLiveForms(list.querySelector(`[data-item-id="${CSS.escape(item.id)}"]`)); lucide.createIcons(); });
+  liveState.socket.on('course:item-created', ({ item }) => { const list = root.querySelector('[data-feed-list]'); if (!list || !item || list.querySelector(`[data-item-id="${CSS.escape(item.id)}"]`)) return; root.querySelector('[data-empty-feed]')?.remove(); list.insertAdjacentHTML('afterbegin', itemCard(item)); bindLiveForms(list.querySelector(`[data-item-id="${CSS.escape(item.id)}"]`)); bindCourseReorder(root); lucide.createIcons(); });
   liveState.socket.on('item:verification-changed', ({ itemId, verifiedBy }) => { const count = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-verify-count]`); if (count) count.textContent = verifiedBy.length; });
-  liveState.socket.on('item:downvote-changed', ({ itemId, downvotedBy }) => { const count = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = downvotedBy.length; });
+  liveState.socket.on('item:downvote-changed', ({ itemId, downvoteCount }) => { const count = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count && downvoteCount !== undefined) count.textContent = downvoteCount; });
   liveState.socket.on('item:updated', ({ item }) => { const card = root.querySelector(`[data-item-id="${CSS.escape(item?.id || '')}"]`); if (card && item) { card.querySelector('h3').textContent = item.title; card.querySelector('.feed-source').textContent = `${item.type} · ${item.due}`; } });
   liveState.socket.on('item:deleted', ({ itemId }) => root.querySelector(`[data-item-id="${CSS.escape(itemId)}"]`)?.remove());
+  liveState.socket.on('course:items-reordered', ({ items }) => { if (!items) return; const list = root.querySelector('[data-feed-list]'); const positions = new Map(items.map((item) => [item.id, item.position])); [...list.querySelectorAll('[data-item-id]')].sort((left, right) => (positions.get(left.dataset.itemId) ?? 0) - (positions.get(right.dataset.itemId) ?? 0)).forEach((card, index) => { card.dataset.position = positions.get(card.dataset.itemId) ?? index; list.appendChild(card); }); });
   liveState.socket.on('item:comment-added', ({ itemId, comment }) => appendUniqueComment(itemId, comment));
   liveState.socket.on('item:comment-deleted', ({ itemId, commentId }) => root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`)?.remove());
-  liveState.socket.on('board:card-created', ({ card }) => { if (!card) return; const list = root.querySelector('[data-board-list]'); if (!list || list.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`)) return; root.querySelector('[data-empty-board]')?.remove(); list.insertAdjacentHTML('beforeend', `<div class="claim-row" data-card-id="${escapeHtml(card.id)}"><span><strong>${escapeHtml(card.title)}</strong><small>${escapeHtml(card.status)}</small></span><i data-lucide="arrow-right"></i></div>`); lucide.createIcons(); });
-  liveState.socket.on('resource:created', ({ resource }) => { if (!resource) return; const list = root.querySelector('[data-resource-list]'); if (!list || list.querySelector(`[data-resource-id="${CSS.escape(resource.id)}"]`)) return; list.insertAdjacentHTML('beforeend', `<a class="resource-link" data-resource-id="${escapeHtml(resource.id)}" href="${escapeHtml(resource.url)}" target="_blank" rel="noreferrer"><i data-lucide="external-link"></i><span>${escapeHtml(resource.title)}</span></a>`); lucide.createIcons(); });
+  liveState.socket.on('item:comment-reported', ({ itemId, commentId }) => root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`)?.remove());
+  liveState.socket.on('board:card-created', ({ card }) => { if (!card) return; const list = root.querySelector('[data-board-list]'); if (!list || list.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`)) return; root.querySelector('[data-empty-board]')?.remove(); const remove = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/course/${escapeHtml(root.dataset.courseId)}/board/${escapeHtml(card.id)}/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete board task"><i data-lucide="trash-2"></i></button></form>` : '<i data-lucide="arrow-right"></i>'; list.insertAdjacentHTML('beforeend', `<div class="claim-row" data-card-id="${escapeHtml(card.id)}"><span><strong>${escapeHtml(card.title)}</strong><small>${escapeHtml(card.status)}</small></span>${remove}</div>`); bindLiveForms(list.lastElementChild); lucide.createIcons(); });
+  liveState.socket.on('resource:created', ({ resource }) => { if (!resource) return; const list = root.querySelector('[data-resource-list]'); if (!list || list.querySelector(`[data-resource-id="${CSS.escape(resource.id)}"]`)) return; const remove = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/course/${escapeHtml(root.dataset.courseId)}/resources/${escapeHtml(resource.id)}/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete resource"><i data-lucide="trash-2"></i></button></form>` : ''; list.insertAdjacentHTML('beforeend', `<div class="resource-row" data-resource-id="${escapeHtml(resource.id)}"><a class="resource-link" href="${escapeHtml(resource.url)}" target="_blank" rel="noreferrer"><i data-lucide="external-link"></i><span>${escapeHtml(resource.title)}</span></a>${remove}</div>`); bindLiveForms(list.lastElementChild); lucide.createIcons(); });
+  liveState.socket.on('resource:deleted', ({ resourceId }) => root.querySelector(`[data-resource-id="${CSS.escape(resourceId)}"]`)?.remove());
   liveState.socket.on('subgroup:created', ({ group }) => { if (!group || group.courseId !== root.dataset.courseId) return; const list = root.querySelector('[data-subgroup-list]'); if (!list || list.querySelector(`[data-group-id="${CSS.escape(group.id)}"]`)) return; list.insertAdjacentHTML('beforeend', `<a class="claim-row" href="/org/${escapeHtml(root.dataset.orgId)}/breakout/${escapeHtml(group.id)}" data-group-id="${escapeHtml(group.id)}"><span><strong>${escapeHtml(group.name)}</strong><small>${group.members.length}/${group.limit} members</small></span><i data-lucide="users-round"></i></a>`); lucide.createIcons(); });
+}
+
+function persistCourseOrder(root) {
+  const list = root.querySelector('[data-feed-list]'); if (!list) return;
+  const order = [...list.querySelectorAll('[data-item-id]')].map((card, index) => { card.dataset.position = index; return card.dataset.itemId; });
+  fetch(`/org/${root.dataset.orgId}/course/${root.dataset.courseId}/items/reorder`, { method: 'POST', body: new URLSearchParams({ order: order.join(',') }), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }).then(async (response) => { const payload = await response.json(); if (!response.ok || payload.error) { window.dispatchEvent(new CustomEvent('live-error', { detail: payload.error || 'Could not reorder course tasks.' })); } });
+}
+
+function bindCourseReorder(root) {
+  if (!root || root.dataset.canEdit !== 'true') return;
+  const list = root.querySelector('[data-feed-list]'); if (!list) return;
+  list.querySelectorAll('[data-item-id]').forEach((card) => {
+    if (card.dataset.reorderBound === 'true') return;
+    card.dataset.reorderBound = 'true';
+    const grip = card.querySelector('.course-drag-handle'); if (!grip) return;
+    grip.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault(); liveState.courseDragged = card; card.classList.add('is-dragging'); grip.setPointerCapture?.(event.pointerId);
+      const move = (moveEvent) => { const dragged = liveState.courseDragged; if (!dragged) return; const target = [...list.querySelectorAll('[data-item-id]')].filter((candidate) => candidate !== dragged).find((candidate) => moveEvent.clientY < candidate.getBoundingClientRect().top + candidate.offsetHeight / 2); if (target) list.insertBefore(dragged, target); else list.appendChild(dragged); };
+      const finish = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', finish); document.removeEventListener('pointercancel', finish); card.classList.remove('is-dragging'); liveState.courseDragged = null; persistCourseOrder(root); };
+      document.addEventListener('pointermove', move); document.addEventListener('pointerup', finish, { once: true }); document.addEventListener('pointercancel', finish, { once: true });
+    });
+  });
 }
 
 function connectLiveBreakout() {
@@ -61,6 +88,78 @@ function connectLiveBreakout() {
   liveState.socket.on('breakout:board-deleted', ({ groupId }) => { if (groupId === root.dataset.groupId) root.querySelector('[data-breakout-task-list]').innerHTML = '<div class="empty-panel" data-empty-breakout-board><h3>The board is clear</h3></div>'; });
   liveState.socket.on('breakout:comment-created', ({ groupId, comment }) => { if (groupId !== root.dataset.groupId || !comment) return; const list = root.querySelector('[data-breakout-comment-list]'); if (list && !list.querySelector(`[data-comment-id="${CSS.escape(comment.id)}"]`)) list.insertAdjacentHTML('beforeend', `<div class="comment-entry" data-comment-id="${escapeHtml(comment.id)}"><strong>${escapeHtml(comment.author)}</strong> ${escapeHtml(comment.text)}</div>`); });
   liveState.socket.on('breakout:comment-deleted', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)?.remove(); });
+  liveState.socket.on('breakout:comment-reported', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)?.remove(); });
+}
+
+function todoList() { return document.querySelector('[data-live-todo-list]'); }
+function todoImportance(due) {
+  if (!due || due === 'No date') return 'Unscheduled';
+  const today = new Date(); today.setHours(0, 0, 0, 0); const date = new Date(`${due}T00:00:00`); const days = Math.round((date - today) / 86400000);
+  if (days < 0) return 'Overdue'; if (days === 0) return 'Today'; if (days <= 3) return 'Soon'; return 'Later';
+}
+function todoTaskMarkup(task) {
+  const importance = task.importance || todoImportance(task.due); const priority = task.priority || 'Normal';
+  return `<article class="private-task ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}" data-due="${escapeHtml(task.due)}" data-importance="${importance}" data-position="${Number(task.position) || 0}" draggable="false"><form class="toggle-task-form" action="/tasks/${escapeHtml(task.id)}/toggle" method="post" data-live-form><button class="task-check" aria-label="Toggle ${escapeHtml(task.title)}"><i data-lucide="check"></i></button></form><div class="private-task-copy"><h3>${escapeHtml(task.title)}</h3><span><i data-lucide="link-2"></i> ${escapeHtml(task.source)}</span><small>Due ${escapeHtml(task.due)} · ${importance}</small></div><div class="priority-menu"><button class="priority-flag" type="button" aria-haspopup="menu" aria-expanded="false"><i data-lucide="flag"></i> <span>${escapeHtml(priority)}</span><i data-lucide="chevron-down"></i></button><div class="priority-options" role="menu"><button type="button" data-priority="Low">Low</button><button type="button" data-priority="Normal">Normal</button><button type="button" data-priority="Medium">Medium</button><button type="button" data-priority="High">High</button></div></div><form data-live-form action="/tasks/${escapeHtml(task.id)}/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete task"><i data-lucide="trash-2"></i></button></form><button class="icon-button drag-handle" aria-label="Move task" type="button"><i data-lucide="grip-vertical"></i></button></article>`;
+}
+function sortTodoDom(compare) { const list = todoList(); if (!list) return; [...list.querySelectorAll('.private-task')].sort(compare).forEach((task) => list.appendChild(task)); }
+function persistTodoOrder() {
+  const list = todoList(); if (!list) return;
+  const order = [...list.querySelectorAll('.private-task')].map((task, index) => { task.dataset.position = index; return task.dataset.taskId; });
+  fetch('/tasks/reorder', { method: 'POST', body: new URLSearchParams({ order: order.join(',') }), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } });
+}
+function applyTodoFilter(filter = 'all') {
+  const list = todoList(); if (!list) return;
+  document.querySelectorAll('[data-todo-filter]').forEach((link) => link.classList.toggle('active', link.dataset.todoFilter === filter));
+  list.querySelectorAll('.private-task').forEach((task) => { task.hidden = filter === 'pending' ? task.classList.contains('is-done') : filter === 'completed' ? !task.classList.contains('is-done') : false; });
+}
+function toggleFocusMode(button) {
+  const list = todoList(); if (!list) return;
+  const rank = { Overdue: 0, Today: 1, Soon: 2, Later: 3, Unscheduled: 4 };
+  const active = button.classList.toggle('active');
+  if (active) sortTodoDom((left, right) => (rank[left.dataset.importance] - rank[right.dataset.importance]) || (new Date(`${left.dataset.due}T00:00:00`) - new Date(`${right.dataset.due}T00:00:00`)) || (Number(left.dataset.position) - Number(right.dataset.position)));
+  else sortTodoDom((left, right) => Number(left.dataset.position) - Number(right.dataset.position));
+}
+function enhanceTodoTasks() {
+  const list = todoList(); if (!list) return;
+  list.querySelectorAll('.private-task').forEach((task, index) => {
+    task.draggable = false; task.dataset.position ||= index; task.dataset.due ||= task.querySelector('small')?.textContent.replace(/^Due\s+/, '').split(' · ')[0] || 'No date'; task.dataset.importance ||= todoImportance(task.dataset.due);
+    const priority = task.querySelector('.priority-flag');
+    if (priority && !priority.closest('.priority-menu')) { const value = priority.textContent.trim(); const menu = document.createElement('div'); menu.className = 'priority-menu'; menu.innerHTML = `<button class="priority-flag" type="button" aria-haspopup="menu" aria-expanded="false"><i data-lucide="flag"></i> <span>${escapeHtml(value)}</span><i data-lucide="chevron-down"></i></button><div class="priority-options" role="menu"><button type="button" data-priority="Low">Low</button><button type="button" data-priority="Normal">Normal</button><button type="button" data-priority="Medium">Medium</button><button type="button" data-priority="High">High</button></div>`; priority.replaceWith(menu); }
+  });
+  list.querySelectorAll('.private-task').forEach((task) => {
+    const grip = task.querySelector('.drag-handle, button[aria-label="Move task"]');
+    grip?.classList.add('drag-handle');
+    grip?.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault(); liveState.draggedTask = task; task.classList.add('is-dragging'); grip.setPointerCapture?.(event.pointerId);
+      const move = (moveEvent) => {
+        const dragged = liveState.draggedTask; if (!dragged) return;
+        const target = [...list.querySelectorAll('.private-task')].filter((candidate) => candidate !== dragged).find((candidate) => moveEvent.clientY < candidate.getBoundingClientRect().top + candidate.offsetHeight / 2);
+        if (target) list.insertBefore(dragged, target); else list.appendChild(dragged);
+      };
+      const finish = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', finish); document.removeEventListener('pointercancel', finish); task.classList.remove('is-dragging'); liveState.draggedTask = null; persistTodoOrder(); };
+      document.addEventListener('pointermove', move); document.addEventListener('pointerup', finish, { once: true }); document.addEventListener('pointercancel', finish, { once: true });
+    });
+  });
+  lucide.createIcons();
+}
+function connectLiveTodo() {
+  const list = todoList(); if (!list || typeof io !== 'function') return;
+  liveState.socket?.disconnect(); liveState.socket = io(); liveState.socket.on('connect', () => liveState.socket.emit('todo:join'));
+  liveState.socket.on('todo:task-added', ({ task }) => { if (!task || list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`)) return; list.querySelector('.empty-panel')?.remove(); list.insertAdjacentHTML('beforeend', todoTaskMarkup(task)); bindLiveForms(list.lastElementChild); enhanceTodoTasks(); lucide.createIcons(); });
+  liveState.socket.on('todo:task-updated', ({ task }) => { const row = task && list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`); if (!row) return; row.outerHTML = todoTaskMarkup(task); bindLiveForms(list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`)); enhanceTodoTasks(); lucide.createIcons(); syncTodoSummary(); });
+  liveState.socket.on('todo:task-deleted', ({ taskId }) => { list.querySelector(`[data-task-id="${CSS.escape(taskId)}"]`)?.remove(); syncTodoSummary(); });
+  liveState.socket.on('todo:reordered', ({ tasks }) => { if (!tasks) return; const byId = new Map(tasks.map((task) => [task.id, task])); [...list.querySelectorAll('.private-task')].sort((left, right) => byId.get(left.dataset.taskId).position - byId.get(right.dataset.taskId).position).forEach((task) => list.appendChild(task)); });
+}
+function bindTodoControls() {
+  enhanceTodoTasks();
+  document.querySelectorAll('[data-todo-filter]').forEach((link) => link.addEventListener('click', (event) => { event.preventDefault(); applyTodoFilter(link.dataset.todoFilter); history.replaceState({}, '', `/todo${link.dataset.todoFilter === 'all' ? '' : `?filter=${link.dataset.todoFilter}`}`); }));
+  document.querySelector('[data-focus-mode]')?.addEventListener('click', (event) => toggleFocusMode(event.currentTarget));
+  document.querySelectorAll('.priority-menu').forEach((menu) => {
+    menu.querySelector('.priority-flag')?.addEventListener('click', () => { const open = menu.classList.toggle('open'); menu.querySelector('.priority-flag').setAttribute('aria-expanded', String(open)); });
+    menu.querySelectorAll('[data-priority]').forEach((option) => option.addEventListener('click', async () => { const row = menu.closest('.private-task'); const response = await fetch(`/tasks/${row.dataset.taskId}/priority`, { method: 'POST', body: new URLSearchParams({ priority: option.dataset.priority }), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); if (!response.ok) return; menu.querySelector('.priority-flag span').textContent = option.dataset.priority; menu.classList.remove('open'); menu.querySelector('.priority-flag').setAttribute('aria-expanded', 'false'); }));
+  });
+  const filter = new URLSearchParams(window.location.search).get('filter') || 'all'; applyTodoFilter(filter);
 }
 
 async function submitLiveForm(form) {
@@ -75,13 +174,14 @@ async function submitLiveForm(form) {
     if (payload.groupUrl) { window.location.assign(payload.groupUrl); return; }
     if (payload.verifiedBy) { const itemId = form.action.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-verify-count]`); if (count) count.textContent = payload.verifiedBy.length; }
     if (payload.downvotedBy) { const itemId = form.action.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = payload.downvotedBy.length; }
+    if (payload.downvoteCount !== undefined) { const itemId = form.action.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = payload.downvoteCount; }
     if (payload.comment) { const itemId = form.action.split('/').at(-2); document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-list] [data-comment-id="${CSS.escape(optimisticComment?.id || '')}"]`)?.remove(); appendUniqueComment(itemId, payload.comment); }
     if (payload.task) {
       const list = document.querySelector('[data-live-todo-list]'); if (list) {
         const existing = list.querySelector(`[data-task-id="${CSS.escape(payload.task.id)}"]`);
         if (!existing) {
           const empty = list.querySelector('.empty-panel'); empty?.remove();
-          const article = document.createElement('article'); article.className = `private-task ${payload.task.done ? 'is-done' : ''}`; article.dataset.taskId = payload.task.id; article.innerHTML = `<form class="toggle-task-form" action="/tasks/${payload.task.id}/toggle" method="post" data-live-form><button class="task-check" aria-label="Toggle ${escapeHtml(payload.task.title)}"><i data-lucide="check"></i></button></form><div class="private-task-copy"><h3>${escapeHtml(payload.task.title)}</h3><span><i data-lucide="link-2"></i> ${escapeHtml(payload.task.source)}</span><small>Due ${escapeHtml(payload.task.due)}</small></div><span class="priority-flag"><i data-lucide="flag"></i> ${escapeHtml(payload.task.priority || 'Normal')}</span><button class="icon-button" aria-label="Move task" type="button"><i data-lucide="grip-vertical"></i></button>`; list.prepend(article); article.querySelector('.toggle-task-form')?.addEventListener('submit', (event) => { event.preventDefault(); submitLiveForm(event.currentTarget); });
+          list.insertAdjacentHTML('afterbegin', todoTaskMarkup(payload.task)); bindLiveForms(list.firstElementChild); enhanceTodoTasks();
           form.reset(); document.getElementById('quick-task')?.classList.remove('open');
         }
       }
@@ -89,6 +189,15 @@ async function submitLiveForm(form) {
     if (payload.task && isTaskToggle) {
       const row = document.querySelector(`[data-task-id="${CSS.escape(payload.task.id)}"]`);
       if (row) row.classList.toggle('is-done', Boolean(payload.task.done));
+    }
+    if (payload.deleted && payload.taskId) document.querySelector(`[data-task-id="${CSS.escape(payload.taskId)}"]`)?.remove();
+    if (payload.deleted && payload.resourceId) document.querySelector(`[data-resource-id="${CSS.escape(payload.resourceId)}"]`)?.remove();
+    if (payload.deleted && payload.itemId) document.querySelector(`[data-item-id="${CSS.escape(payload.itemId)}"]`)?.remove();
+    if (payload.deleted && payload.cardId) document.querySelector(`[data-card-id="${CSS.escape(payload.cardId)}"]`)?.remove();
+    if (payload.reported && payload.commentId) document.querySelector(`[data-comment-id="${CSS.escape(payload.commentId)}"]`)?.remove();
+    if (payload.todoPendingCount !== undefined) {
+      const countTarget = document.querySelector('[data-live-todo-count]');
+      if (countTarget) countTarget.textContent = payload.todoPendingCount;
     }
     if (payload.item) { form.reset(); }
     if (payload.card || payload.resource) form.reset();
@@ -100,13 +209,28 @@ async function submitLiveForm(form) {
 }
 
 function syncTodoSummary() {
-  const list = document.querySelector('[data-live-todo-list]'); const summary = document.querySelector('[data-todo-summary]'); if (!list || !summary) return;
+  const list = document.querySelector('[data-live-todo-list]'); const summary = document.querySelector('[data-todo-summary]'); const countTarget = document.querySelector('[data-live-todo-count]');
+  if (!list) return;
   const count = list.querySelectorAll('.private-task:not(.is-done)').length;
-  summary.textContent = `${count} thing${count === 1 ? '' : 's'} still in motion`;
+  if (summary) summary.textContent = `${count} thing${count === 1 ? '' : 's'} still in motion`;
+  if (countTarget) countTarget.textContent = count;
 }
 
 function bindLiveForms(scope = document) {
   scope.querySelectorAll('[data-live-form]').forEach((form) => form.addEventListener('submit', (event) => { event.preventDefault(); submitLiveForm(form); }));
+}
+
+function showLiveError(message) {
+  document.querySelector('[data-live-error]')?.remove();
+  const alert = document.createElement('div');
+  alert.className = 'live-error';
+  alert.dataset.liveError = 'true';
+  alert.setAttribute('role', 'alert');
+  alert.innerHTML = `<i data-lucide="triangle-alert"></i><span>${escapeHtml(message)}</span><button type="button" aria-label="Dismiss message"><i data-lucide="x"></i></button>`;
+  alert.querySelector('button').addEventListener('click', () => alert.remove());
+  document.body.appendChild(alert);
+  lucide.createIcons();
+  window.setTimeout(() => alert.remove(), 7000);
 }
 
 function bindInteractions() {
@@ -117,13 +241,12 @@ function bindInteractions() {
   document.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => { const target = document.getElementById(button.dataset.open); target?.classList.add('open'); target?.querySelector('input[name="title"]')?.focus(); }));
   document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => { button.closest('.modal-backdrop')?.classList.remove('open'); }));
   document.querySelectorAll('.modal-backdrop').forEach((backdrop) => backdrop.addEventListener('click', (event) => { if (event.target === backdrop) backdrop.classList.remove('open'); }));
-  document.querySelectorAll('.toggle-task-form').forEach((form) => { form.addEventListener('submit', (event) => { event.preventDefault(); submitLiveForm(form); }); });
-  document.querySelectorAll('[data-live-todo-list] .private-task').forEach((task) => { task.querySelector('.task-check')?.addEventListener('click', () => { task.classList.toggle('is-done'); syncTodoSummary(); }); });
-  document.querySelectorAll('[data-live-todo-list] .private-task').forEach((task) => { task.closest('form')?.addEventListener('submit', (event) => { event.preventDefault(); const form = event.currentTarget; submitLiveForm(form); }); });
   const hash = window.location.hash.slice(1); if (courseRoot() && ['feed', 'board', 'resources'].includes(hash)) setCourseTab(hash, false);
   syncTodoSummary();
-  lucide.createIcons(); connectLiveCourse(); connectLiveBreakout();
+  lucide.createIcons(); bindTodoControls(); connectLiveCourse(); bindCourseReorder(courseRoot()); connectLiveBreakout(); connectLiveTodo();
 }
+
+window.addEventListener('live-error', (event) => showLiveError(event.detail || 'Action failed. Please try again.'));
 
 function isInternalGetLink(link) { return link.origin === window.location.origin && link.pathname && !link.pathname.startsWith('/share/') && !link.hasAttribute('download') && link.target !== '_blank' && !link.dataset.noRouter; }
 async function navigate(url, pushState = true) { routeProgress.classList.add('active'); document.body.classList.add('is-navigating'); try { const response = await fetch(url, { headers: { 'X-Studyline-Navigation': 'true' } }); if (!response.ok) throw new Error(`Navigation failed: ${response.status}`); const nextDocument = new DOMParser().parseFromString(await response.text(), 'text/html'); nextDocument.body.querySelectorAll('script').forEach((script) => script.remove()); liveState.socket?.disconnect(); document.body.innerHTML = nextDocument.body.innerHTML; document.body.appendChild(routeProgress); document.title = nextDocument.title; if (pushState) window.history.pushState({}, '', url); window.scrollTo({ top: 0, behavior: 'instant' }); bindInteractions(); requestAnimationFrame(() => document.body.classList.remove('is-navigating')); } catch (error) { window.location.assign(url); } finally { routeProgress.classList.remove('active'); } }

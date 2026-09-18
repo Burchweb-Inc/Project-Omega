@@ -1,0 +1,22 @@
+<section class="content-wrap admin-page">
+  <a class="back-link" href="/group/<%= selectedOrg.slug %>"><i data-lucide="arrow-left"></i> <%= selectedOrg.name %></a>
+  <div class="page-heading hero-heading">
+    <div><p class="eyebrow">GROUP ADMINISTRATION</p><h1>Admin console</h1><p class="lead">Review shared activity, manage people, and keep this group healthy.</p></div>
+    <div class="admin-actions"><a class="button secondary" href="/org/<%= selectedOrg.id %>/people"><i data-lucide="users-round"></i> People</a><a class="button secondary" href="/org/<%= selectedOrg.id %>/settings"><i data-lucide="settings-2"></i> Settings</a></div>
+  </div>
+  <div class="metric-grid admin-metrics"><article class="metric-card metric-accent"><span>Open reports</span><strong><%= adminStats.openReports %></strong><small>Needs a decision</small></article><article class="metric-card"><span>Recent comments</span><strong><%= adminStats.comments %></strong><small>Across this group</small></article><article class="metric-card"><span>People</span><strong><%= adminStats.members %></strong><small>With access</small></article><article class="metric-card"><span>Courses</span><strong><%= adminStats.courses %></strong><small>In this group</small></article></div>
+  <div class="admin-layout">
+    <section class="feed-panel">
+      <div class="panel-heading"><div><p class="eyebrow">MODERATE</p><h2>Recent comments</h2></div><span class="filter-label"><i data-lucide="clock-3"></i> Newest first</span></div>
+      <div class="moderation-list">
+        <% if (moderationComments.length) { moderationComments.forEach(comment => { %>
+          <article class="moderation-row"><div class="moderation-copy"><div><strong><%= comment.author %></strong><span class="muted"> in <%= comment.source %></span></div><p><%= comment.text %></p><small><%= comment.sourceType %> · <%= new Date(comment.createdAt).toLocaleString() %></small></div><form data-live-form action="/group/<%= selectedOrg.slug %>/admin/comments/<%= comment.id %>/remove" method="post"><button class="icon-button" type="submit" aria-label="Remove comment"><i data-lucide="trash-2"></i></button></form></article>
+        <% }) } else { %><div class="empty-panel"><i data-lucide="message-square"></i><h3>No comments to review</h3><p>New shared discussion will appear here.</p></div><% } %>
+      </div>
+    </section>
+    <aside class="dashboard-rail">
+      <section class="rail-panel"><div class="panel-heading"><div><p class="eyebrow">REVIEW</p><h2>Reports</h2></div><i data-lucide="flag"></i></div><% if (selectedOrg.reports?.filter(report => report.status === 'open').length) { %><div class="mini-tasks"><% selectedOrg.reports.filter(report => report.status === 'open').slice(0, 5).forEach(report => { %><div class="mini-task"><span class="mini-check"></span><div><strong><%= report.reason %></strong><small><%= report.detail %></small></div></div><% }) %></div><% } else { %><p class="muted">No open reports.</p><% } %><a class="rail-link" href="/org/<%= selectedOrg.id %>/settings#safety">Open safety reports <i data-lucide="arrow-up-right"></i></a></section>
+      <section class="rail-panel group-callout"><h3>People and access</h3><p>Manage roles, invitations, and member access from the People page.</p><a class="button secondary full" href="/org/<%= selectedOrg.id %>/people">Manage people</a></section>
+    </aside>
+  </div>
+</section>

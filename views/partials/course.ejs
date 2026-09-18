@@ -1,4 +1,4 @@
-<section class="content-wrap course-page" data-course-live data-org-id="<%= selectedOrg.id %>" data-course-id="<%= course.id %>" data-is-admin="<%= member?.role === 'admin' %>">
+<section class="content-wrap course-page" data-course-live data-org-id="<%= selectedOrg.id %>" data-course-id="<%= course.id %>" data-is-admin="<%= member?.role === 'admin' %>" data-can-edit="<%= canEdit(member) %>">
 <a class="back-link" href="/org/<%= selectedOrg.id %>">
 <i data-lucide="arrow-left">
 </i> <%= selectedOrg.name %>
@@ -60,7 +60,7 @@
 <% } %>
 <div class="feed-list" data-feed-list>
 <% course.items.forEach(item => { %>
-<article class="feed-card feed-item" data-item-id="<%= item.id %>">
+<article class="feed-card feed-item" data-item-id="<%= item.id %>" data-position="<%= item.position || 0 %>">
 <div class="feed-card-head">
 <span class="category-dot category-<%= item.type.toLowerCase().replace(/[^a-z]/g, '-') %>">
 </span>
@@ -78,6 +78,7 @@
 <%= (item.verifiedBy || []).length %>
 </span>
 </span>
+<% if (canEdit(member)) { %><button class="icon-button course-drag-handle" type="button" aria-label="Move <%= item.title %>"><i data-lucide="grip-vertical"></i></button><% } %>
 </div>
 <div class="feed-card-foot">
 <div class="feed-card-actions">
@@ -132,12 +133,12 @@
 </span> comments</summary>
 <div class="comments">
 <div class="comment-list" data-comment-list>
-<% item.comments.forEach(comment => { %>
+<% item.comments.filter(comment => !comment.reported).forEach(comment => { %>
 <div class="comment-entry" data-comment-id="<%= comment.id %>">
 <strong>
 <%= comment.author %>
 </strong> <%= comment.text %>
-<% if (member?.role === 'admin') { %><form data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/comments/<%= comment.id %>/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete comment"><i data-lucide="trash-2"></i></button></form><% } %>
+<% if (member?.role === 'admin') { %><form data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/comments/<%= comment.id %>/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete comment"><i data-lucide="trash-2"></i></button></form><% } else { %><form data-live-form action="/org/<%= selectedOrg.id %>/content-reports" method="post"><input type="hidden" name="contentId" value="<%= comment.id %>"><button class="icon-button" type="submit" aria-label="Report comment"><i data-lucide="flag"></i></button></form><% } %>
 </div>
 <% }) %>
 </div>
@@ -182,8 +183,9 @@
 <%= card.status %>
 </small>
 </span>
-<i data-lucide="arrow-right">
+<% if (member?.role === 'admin') { %><form data-live-form action="/org/<%= selectedOrg.id %>/course/<%= course.id %>/board/<%= card.id %>/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete board task"><i data-lucide="trash-2"></i></button></form><% } else { %><i data-lucide="arrow-right">
 </i>
+<% } %>
 </div>
 <% }) %>
 <% if (!(course.board || []).length) { %>
@@ -233,13 +235,14 @@
 <p class="muted">Keep rubrics, decks, and shared links with the course.</p>
 <div class="resource-list" data-resource-list>
 <% (course.resources || []).forEach(resource => { %>
-<a class="resource-link" data-resource-id="<%= resource.id %>" href="<%= resource.url %>" target="_blank" rel="noreferrer">
+<div class="resource-row" data-resource-id="<%= resource.id %>"><a class="resource-link" href="<%= resource.url %>" target="_blank" rel="noreferrer">
 <i data-lucide="external-link">
 </i>
 <span>
 <%= resource.title %>
 </span>
 </a>
+<% if (member?.role === 'admin') { %><form data-live-form action="/org/<%= selectedOrg.id %>/course/<%= course.id %>/resources/<%= resource.id %>/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete resource"><i data-lucide="trash-2"></i></button></form><% } %></div>
 <% }) %>
 </div>
 <% if (canEdit(member)) { %>

@@ -1,9 +1,9 @@
 <aside class="sidebar" aria-label="Primary navigation">
-  <div class="sidebar-head"><a href="/dashboard" class="wordmark"><span class="mark">H</span><span>studyhub</span></a><span class="privacy-note"><i data-lucide="shield-check"></i> Ad-free workspace</span></div>
+  <div class="sidebar-head"><a href="/dashboard" class="wordmark"><span class="mark">H</span><span>studyhub</span></a><span class="privacy-note"><i data-lucide="shield-check"></i> Your data is encrypted</span></div>
   <nav class="nav-groups">
     <div class="nav-label">MY DESK</div>
     <a class="nav-link <%= page === 'dashboard' ? 'selected' : '' %>" href="/dashboard"><i data-lucide="layout-dashboard"></i><span>Overview</span></a>
-    <a class="nav-link <%= page === 'todo' ? 'selected' : '' %>" href="/todo"><i data-lucide="check-square-2"></i><span>Personal Todo</span><strong class="nav-count"><%= (user.tasks || []).filter(task => !task.done).length %></strong></a>
+    <a class="nav-link <%= page === 'todo' ? 'selected' : '' %>" href="/todo"><i data-lucide="check-square-2"></i><span>Personal Todo</span><strong class="nav-count" data-live-todo-count><%= (user.tasks || []).filter(task => !task.done).length %></strong></a>
     <a class="nav-link <%= page === 'calendar' ? 'selected' : '' %>" href="/calendar"><i data-lucide="calendar-days"></i><span>Academic calendar</span></a>
     <div class="nav-label space-label">YOUR GROUPS</div>
     <a class="nav-link <%= page === 'groups' ? 'selected' : '' %>" href="/groups"><i data-lucide="users-round"></i><span>All groups</span></a>

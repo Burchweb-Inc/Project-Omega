@@ -1,1 +1,55 @@
-<section class="content-wrap todo-page"><div class="page-heading hero-heading"><div><p class="eyebrow">PRIVATE BY DEFAULT</p><h1>Personal Todo</h1><p class="lead">Your own queue, pulled from class feeds and group work.</p></div><button class="button primary" type="button" data-open="quick-task"><i data-lucide="plus"></i> Add personal task</button></div><div class="todo-toolbar"><div class="segmented"><a class="active" href="/todo">All tasks</a><a href="/todo?filter=pending">Pending</a><a href="/todo?filter=completed">Completed</a></div><span class="muted" data-todo-summary><%= (user.tasks || []).filter(task => !task.done).length %> things still in motion</span></div><section class="private-list" data-live-todo-list><% (user.tasks || []).forEach(task => { %><article class="private-task <%= task.done ? 'is-done' : '' %>" data-task-id="<%= task.id %>"><form class="toggle-task-form" action="/tasks/<%= task.id %>/toggle" method="post" data-live-form><button class="task-check" aria-label="Toggle <%= task.title %>"><i data-lucide="check"></i></button></form><div class="private-task-copy"><h3><%= task.title %></h3><span><i data-lucide="link-2"></i> <%= task.source %></span><small>Due <%= task.due %></small></div><span class="priority-flag"><i data-lucide="flag"></i> <%= task.priority || 'Normal' %></span><button class="icon-button" aria-label="Move task" type="button"><i data-lucide="grip-vertical"></i></button></article><% }) %><% if (!(user.tasks || []).length) { %><div class="empty-panel"><i data-lucide="inbox"></i><h3>Your queue is clear</h3><p>Add a task from any course feed or create a private study goal.</p></div><% } %></section><div id="quick-task" class="modal-backdrop"><div class="modal-card"><button class="modal-close" data-close aria-label="Close" type="button"><i data-lucide="x"></i></button><p class="eyebrow">PERSONAL TASK</p><h2>Keep one more thing visible.</h2><form class="page-form" action="/tasks" method="post" data-live-form data-live-todo-form><label>Task<input name="title" placeholder="Review chapter notes" required></label><label>Due date<input name="due" type="date"></label><label>Priority<select name="priority"><option>Normal</option><option>Medium</option><option>High</option></select></label><button class="button primary full" type="submit">Add to my Todo</button></form></div></div></section>
+<section class="content-wrap todo-page">
+    <div class="page-heading hero-heading">
+        <div>
+            <p class="eyebrow">PRIVATE BY DEFAULT</p>
+            <h1>Personal Todo</h1>
+            <p class="lead">Your own queue, pulled from class feeds and group work.</p>
+        </div><button class="button primary" type="button" data-open="quick-task"><i data-lucide="plus"></i> Add
+            personal task</button>
+    </div>
+    <div class="todo-toolbar">
+        <div class="segmented"><a class="active" href="/todo">All tasks</a><a href="/todo?filter=pending">Pending</a><a
+                href="/todo?filter=completed">Completed</a></div><span class="muted" data-todo-summary>
+            <%= (user.tasks || []).filter(task=> !task.done).length %> things still in motion
+        </span>
+    </div>
+    <section class="private-list" data-live-todo-list>
+        <% (user.tasks || []).forEach(task=> { %><article class="private-task <%= task.done ? 'is-done' : '' %>"
+                data-task-id="<%= task.id %>">
+                <form class="toggle-task-form" action="/tasks/<%= task.id %>/toggle" method="post" data-live-form>
+                    <button class="task-check" aria-label="Toggle <%= task.title %>"><i
+                            data-lucide="check"></i></button></form>
+                <div class="private-task-copy">
+                    <h3>
+                        <%= task.title %>
+                    </h3><span><i data-lucide="link-2"></i>
+                        <%= task.source %>
+                    </span><small>Due <%= task.due %></small>
+                </div><span class="priority-flag"><i data-lucide="flag"></i>
+                    <%= task.priority || 'Normal' %>
+                </span><form data-live-form action="/tasks/<%= task.id %>/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete task"><i data-lucide="trash-2"></i></button></form><button class="icon-button drag-handle" aria-label="Move task" type="button"><i
+                    data-lucide="grip-vertical"></i></button>
+            </article>
+            <% }) %>
+                <% if (!(user.tasks || []).length) { %>
+                    <div class="empty-panel"><i data-lucide="inbox"></i>
+                        <h3>Your queue is clear</h3>
+                        <p>Add a task from any course feed or create a private study goal.</p>
+                    </div>
+                    <% } %>
+    </section>
+    <div id="quick-task" class="modal-backdrop">
+        <div class="modal-card"><button class="modal-close" data-close aria-label="Close" type="button"><i
+                    data-lucide="x"></i></button>
+            <p class="eyebrow">PERSONAL TASK</p>
+            <h2>Keep one more thing visible.</h2>
+            <form class="page-form" action="/tasks" method="post" data-live-form data-live-todo-form><label>Task<input
+                        name="title" placeholder="Review chapter notes" required></label><label>Due date<input
+                        name="due" type="date"></label><label>Priority<select name="priority">
+                        <option>Normal</option>
+                        <option>Medium</option>
+                        <option>High</option>
+                    </select></label><button class="button primary full" type="submit">Add to my Todo</button></form>
+        </div>
+    </div>
+</section>
