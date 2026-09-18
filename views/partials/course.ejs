@@ -1,0 +1,255 @@
+<section class="content-wrap course-page" data-course-live data-org-id="<%= selectedOrg.id %>" data-course-id="<%= course.id %>" data-is-admin="<%= member?.role === 'admin' %>">
+<a class="back-link" href="/org/<%= selectedOrg.id %>">
+<i data-lucide="arrow-left">
+</i> <%= selectedOrg.name %>
+</a>
+<div class="page-heading hero-heading">
+<div>
+<div class="course-kicker">
+<span class="course-color" style="background:<%= course.color %>">
+</span>
+<%= course.code %>
+</div>
+<h1>
+<%= course.name %>
+</h1>
+<p class="lead">A focused feed for homework, tests, events, and the questions between them.</p>
+</div>
+<% if (canEdit(member)) { %>
+<button class="button primary" type="button" data-inline-create>
+<i data-lucide="plus">
+</i> Create event</button>
+<% } %>
+</div>
+<div class="course-tabs" role="tablist">
+<a class="active" href="#feed" data-course-tab="feed">Feed</a>
+<a href="#board" data-course-tab="board">Project board</a>
+<a href="#resources" data-course-tab="resources">Resources</a>
+</div>
+<div class="course-layout">
+<section id="feed" class="feed-panel course-view active" data-course-view="feed">
+<div class="panel-heading">
+<div>
+<p class="eyebrow">COURSE FEED</p>
+<h2>What the class knows</h2>
+</div>
+<span class="filter-label">
+<i data-lucide="radio">
+</i> Live</span>
+</div>
+<% if (canEdit(member)) { %>
+<form class="inline-create-form page-form hidden" data-live-form action="/org/<%= selectedOrg.id %>/courses/<%= course.id %>/items" method="post">
+<div class="inline-create-fields">
+<label>Title<input name="title" placeholder="Read chapter 4" required>
+</label>
+<label>Type<select name="type">
+<option>Homework</option>
+<option>Upcoming test</option>
+<option>Event</option>
+<option>Project</option>
+</select>
+</label>
+<label>Date<input name="due" type="date">
+</label>
+<button class="button primary" type="submit">Add to feed</button>
+</div>
+<a class="text-button" href="/org/<%= selectedOrg.id %>/course/<%= course.id %>/items/new">Advanced create/edit <i data-lucide="arrow-up-right">
+</i>
+</a>
+</form>
+<% } %>
+<div class="feed-list" data-feed-list>
+<% course.items.forEach(item => { %>
+<article class="feed-card feed-item" data-item-id="<%= item.id %>">
+<div class="feed-card-head">
+<span class="category-dot category-<%= item.type.toLowerCase().replace(/[^a-z]/g, '-') %>">
+</span>
+<div>
+<span class="feed-source">
+<%= item.type %> · <%= item.due %>
+</span>
+<h3>
+<%= item.title %>
+</h3>
+</div>
+<span class="confidence">
+<i data-lucide="shield-check">
+</i> <span data-verify-count>
+<%= (item.verifiedBy || []).length %>
+</span>
+</span>
+</div>
+<div class="feed-card-foot">
+<div class="feed-card-actions">
+<form data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/verify" method="post">
+<button class="text-button" type="submit">
+<i data-lucide="badge-check">
+</i> Confirm details</button>
+</form>
+<form data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/todo" method="post">
+<button class="text-button" type="submit">
+<i data-lucide="inbox">
+</i> Add to My Todo</button>
+</form>
+<% if (item.type === 'Project') { const breakout = (selectedOrg.groups || []).find(group => group.itemId === item.id); %>
+<form data-live-form action="/groups" method="post">
+<input type="hidden" name="orgId" value="<%= selectedOrg.id %>">
+<input type="hidden" name="courseId" value="<%= course.id %>">
+<input type="hidden" name="itemId" value="<%= item.id %>">
+<input type="hidden" name="limit" value="4">
+<button class="text-button breakout-action" type="submit">
+<i data-lucide="users-round">
+</i> <%= breakout ? 'Go To Breakout Group' : 'Create Breakout Group' %>
+</button>
+</form>
+<% } %>
+<% if (member?.role === 'admin') { %>
+<form data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/downvote" method="post">
+<button class="text-button" type="submit">
+<i data-lucide="thumbs-down">
+</i> <span data-downvote-count><%= (item.downvotedBy || []).length %></span>
+</button>
+</form>
+<% } %>
+<% if (item.createdBy === user.id || member?.role === 'admin' || (selectedOrg.groups || []).some(group => group.itemId === item.id && (group.createdBy === user.id || group.roles?.[user.id] === 'Organizer'))) { %>
+<details class="item-edit-details">
+<summary class="text-button"><i data-lucide="pencil"></i> Edit</summary>
+<form class="inline-tool-form" data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/update" method="post">
+<input name="title" value="<%= item.title %>" required>
+<select name="type"><option <%= item.type === 'Homework' ? 'selected' : '' %>>Homework</option><option <%= item.type === 'Upcoming test' ? 'selected' : '' %>>Upcoming test</option><option <%= item.type === 'Event' ? 'selected' : '' %>>Event</option><option <%= item.type === 'Project' ? 'selected' : '' %>>Project</option></select>
+<input name="due" type="date" value="<%= item.due !== 'No date' ? item.due : '' %>">
+<button class="button secondary" type="submit">Save</button>
+</form>
+<form data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/delete" method="post"><button class="text-button" type="submit"><i data-lucide="trash-2"></i> Delete</button></form>
+</details>
+<% } %>
+</div>
+<details class="comment-details">
+<summary>
+<i data-lucide="message-circle">
+</i> <span data-comment-count>
+<%= item.comments.length %>
+</span> comments</summary>
+<div class="comments">
+<div class="comment-list" data-comment-list>
+<% item.comments.forEach(comment => { %>
+<div class="comment-entry" data-comment-id="<%= comment.id %>">
+<strong>
+<%= comment.author %>
+</strong> <%= comment.text %>
+<% if (member?.role === 'admin') { %><form data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/comments/<%= comment.id %>/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete comment"><i data-lucide="trash-2"></i></button></form><% } %>
+</div>
+<% }) %>
+</div>
+<form data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/comments" method="post">
+<input name="comment" placeholder="Ask a question or share a note..." required>
+<button class="button primary" type="submit">Reply</button>
+</form>
+</div>
+</details>
+</div>
+</article>
+<% }) %>
+<% if (!course.items.length) { %>
+<div class="empty-panel" data-empty-feed>
+<i data-lucide="message-square-plus">
+</i>
+<h3>The feed is waiting</h3>
+<p>Post the first deadline, study guide, or class event.</p>
+</div>
+<% } %>
+</div>
+</section>
+<section id="board" class="course-view" data-course-view="board">
+<div class="rail-panel board-panel">
+<div class="panel-heading">
+<div>
+<p class="eyebrow">PROJECT BOARD</p>
+<h2>Claimable work</h2>
+</div>
+<span class="progress-ring">
+<%= course.board?.length || 0 %>
+</span>
+</div>
+<div class="board-column" data-board-list>
+<% (course.board || []).forEach(card => { %>
+<div class="claim-row" data-card-id="<%= card.id %>">
+<span>
+<strong>
+<%= card.title %>
+</strong>
+<small>
+<%= card.status %>
+</small>
+</span>
+<i data-lucide="arrow-right">
+</i>
+</div>
+<% }) %>
+<% if (!(course.board || []).length) { %>
+<div class="claim-row" data-empty-board>
+<span>Start a board card for shared work.</span>
+<i data-lucide="plus">
+</i>
+</div>
+<% } %>
+</div>
+<% if (canEdit(member)) { %>
+<form class="inline-tool-form" data-live-form action="/org/<%= selectedOrg.id %>/course/<%= course.id %>/board" method="post">
+<input name="title" placeholder="Add a board task" required>
+<button class="button secondary" type="submit">Add task</button>
+</form>
+<% } %>
+<div class="subgroup-section">
+<div class="panel-heading">
+<h3>Breakout groups</h3>
+<span class="muted">Live course teams</span>
+</div>
+<div class="subgroup-list" data-subgroup-list>
+<% (selectedOrg.groups || []).filter(group => group.courseId === course.id).forEach(group => { %>
+<a class="claim-row" data-group-id="<%= group.id %>" href="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>">
+<span>
+<strong>
+<%= group.name %>
+</strong>
+<small>
+<%= group.members.length %>/<%= group.limit %> members</small>
+</span>
+<i data-lucide="users-round">
+</i>
+</a>
+<% }) %>
+</div>
+</div>
+</div>
+</section>
+<section id="resources" class="course-view" data-course-view="resources">
+<div class="rail-panel resource-panel">
+<div class="panel-heading">
+<h2>Resource hub</h2>
+<i data-lucide="paperclip">
+</i>
+</div>
+<p class="muted">Keep rubrics, decks, and shared links with the course.</p>
+<div class="resource-list" data-resource-list>
+<% (course.resources || []).forEach(resource => { %>
+<a class="resource-link" data-resource-id="<%= resource.id %>" href="<%= resource.url %>" target="_blank" rel="noreferrer">
+<i data-lucide="external-link">
+</i>
+<span>
+<%= resource.title %>
+</span>
+</a>
+<% }) %>
+</div>
+<% if (canEdit(member)) { %>
+<form class="inline-tool-form" data-live-form action="/org/<%= selectedOrg.id %>/course/<%= course.id %>/resources" method="post">
+<input name="title" placeholder="Resource name" required>
+<input name="url" type="url" placeholder="https://..." required>
+<button class="button secondary" type="submit">Add resource</button>
+</form>
+<% } %>
+</div>
+</section>
+</div>
+</section>

@@ -1,0 +1,14 @@
+<aside class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-head"><a href="/dashboard" class="wordmark"><span class="mark">H</span><span>studyhub</span></a><span class="privacy-note"><i data-lucide="shield-check"></i> Ad-free workspace</span></div>
+  <nav class="nav-groups">
+    <div class="nav-label">MY DESK</div>
+    <a class="nav-link <%= page === 'dashboard' ? 'selected' : '' %>" href="/dashboard"><i data-lucide="layout-dashboard"></i><span>Overview</span></a>
+    <a class="nav-link <%= page === 'todo' ? 'selected' : '' %>" href="/todo"><i data-lucide="check-square-2"></i><span>Personal Todo</span><strong class="nav-count"><%= (user.tasks || []).filter(task => !task.done).length %></strong></a>
+    <a class="nav-link <%= page === 'calendar' ? 'selected' : '' %>" href="/calendar"><i data-lucide="calendar-days"></i><span>Academic calendar</span></a>
+    <div class="nav-label space-label">YOUR GROUPS</div>
+    <a class="nav-link <%= page === 'groups' ? 'selected' : '' %>" href="/groups"><i data-lucide="users-round"></i><span>All groups</span></a>
+    <% orgs.filter(org => org.members.some(member => member.userId === user.id)).forEach(org => { %><a class="space-link" href="/group/<%= org.slug || org.id %>"><span class="space-dot" style="background:<%= org.courses[0]?.color || '#e56b4f' %>"></span><span><%= org.name %></span></a><% }) %>
+    <a class="new-space" href="/group/new"><i data-lucide="plus"></i><span>New group</span></a>
+  </nav>
+  <div class="sidebar-foot"><div class="user-chip"><span class="avatar"><%= user.name[0] %></span><div><strong><%= user.name %></strong><small>@<%= user.username %></small></div></div><form action="/logout" method="post"><button class="icon-button" aria-label="Sign out" title="Sign out"><i data-lucide="log-out"></i></button></form></div>
+</aside>

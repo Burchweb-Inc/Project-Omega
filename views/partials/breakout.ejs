@@ -1,0 +1,143 @@
+<section class="content-wrap space-page breakout-page" data-breakout-live data-org-id="<%= selectedOrg.id %>" data-group-id="<%= group.id %>" data-user-id="<%= user.id %>" data-group-admin="<%= groupAdmin %>" data-members="<%= JSON.stringify(group.members.map(memberId => ({ id: memberId, name: (users.find(person => person.id === memberId) || { name: 'Member' }).name }))) %>">
+<a class="back-link" href="/org/<%= selectedOrg.id %>/course/<%= group.courseId %>#board">
+<i data-lucide="arrow-left">
+</i> <%= groupCourse?.name || 'Course' %>
+</a>
+<div class="page-heading hero-heading">
+<div>
+<p class="eyebrow">BREAKOUT GROUP</p>
+<h1>
+<%= group.name %>
+</h1>
+<p class="lead">
+<%= groupItem?.title || group.courseName %>
+</p>
+</div>
+<% if (groupAdmin) { %>
+<form data-live-form action="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>/board/delete" method="post">
+<button class="button secondary" type="submit">
+<i data-lucide="trash-2">
+</i> Delete board</button>
+</form>
+<% } %>
+</div>
+<div class="breakout-grid">
+<section class="rail-panel breakout-board">
+<div class="panel-heading">
+<div>
+<p class="eyebrow">SHARED BOARD</p>
+<h2>Work in progress</h2>
+</div>
+<span class="progress-ring">
+<%= (group.tasks || []).length %>
+</span>
+</div>
+<div class="breakout-task-list" data-breakout-task-list>
+<% (group.tasks || []).forEach(task => { %>
+<article class="claim-row breakout-task <%= task.done ? 'is-done' : '' %>" data-task-id="<%= task.id %>">
+<span>
+<strong>
+<%= task.title %>
+</strong>
+<small>
+<%= task.claimedBy ? `Claimed by ${(users.find(person => person.id === task.claimedBy) || { name: 'a member' }).name}` : 'Open' %>
+</small>
+</span>
+<span class="task-actions">
+<% if (!task.claimedBy) { %>
+<form data-live-form action="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>/tasks/<%= task.id %>/claim" method="post"><button class="button secondary task-action" type="submit">Claim task</button></form>
+<% } %>
+<% if (groupAdmin || task.claimedBy === user.id) { %>
+<details class="task-menu"><summary class="icon-button" aria-label="More actions for <%= task.title %>"><i data-lucide="ellipsis"></i></summary>
+<div class="task-menu-popover">
+<% if (task.claimedBy && (groupAdmin || task.claimedBy === user.id)) { %><form data-live-form action="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>/tasks/<%= task.id %>/unclaim" method="post"><button class="menu-action" type="submit">Unclaim task</button></form><% } %>
+<% if (groupAdmin) { %>
+<details class="inline-edit"><summary><i data-lucide="pencil"></i> Edit task</summary>
+<form class="inline-tool-form" data-live-form action="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>/tasks/<%= task.id %>/update" method="post"><input name="title" value="<%= task.title %>" required><button class="button secondary" type="submit">Save</button></form>
+</details>
+<details class="inline-edit"><summary><i data-lucide="user-plus"></i> Delegate task</summary>
+<form class="inline-tool-form" data-live-form action="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>/tasks/<%= task.id %>/delegate" method="post"><select name="userId"><% group.members.forEach(memberId => { const person = users.find(personUser => personUser.id === memberId); %><option value="<%= memberId %>" <%= task.claimedBy === memberId ? 'selected' : '' %>><%= person?.name || 'Member' %></option><% }) %></select><button class="button secondary" type="submit">Delegate</button></form>
+</details>
+<form data-live-form action="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>/tasks/<%= task.id %>/delete" method="post">
+<button class="menu-action danger" type="submit"><i data-lucide="trash-2"></i> Delete task</button>
+</form>
+<% } %>
+</div>
+</details>
+<% } %>
+</span>
+</article>
+<% }) %>
+<% if (!(group.tasks || []).length) { %>
+<div class="empty-panel" data-empty-breakout-board>
+<i data-lucide="clipboard-list">
+</i>
+<h3>The board is clear</h3>
+<p>Add the first shared task.</p>
+</div>
+<% } %>
+</div>
+<% if (groupAdmin) { %>
+<form class="inline-tool-form" data-live-form action="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>/tasks" method="post">
+<input name="title" placeholder="Add a shared task" required>
+<button class="button secondary" type="submit">Add task</button>
+</form>
+<% } %>
+</section>
+<aside class="breakout-side">
+<section class="rail-panel">
+<div class="panel-heading">
+<h2>People</h2>
+<span class="muted">
+<%= group.members.length %>/<%= group.limit %>
+</span>
+</div>
+<div class="member-list clean-members">
+<% group.members.forEach(memberId => { const person = users.find(personUser => personUser.id === memberId) || { name: 'Member', username: 'member' }; %>
+<div class="member-row">
+<span class="avatar">
+<%= person.name[0] %>
+</span>
+<div>
+<strong>
+<%= person.name %>
+</strong>
+<small>@<%= person.username %>
+</small>
+</div>
+<span class="role-label">
+<%= group.roles?.[memberId] || 'Member' %>
+</span>
+</div>
+<% }) %>
+</div>
+</section>
+<section class="rail-panel breakout-comments">
+<div class="panel-heading">
+<h2>Discussion</h2>
+</div>
+<div class="comment-list" data-breakout-comment-list>
+<% (group.comments || []).forEach(comment => { %>
+<div class="comment-entry" data-comment-id="<%= comment.id %>">
+<strong>
+<%= comment.author %>
+</strong> <%= comment.text %>
+<% if (groupAdmin) { %>
+<form data-live-form action="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>/comments/<%= comment.id %>/delete" method="post">
+<button class="icon-button" type="submit" aria-label="Delete comment">
+<i data-lucide="trash-2">
+</i>
+</button>
+</form>
+<% } %>
+</div>
+<% }) %>
+</div>
+<form class="comments-form" data-live-form action="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>/comments" method="post">
+<input name="comment" placeholder="Write to the group..." required>
+<button class="button primary" type="submit">Send</button>
+</form>
+</section>
+</aside>
+</div>
+</section>
