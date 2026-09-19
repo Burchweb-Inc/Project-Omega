@@ -6,7 +6,8 @@
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "dev": "node app.js"
+    "dev": "node app.js",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

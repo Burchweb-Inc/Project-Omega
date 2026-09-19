@@ -1,5 +1,8 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
+
 const SCORE_BANDS = Object.freeze([
   { min: 1, max: 10, name: 'low' },
   { min: 11, max: 30, name: 'review' },
@@ -10,7 +13,7 @@ const SCORE_BANDS = Object.freeze([
 const DEFAULT_RULES = Object.freeze([
   { pattern: /\b(damn|hell|crap)\b/gi, points: 5, category: 'profanity' },
   { pattern: /\b(shit|fuck|bitch|asshole)\b/gi, points: 20, category: 'heavy-profanity' },
-  { pattern: /\b(idiot|moron|stupid)\b/gi, points: 8, category: 'insult' },
+  { pattern: /\b(idiot|moron|stupid|dumbas(?:s)?|dumb)\b/gi, points: 20, category: 'insult' },
   { pattern: /\b(awful|worthless)\b/gi, points: 8, category: 'harassment' },
   { pattern: /\b(kill yourself|go die|you should die|going to hurt you|hurt you)\b/gi, points: 35, category: 'threat' },
   { pattern: /\b(nazi|white power|racial slur)\b/gi, points: 55, category: 'hate-speech' },
@@ -36,6 +39,22 @@ const CONTEXT_RULES = Object.freeze([
 
 const LEET_MAP = Object.freeze({ '0': 'o', '1': 'i', '!': 'i', '|': 'i', '3': 'e', '4': 'a', '@': 'a', '5': 's', '$': 's', '7': 't', '8': 'b' });
 const HOMOGLYPH_MAP = Object.freeze({ 'а': 'a', 'А': 'a', 'е': 'e', 'Е': 'e', 'і': 'i', 'І': 'i', 'о': 'o', 'О': 'o', 'р': 'p', 'Р': 'p', 'с': 'c', 'С': 'c', 'х': 'x', 'Х': 'x', 'у': 'y', 'У': 'y', 'ѕ': 's', 'Ѕ': 's' });
+
+function loadBadWords(filePath = path.join(__dirname, 'bad-words.txt')) {
+  if (!fs.existsSync(filePath)) return [];
+  return fs.readFileSync(filePath, 'utf8')
+    .split(/\r?\n/)
+    .map((word) => word.trim().toLowerCase())
+    .filter((word) => word && !word.startsWith('#'));
+}
+
+const BAD_WORDS = Object.freeze(loadBadWords());
+const CURATED_WORDS = new Set('damn hell crap shit fuck bitch asshole idiot moron stupid awful worthless nazi power racial slur fag retard people from those that group community disgusting inferior dirty explicit sexual content sexually explicit sexual material sexual content hurt myself harm myself intention to hurt myself want to hurt myself thinking about hurting myself suicidal suicide dangerous challenge unsafe challenge dangerous stunt unsafe stunt bypass evade avoid beat defeat get around filter moderation moderator safety filter'.split(' '));
+const BAD_WORD_RULES = Object.freeze(BAD_WORDS.map((word) => ({
+  pattern: new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'),
+  points: 20,
+  category: 'bad-word-list'
+})).filter((rule, index) => !CURATED_WORDS.has(BAD_WORDS[index])));
 
 function clamp(value, min = 0, max = 100) {
   const number = Number(value);
@@ -158,7 +177,7 @@ function scanContent(input = {}, options = {}) {
   const quotedTextApplies = ['file', 'pdf', 'url', 'website'].includes(type);
   const scanText = quotedTextApplies ? withoutQuotedText(text) : text;
   const findings = [];
-  let score = scoreText(scanText, [...(options.rules || DEFAULT_RULES), ...CONTEXT_RULES], findings);
+  let score = scoreText(scanText, [...(options.rules || [...DEFAULT_RULES, ...BAD_WORD_RULES]), ...CONTEXT_RULES], findings);
   urlsIn(text).forEach((url) => { const urlFindings = []; score += Math.min(10, scoreText(url, options.rules || DEFAULT_RULES, urlFindings, 'url')); urlFindings.forEach((finding) => findings.push(finding)); });
   score += contextScore(scanText, input.previousMessages, findings);
   const badScore = clamp(score);

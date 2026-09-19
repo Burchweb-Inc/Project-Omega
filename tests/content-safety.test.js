@@ -7,6 +7,7 @@ const {
   createContentSafetyAdapter,
   scanContent
 } = require('../moderation/content-safety');
+const { createIffyModerator } = require('../moderation/iffy');
 
 /*
  * Content Safety Test Suite
@@ -88,6 +89,25 @@ test('scores heavier profanity into review territory', () => {
 
   assert.equal(result.band, 'review');
   assert.ok(result.badScore >= 11 && result.badScore <= 30);
+});
+
+test('rejects a word supplied by the local bad-word list', () => {
+  const result = scanContent({
+    type: 'comment',
+    text: 'abbo'
+  });
+
+  assertValidResult(result);
+  assertHasCategory(result, 'bad-word-list');
+  assert.ok(result.badScore >= 20);
+});
+
+test('detects reported profanity and obfuscated insults', () => {
+  for (const text of ['Preston Diddy hell', 'Preston Diddy dumbas', 'Preston Diddy idiot']) {
+    const result = scanContent({ type: 'comment', text });
+    assertValidResult(result);
+    assert.ok(result.badScore > 0, `expected moderation finding for ${text}`);
+  }
 });
 
 test('does not treat normal clean conversation as harmful', () => {
@@ -642,6 +662,31 @@ test('propagates provider results without modifying them', async () => {
   });
 
   assert.deepEqual(result, providerResult);
+});
+
+test('Iffy accepts a clean OpenRouter decision', async () => {
+  const moderator = createIffyModerator({
+    apiKey: 'test-key',
+    urlSourceUrl: null,
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ message: { content: '{"flagged":false,"uncertain":false,"reasoning":"appropriate"}' } }] })
+    })
+  });
+  const result = await moderator.scan({ type: 'comment', text: 'Let us compare our notes.' });
+  assert.equal(result.badScore, 0);
+});
+
+test('Iffy uses strict local matching when OpenRouter returns 429', async () => {
+  const moderator = createIffyModerator({
+    apiKey: 'test-key',
+    urlSourceUrl: null,
+    fetchImpl: async () => ({ ok: false, status: 429 })
+  });
+  const result = await moderator.scan({ type: 'comment', text: 'abbo' });
+  assert.equal(result.provider, 'strict-regex-fallback');
+  assert.ok(result.badScore >= 20);
 });
 
 // ---------------------------------------------------------------------------
