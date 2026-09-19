@@ -1,5 +1,177 @@
+<style>
+  .time {
+    font-size: 1.5rem;
+    color: var(--muted);
+  }
+
+  .page-heading .hero {
+  display: inline-block;
+  transition: opacity 2s ease, transform 2s ease;
+  min-height:150px
+}
+
+/* Fading in and sliding up into position */
+.hero-fade-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Fading out and sliding slightly upwards */
+.hero-fade-out {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.spbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width:175px;
+  max-width:175px;
+}
+</style>
 <section class="content-wrap dashboard-page">
-  <div class="page-heading hero-heading"><div><p class="eyebrow">WEDNESDAY, SEPTEMBER 17</p><h1>Make today easier to carry.</h1><p class="lead">Your classes, people, and next steps in one calm view.</p></div><a class="button primary" href="/org/new"><i data-lucide="plus"></i> New study space</a></div>
-  <div class="metric-grid"><div class="metric-card metric-accent"><span>Open tasks</span><strong><%= (user.tasks || []).filter(task => !task.done).length %></strong><small>in your private queue</small></div><div class="metric-card"><span>Course feeds</span><strong><%= orgs.reduce((count, org) => count + org.courses.length, 0) %></strong><small>across your spaces</small></div><div class="metric-card"><span>Peer signals</span><strong><%= feedItems.filter(entry => (entry.verifiedBy || []).length).length %></strong><small>items checked recently</small></div><div class="metric-card"><span>Groups</span><strong><%= orgs.reduce((count, org) => count + (org.groups || []).length, 0) %></strong><small>projects in motion</small></div></div>
-  <div class="dashboard-grid"><section class="feed-panel"><div class="panel-heading"><div><p class="eyebrow">LIVE FROM YOUR SPACES</p><h2>Course activity</h2></div><a class="text-button" href="/calendar">View calendar <i data-lucide="arrow-up-right"></i></a></div><div class="feed-list"><% feedItems.forEach(entry => { %><article class="feed-card"><div class="feed-card-head"><span class="category-dot category-<%= entry.type.toLowerCase().replace(/[^a-z]/g, '-') %>"></span><div><span class="feed-source"><%= entry.course.name %> · <%= entry.org.name %></span><h3><%= entry.title %></h3></div><span class="feed-date"><%= entry.due %></span></div><div class="feed-card-foot"><span class="type-label"><%= entry.type %></span><span class="trust-count"><i data-lucide="shield-check"></i> <%= (entry.verifiedBy || []).length %> confirmed</span><a href="/org/<%= entry.org.id %>/course/<%= entry.course.id %>">Open thread <i data-lucide="arrow-right"></i></a></div></article><% }) %><% if (!feedItems.length) { %><div class="empty-panel"><i data-lucide="layers-2"></i><h3>Your course feed starts here</h3><p>Add a course and post the first deadline for your classmates.</p><a class="button secondary" href="/org/new">Create a study space</a></div><% } %></div></section><aside class="dashboard-rail"><section class="rail-panel"><div class="panel-heading"><div><p class="eyebrow">NEXT UP</p><h2>My Todo</h2></div><a class="icon-link" href="/todo" aria-label="Open Personal Todo"><i data-lucide="arrow-up-right"></i></a></div><div class="mini-tasks"><% (user.tasks || []).filter(task => !task.done).slice(0, 4).forEach(task => { %><div class="mini-task"><span class="mini-check"></span><div><strong><%= task.title %></strong><small><%= task.source %></small></div></div><% }) %><% if (!(user.tasks || []).filter(task => !task.done).length) { %><p class="muted">Your private queue is clear.</p><% } %></div><a class="rail-link" href="/todo">Open full Todo <i data-lucide="arrow-right"></i></a></section><section class="rail-panel group-callout"><div class="panel-heading"><div><p class="eyebrow">WORK TOGETHER</p><h2>Breakout groups</h2></div><i data-lucide="users-round"></i></div><p>Split project work, claim responsibilities, and keep the shared deadline visible.</p><a class="button secondary" href="/groups">Explore groups</a></section></aside></div>
+  <div class="page-heading hero-heading">
+    <div>
+      <p class="time">TIME TO GET TO BUSINESS</p>
+      <h1 class="hero">Make today easier to carry.</h1>
+      <p class="lead">Your classes, people, and next steps in one calm view.</p>
+    </div><a class="button primary spbtn" href="/org/new"><i data-lucide="plus"></i> New Group</a>
+  </div>
+  <div class="metric-grid">
+    <div class="metric-card metric-accent"><span>Open tasks</span><strong>
+        <%= (user.tasks || []).filter(task=> !task.done).length %>
+      </strong><small>in your private queue</small></div>
+    <div class="metric-card"><span>Course feeds</span><strong>
+        <%= orgs.reduce((count, org)=> count + org.courses.length, 0) %>
+      </strong><small>across your spaces</small></div>
+    <div class="metric-card"><span>Peer signals</span><strong>
+        <%= feedItems.filter(entry=> (entry.verifiedBy || []).length).length %>
+      </strong><small>items checked recently</small></div>
+    <div class="metric-card"><span>Groups</span><strong>
+        <%= orgs.reduce((count, org)=> count + (org.groups || []).length, 0) %>
+      </strong><small>projects in motion</small></div>
+  </div>
+  <div class="dashboard-grid">
+    <section class="feed-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">LIVE FROM YOUR SPACES</p>
+          <h2>Course activity</h2>
+        </div><a class="text-button" href="/calendar">View calendar <i data-lucide="arrow-up-right"></i></a>
+      </div>
+      <div class="feed-list">
+        <% feedItems.forEach(entry=> { %><article class="feed-card">
+            <div class="feed-card-head"><span
+                class="category-dot category-<%= entry.type.toLowerCase().replace(/[^a-z]/g, '-') %>"></span>
+              <div><span class="feed-source">
+                  <%= entry.course.name %> · <%= entry.org.name %>
+                </span>
+                <h3>
+                  <%= entry.title %>
+                </h3>
+              </div><span class="feed-date">
+                <%= entry.due %>
+              </span>
+            </div>
+            <div class="feed-card-foot"><span class="type-label">
+                <%= entry.type %>
+              </span><span class="trust-count"><i data-lucide="shield-check"></i>
+                <%= (entry.verifiedBy || []).length %> confirmed
+              </span><a href="/org/<%= entry.org.id %>/course/<%= entry.course.id %>">Open thread <i
+                  data-lucide="arrow-right"></i></a></div>
+          </article>
+          <% }) %>
+            <% if (!feedItems.length) { %>
+              <div class="empty-panel"><i data-lucide="layers-2"></i>
+                <h3>Your course feed starts here</h3>
+                <p>Add a course and post the first deadline for your classmates.</p><a class="button secondary"
+                  href="/org/new">Create a study space</a>
+              </div>
+              <% } %>
+      </div>
+    </section>
+    <aside class="dashboard-rail">
+      <section class="rail-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">NEXT UP</p>
+            <h2>My Todo</h2>
+          </div><a class="icon-link" href="/todo" aria-label="Open Personal Todo"><i
+              data-lucide="arrow-up-right"></i></a>
+        </div>
+        <div class="mini-tasks">
+          <% (user.tasks || []).filter(task=> !task.done).slice(0, 4).forEach(task => { %><div class="mini-task"><span
+                class="mini-check"></span>
+              <div><strong>
+                  <%= task.title %>
+                </strong><small>
+                  <%= task.source %>
+                </small></div>
+            </div>
+            <% }) %>
+              <% if (!(user.tasks || []).filter(task=> !task.done).length) { %><p class="muted">Your private queue is
+                  clear.</p>
+                <% } %>
+        </div><a class="rail-link" href="/todo">Open full Todo <i data-lucide="arrow-right"></i></a>
+      </section>
+      <section class="rail-panel group-callout">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">WORK TOGETHER</p>
+            <h2>Breakout groups</h2>
+          </div><i data-lucide="users-round"></i>
+        </div>
+        <p>Split project work, claim responsibilities, and keep the shared deadline visible.</p><a
+          class="button secondary" href="/groups">Explore groups</a>
+      </section>
+    </aside>
+  </div>
 </section>
+<script>
+  const today = new Date();
+console.log(today.toLocaleDateString()); 
+  const options = { weekday: 'long', month: 'long', day: 'numeric' };
+  const formattedDate = today.toLocaleDateString(undefined, options);
+  const upperCase = formattedDate.toUpperCase();
+  document.querySelector('.page-heading .time').textContent = upperCase;
+
+  function rotateHeroMessages() {
+  const heroMessages = [
+    'Make today easier to carry.',
+    'Your classes, people, and next steps in one calm view.',
+    'Stay on top of your tasks and deadlines.',
+    'Collaborate with your study groups seamlessly.',
+    'Keep your learning organized and efficient.'
+  ];
+
+  const heroElement = document.querySelector('.page-heading .hero');
+  if (!heroElement) return;
+
+  // 1. Pick a random starting index
+  let currentIndex = Math.floor(Math.random() * heroMessages.length);
+  
+  // Set initial message and display class
+  heroElement.textContent = heroMessages[currentIndex];
+  heroElement.classList.add('hero-fade-in');
+
+  // 2. Rotate message with smooth transitions
+  setInterval(() => {
+    // Fade out phase
+    heroElement.classList.remove('hero-fade-in');
+    heroElement.classList.add('hero-fade-out');
+
+    // Wait for fade-out CSS transition to finish (300ms) before swapping text
+    setTimeout(() => {
+      currentIndex = (currentIndex + 1) % heroMessages.length;
+      heroElement.textContent = heroMessages[currentIndex];
+      
+      // Fade in phase
+      heroElement.classList.remove('hero-fade-out');
+      heroElement.classList.add('hero-fade-in');
+    }, 2500);
+  }, 10000);
+}
+
+document.addEventListener('DOMContentLoaded', rotateHeroMessages);
+</script>

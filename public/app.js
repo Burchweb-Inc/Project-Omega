@@ -10,7 +10,7 @@ function itemCard(item) {
   const typeClass = String(item.type || '').toLowerCase().replace(/[^a-z]/g, '-');
   const root = courseRoot(); const orgId = escapeHtml(root.dataset.orgId); const itemId = escapeHtml(item.id); const projectAction = item.type === 'Project' ? `<form data-live-form action="/groups" method="post"><input type="hidden" name="orgId" value="${orgId}"><input type="hidden" name="courseId" value="${escapeHtml(root.dataset.courseId)}"><input type="hidden" name="itemId" value="${itemId}"><button class="text-button breakout-action" type="submit"><i data-lucide="users-round"></i> Create Breakout Group</button></form>` : ''; const downvoteAction = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${orgId}/items/${itemId}/downvote" method="post"><button class="text-button" type="submit"><i data-lucide="thumbs-down"></i> <span data-downvote-count>${(item.downvotedBy || []).length}</span></button></form>` : '';
   const dragHandle = root.dataset.canEdit === 'true' ? `<button class="icon-button course-drag-handle" type="button" aria-label="Move ${escapeHtml(item.title)}"><i data-lucide="grip-vertical"></i></button>` : '';
-  return `<article class="feed-card feed-item" data-item-id="${itemId}" data-position="${Number(item.position) || 0}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(item.due)}</span><h3>${escapeHtml(item.title)}</h3></div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="text-button" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="text-button" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>0</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><button class="button primary" type="submit">Reply</button></form></div></details></div></article>`;
+  return `<article class="feed-card feed-item" data-item-id="${itemId}" data-position="${Number(item.position) || 0}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(item.due)}</span><h3>${escapeHtml(item.title)}</h3></div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="text-button" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="text-button" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${(item.comments || []).filter((comment) => !comment.reported).length}</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><button class="button primary" type="submit">Reply</button></form></div></details></div></article>`;
 }
 
 function commentMenuMarkup(comment, context) {
@@ -18,7 +18,7 @@ function commentMenuMarkup(comment, context) {
   const base = groupId ? `/org/${escapeHtml(orgId)}/breakout/${escapeHtml(groupId)}/comments/${escapeHtml(comment.id)}` : `/org/${escapeHtml(orgId)}/items/${escapeHtml(itemId)}/comments/${escapeHtml(comment.id)}`;
   const report = `<form data-live-form action="/org/${escapeHtml(orgId)}/content-reports" method="post"><input type="hidden" name="contentId" value="${escapeHtml(comment.id)}"><button class="menu-action" type="submit"><i data-lucide="flag"></i> Report comment</button></form>`;
   const edit = canEdit ? `<details class="comment-edit"><summary><i data-lucide="pencil"></i> Edit comment</summary><form data-live-form action="${base}/update" method="post"><textarea name="comment" required>${escapeHtml(comment.text)}</textarea><button class="button secondary" type="submit">Save</button></form></details>` : '';
-  const remove = canDelete ? `<form data-live-form action="${base}/delete" method="post"><button class="menu-action danger" type="submit"><i data-lucide="trash-2"></i> Delete comment</button></form>` : '';
+  const remove = canDelete ? `<form data-live-form action="${base}/delete" method="post"><button class="menu-action danger" type="submit">Delete comment</button></form>` : '';
   const history = canViewHistory && comment.history?.length ? `<details class="comment-history"><summary><i data-lucide="history"></i> Show edited comment</summary><div>${comment.history.slice().reverse().map((version) => `<p>${escapeHtml(version.text)}<small>${escapeHtml(version.editedAt)} · ${escapeHtml(version.editorName)}</small></p>`).join('')}</div></details>` : '';
   return `<details class="comment-menu"><summary class="icon-button" aria-label="More comment actions"><i data-lucide="ellipsis"></i></summary><div class="comment-menu-popover">${edit}${report}${remove}${history}</div></details>`;
 }
@@ -34,8 +34,14 @@ function appendUniqueComment(itemId, comment) {
   const root = courseRoot(); const canAdmin = root.dataset.isAdmin === 'true'; const canEdit = canAdmin || comment.userId === root.dataset.userId;
   list.insertAdjacentHTML('beforeend', commentMarkup(comment, { orgId: root.dataset.orgId, itemId, canEdit, canDelete: canAdmin, canViewHistory: canAdmin }));
   bindLiveForms(list.lastElementChild); lucide.createIcons();
-  const count = card.querySelector('[data-comment-count]'); if (count) count.textContent = list.children.length;
+  updateCommentCount(card);
 }
+
+function updateCommentCount(card) {
+  const list = card?.querySelector('[data-comment-list]'); const count = card?.querySelector('[data-comment-count]');
+  if (list && count) count.textContent = list.querySelectorAll('.comment-entry:not([data-removing="true"])').length;
+}
+function finishCommentRemoval(entry) { if (!entry) return; const card = entry.closest('[data-item-id]'); entry.remove(); updateCommentCount(card); }
 
 function breakoutTaskMarkup(task, root) {
   const orgId = escapeHtml(root.dataset.orgId); const groupId = escapeHtml(root.dataset.groupId); const userId = root.dataset.userId; const groupAdmin = root.dataset.groupAdmin === 'true'; const members = JSON.parse(root.dataset.members || '[]'); const claimedName = members.find((member) => member.id === task.claimedBy)?.name || 'a member';
@@ -65,8 +71,8 @@ function connectLiveCourse() {
   liveState.socket.on('course:items-reordered', ({ items }) => { if (!items) return; const list = root.querySelector('[data-feed-list]'); const positions = new Map(items.map((item) => [item.id, item.position])); [...list.querySelectorAll('[data-item-id]')].sort((left, right) => (positions.get(left.dataset.itemId) ?? 0) - (positions.get(right.dataset.itemId) ?? 0)).forEach((card, index) => { card.dataset.position = positions.get(card.dataset.itemId) ?? index; list.appendChild(card); }); });
   liveState.socket.on('item:comment-added', ({ itemId, comment }) => appendUniqueComment(itemId, comment));
   liveState.socket.on('item:comment-updated', ({ itemId, comment }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(comment?.id || '')}"]`); if (entry && comment) { entry.outerHTML = commentMarkup(comment, { orgId: root.dataset.orgId, itemId, canEdit: root.dataset.isAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.isAdmin === 'true', canViewHistory: root.dataset.isAdmin === 'true' }); bindLiveForms(root); lucide.createIcons(); } });
-  liveState.socket.on('item:comment-deleted', ({ itemId, commentId }) => root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`)?.remove());
-  liveState.socket.on('item:comment-reported', ({ itemId, commentId }) => root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`)?.remove());
+  liveState.socket.on('item:comment-deleted', ({ itemId, commentId }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`); finishCommentRemoval(entry); });
+  liveState.socket.on('item:comment-reported', ({ itemId, commentId }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`); finishCommentRemoval(entry); });
   liveState.socket.on('board:card-created', ({ card }) => { if (!card) return; const list = root.querySelector('[data-board-list]'); if (!list || list.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`)) return; root.querySelector('[data-empty-board]')?.remove(); const remove = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/course/${escapeHtml(root.dataset.courseId)}/board/${escapeHtml(card.id)}/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete board task"><i data-lucide="trash-2"></i></button></form>` : '<i data-lucide="arrow-right"></i>'; list.insertAdjacentHTML('beforeend', `<div class="claim-row" data-card-id="${escapeHtml(card.id)}"><span><strong>${escapeHtml(card.title)}</strong><small>${escapeHtml(card.status)}</small></span>${remove}</div>`); bindLiveForms(list.lastElementChild); lucide.createIcons(); });
   liveState.socket.on('resource:created', ({ resource }) => { if (!resource) return; const list = root.querySelector('[data-resource-list]'); if (!list || list.querySelector(`[data-resource-id="${CSS.escape(resource.id)}"]`)) return; const remove = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/course/${escapeHtml(root.dataset.courseId)}/resources/${escapeHtml(resource.id)}/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete resource"><i data-lucide="trash-2"></i></button></form>` : ''; list.insertAdjacentHTML('beforeend', `<div class="resource-row" data-resource-id="${escapeHtml(resource.id)}"><a class="resource-link" href="${escapeHtml(resource.url)}" target="_blank" rel="noreferrer"><i data-lucide="external-link"></i><span>${escapeHtml(resource.title)}</span></a>${remove}</div>`); bindLiveForms(list.lastElementChild); lucide.createIcons(); });
   liveState.socket.on('resource:deleted', ({ resourceId }) => root.querySelector(`[data-resource-id="${CSS.escape(resourceId)}"]`)?.remove());
@@ -106,8 +112,8 @@ function connectLiveBreakout() {
   liveState.socket.on('breakout:board-deleted', ({ groupId }) => { if (groupId === root.dataset.groupId) root.querySelector('[data-breakout-task-list]').innerHTML = '<div class="empty-panel" data-empty-breakout-board><h3>The board is clear</h3></div>'; });
   liveState.socket.on('breakout:comment-created', ({ groupId, comment }) => { if (groupId !== root.dataset.groupId || !comment) return; const list = root.querySelector('[data-breakout-comment-list]'); if (list && !list.querySelector(`[data-comment-id="${CSS.escape(comment.id)}"]`)) { list.insertAdjacentHTML('beforeend', commentMarkup(comment, { orgId: root.dataset.orgId, groupId, canEdit: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.groupAdmin === 'true', canViewHistory: root.dataset.groupAdmin === 'true' })); bindLiveForms(list.lastElementChild); lucide.createIcons(); } });
   liveState.socket.on('breakout:comment-updated', ({ groupId, comment }) => { if (groupId !== root.dataset.groupId || !comment) return; const entry = root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(comment.id)}"]`); if (entry) { entry.outerHTML = commentMarkup(comment, { orgId: root.dataset.orgId, groupId, canEdit: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.groupAdmin === 'true', canViewHistory: root.dataset.groupAdmin === 'true' }); bindLiveForms(root); lucide.createIcons(); } });
-  liveState.socket.on('breakout:comment-deleted', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)?.remove(); });
-  liveState.socket.on('breakout:comment-reported', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)?.remove(); });
+  liveState.socket.on('breakout:comment-deleted', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) finishCommentRemoval(root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)); });
+  liveState.socket.on('breakout:comment-reported', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) finishCommentRemoval(root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)); });
 }
 
 function todoList() { return document.querySelector('[data-live-todo-list]'); }
@@ -181,24 +187,30 @@ function bindTodoControls() {
   const filter = new URLSearchParams(window.location.search).get('filter') || 'all'; applyTodoFilter(filter);
 }
 
-async function submitLiveForm(form) {
-  const key = `${form.action}:${Date.now()}`; const submit = form.querySelector('button[type="submit"]'); const original = submit?.innerHTML; const formData = new FormData(form); const optimisticComment = form.action.endsWith('/comments') ? { id: `pending-${key}`, author: 'You', text: formData.get('comment') } : null;
+async function submitLiveForm(form, animatedEntry = null) {
+  const actionUrl = form.getAttribute('action') || ''; const key = `${actionUrl}:${Date.now()}`; const submit = form.querySelector('button[type="submit"]'); const original = submit?.innerHTML; const formData = new FormData(form); const optimisticComment = actionUrl.endsWith('/comments') ? { id: `pending-${key}`, author: 'You', text: formData.get('comment') } : null;
   const isTaskToggle = form.classList.contains('toggle-task-form');
   const isTaskCreate = form.matches('[data-live-form][action="/tasks"]');
-  if (optimisticComment) { const itemId = form.action.split('/').at(-2); appendUniqueComment(itemId, optimisticComment); }
+  if (optimisticComment) { const itemId = actionUrl.split('/').at(-2); appendUniqueComment(itemId, optimisticComment); }
   if (submit) { submit.disabled = true; submit.dataset.original = original; }
   try {
-    const response = await fetch(form.action, { method: 'POST', body: new URLSearchParams(formData), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } });
+    const response = await fetch(actionUrl, { method: 'POST', body: new URLSearchParams(formData), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } });
     const payload = await response.json(); if (!response.ok || payload.error) throw new Error(payload.error || 'Action failed');
     if (payload.groupUrl) { window.location.assign(payload.groupUrl); return; }
     if (payload.successMessage) showLiveSuccess(payload.successMessage);
+    if (payload.read || payload.readAll) {
+      if (payload.readAll) document.querySelectorAll('.notification-item.unread').forEach((item) => item.classList.replace('unread', 'is-read'));
+      else form.closest('.notification-item')?.classList.replace('unread', 'is-read');
+      const unread = document.querySelectorAll('.notification-item.unread').length; const badge = document.querySelector('.notification-menu .notification-count');
+      if (badge) { badge.textContent = String(unread); badge.hidden = unread === 0; }
+    }
     if (payload.action && payload.reportId) document.querySelector(`[data-report-id="${CSS.escape(payload.reportId)}"]`)?.remove();
     if (payload.role || (payload.action && payload.userId)) { window.location.reload(); return; }
-    if (payload.verifiedBy) { const itemId = form.action.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-verify-count]`); if (count) count.textContent = payload.verifiedBy.length; }
-    if (payload.downvotedBy) { const itemId = form.action.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = payload.downvotedBy.length; }
-    if (payload.downvoteCount !== undefined) { const itemId = form.action.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = payload.downvoteCount; }
+    if (payload.verifiedBy) { const itemId = actionUrl.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-verify-count]`); if (count) count.textContent = payload.verifiedBy.length; }
+    if (payload.downvotedBy) { const itemId = actionUrl.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = payload.downvotedBy.length; }
+    if (payload.downvoteCount !== undefined) { const itemId = actionUrl.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = payload.downvoteCount; }
     if (payload.comment) {
-      const editedComment = form.action.endsWith('/update');
+      const editedComment = actionUrl.endsWith('/update');
       if (editedComment) {
         const entry = form.closest('[data-comment-id]');
         const itemCardElement = form.closest('[data-item-id]');
@@ -207,7 +219,7 @@ async function submitLiveForm(form) {
         const context = itemCardElement && courseLive ? { orgId: courseLive.dataset.orgId, itemId: itemCardElement.dataset.itemId, canEdit: courseLive.dataset.isAdmin === 'true' || payload.comment.userId === courseLive.dataset.userId, canDelete: courseLive.dataset.isAdmin === 'true', canViewHistory: courseLive.dataset.isAdmin === 'true' } : { orgId: breakoutLive.dataset.orgId, groupId: breakoutLive.dataset.groupId, canEdit: breakoutLive.dataset.groupAdmin === 'true' || payload.comment.userId === breakoutLive.dataset.userId, canDelete: breakoutLive.dataset.groupAdmin === 'true', canViewHistory: breakoutLive.dataset.groupAdmin === 'true' };
         if (entry) { entry.outerHTML = commentMarkup(payload.comment, context); bindLiveForms(form.closest('[data-comment-list], [data-breakout-comment-list]') || document); lucide.createIcons(); }
       } else {
-        const itemId = form.action.split('/').at(-2); document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-list] [data-comment-id="${CSS.escape(optimisticComment?.id || '')}"]`)?.remove(); appendUniqueComment(itemId, payload.comment);
+        const itemId = actionUrl.split('/').at(-2); document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-list] [data-comment-id="${CSS.escape(optimisticComment?.id || '')}"]`)?.remove(); appendUniqueComment(itemId, payload.comment);
       }
     }
     if (payload.task) {
@@ -228,6 +240,13 @@ async function submitLiveForm(form) {
     if (payload.deleted && payload.resourceId) document.querySelector(`[data-resource-id="${CSS.escape(payload.resourceId)}"]`)?.remove();
     if (payload.deleted && payload.itemId) document.querySelector(`[data-item-id="${CSS.escape(payload.itemId)}"]`)?.remove();
     if (payload.deleted && payload.cardId) document.querySelector(`[data-card-id="${CSS.escape(payload.cardId)}"]`)?.remove();
+    if (payload.commentId && (payload.removed || actionUrl.endsWith('/delete'))) finishCommentRemoval(document.querySelector(`[data-comment-id="${CSS.escape(payload.commentId)}"]`));
+    if (payload.deletedNotificationId) {
+      const notification = animatedEntry || document.querySelector(`[data-notification-id="${CSS.escape(payload.deletedNotificationId)}"]`);
+      if (notification) { notification.classList.add('notification-waterfall-out'); window.setTimeout(() => notification.remove(), 300); }
+      const remaining = document.querySelectorAll('.notification-item').length - 1; const badge = document.querySelector('.notification-menu .notification-count');
+      if (badge) { badge.textContent = String(Math.max(0, remaining)); badge.hidden = remaining <= 0; }
+    }
     if (payload.reported) { document.querySelector(`[data-comment-id="${CSS.escape(payload.contentId || '')}"]`)?.remove(); showLiveSuccess(payload.successMessage || 'Report submitted.'); }
     if ((payload.reviewed || payload.removed) && payload.commentId) document.querySelector(`[data-comment-id="${CSS.escape(payload.commentId)}"]`)?.closest('.mod-card')?.remove();
     if (payload.todoPendingCount !== undefined) {
@@ -238,6 +257,7 @@ async function submitLiveForm(form) {
     if (payload.card || payload.resource) form.reset();
     syncTodoSummary();
   } catch (error) {
+    if (animatedEntry) { animatedEntry.style.transform = ''; animatedEntry.classList.remove('notification-waterfall-out'); }
     if (optimisticComment) document.querySelector(`[data-comment-id="${CSS.escape(optimisticComment.id)}"]`)?.remove();
     window.dispatchEvent(new CustomEvent('live-error', { detail: error.message }));
   } finally { if (submit) { submit.disabled = false; submit.innerHTML = submit.dataset.original; } }
@@ -249,6 +269,21 @@ function syncTodoSummary() {
   const count = list.querySelectorAll('.private-task:not(.is-done)').length;
   if (summary) summary.textContent = `${count} thing${count === 1 ? '' : 's'} still in motion`;
   if (countTarget) countTarget.textContent = count;
+}
+
+function notificationMarkup(notification) {
+  const action = notification.href && notification.actionLabel ? `<a class="text-button" href="${escapeHtml(notification.href)}">${escapeHtml(notification.actionLabel)}</a>` : '';
+  return `<div class="notification-item unread" data-notification-id="${escapeHtml(notification.id)}"><div><strong>${escapeHtml(notification.title)}</strong><p>${escapeHtml(notification.message)}</p>${action}<small>${escapeHtml(new Date(notification.createdAt).toLocaleString())}</small></div><div class="notification-actions"><form data-live-form action="/notifications/${escapeHtml(notification.id)}/read" method="post"><button class="icon-button" type="submit" aria-label="Mark notification read"><i data-lucide="check"></i></button></form><form data-live-form action="/notifications/${escapeHtml(notification.id)}/delete" method="post"><button class="icon-button notification-delete-button" type="submit" aria-label="Delete notification"><i data-lucide="trash-2"></i></button></form></div></div>`;
+}
+function bindNotificationGestures(scope = document) {
+  scope.querySelectorAll('.notification-item').forEach((item) => {
+    if (item.dataset.gestureBound === 'true') return;
+    item.dataset.gestureBound = 'true'; let startX = 0; let startY = 0; let tracking = false;
+    item.addEventListener('pointerdown', (event) => { if (event.pointerType === 'mouse' || event.target.closest('button, form, a')) return; startX = event.clientX; startY = event.clientY; tracking = true; item.setPointerCapture?.(event.pointerId); });
+    item.addEventListener('pointermove', (event) => { if (!tracking) return; const dx = event.clientX - startX; const dy = event.clientY - startY; if (Math.abs(dy) > Math.abs(dx)) { tracking = false; return; } if (dx < 0) item.style.transform = `translateX(${Math.max(dx, -120)}px)`; });
+    item.addEventListener('pointerup', (event) => { if (!tracking) return; tracking = false; const dx = event.clientX - startX; item.style.transform = ''; if (dx < -72) { const form = item.querySelector('form[action$="/delete"]'); if (form) { item.classList.add('notification-waterfall-out'); submitLiveForm(form, item); } } });
+    item.addEventListener('pointercancel', () => { tracking = false; item.style.transform = ''; });
+  });
 }
 
 function bindLiveForms(scope = document) {
@@ -273,14 +308,27 @@ function showLiveSuccess(message) {
   alert.innerHTML = `<i data-lucide="circle-check"></i><span>${escapeHtml(message)}</span><button type="button" aria-label="Dismiss message"><i data-lucide="x"></i></button>`;
   alert.querySelector('button').addEventListener('click', () => alert.remove()); document.body.appendChild(alert); lucide.createIcons(); window.setTimeout(() => alert.remove(), 7000);
 }
+function showWarningModal(notification) {
+  document.querySelector('[data-warning-modal]')?.remove();
+  const modal = document.createElement('div'); modal.className = 'warning-modal-backdrop open'; modal.dataset.warningModal = 'true'; modal.dataset.warningId = notification.id; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.innerHTML = `<div class="warning-modal"><i data-lucide="shield-alert"></i><p class="kicker">MODERATION NOTICE</p><h2>${escapeHtml(notification.title)}</h2><p>${escapeHtml(notification.message)}</p><button class="button primary" type="button" data-warning-close>I understand</button></div>`;
+  modal.querySelector('[data-warning-close]').addEventListener('click', () => { modal.remove(); fetch(`/notifications/${encodeURIComponent(notification.id)}/read`, { method: 'POST', headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); });
+  document.body.appendChild(modal); lucide.createIcons();
+}
 function connectLiveNotifications() {
   if (typeof io !== 'function') return;
   liveState.notificationSocket?.disconnect(); liveState.notificationSocket = io();
   liveState.notificationSocket.on('connect', () => liveState.notificationSocket.emit('notifications:join'));
   liveState.notificationSocket.on('notification:added', (notification) => {
+    if (notification.type === 'warning') showWarningModal(notification);
+    const popover = document.querySelector('.notification-popover');
+    if (popover && notification.id && !popover.querySelector(`[data-notification-id="${CSS.escape(notification.id)}"]`)) { popover.querySelector('.notification-empty')?.remove(); popover.insertAdjacentHTML('beforeend', notificationMarkup(notification)); bindLiveForms(popover.lastElementChild); bindNotificationGestures(popover.lastElementChild); lucide.createIcons(); }
     showLiveSuccess(notification.actionLabel ? `${notification.title} · ${notification.actionLabel}` : notification.title);
     const summary = document.querySelector('.notification-menu>summary');
-    if (summary && !summary.querySelector('.notification-count')) summary.insertAdjacentHTML('beforeend', '<span class="notification-count">1</span>');
+    if (summary) {
+      const count = summary.querySelector('.notification-count');
+      if (count) count.textContent = String(Number(count.textContent || 0) + 1);
+      else summary.insertAdjacentHTML('beforeend', '<span class="notification-count">1</span>');
+    }
   });
 }
 
@@ -292,6 +340,11 @@ function bindInteractions() {
   document.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => { const target = document.getElementById(button.dataset.open); target?.classList.add('open'); target?.querySelector('input[name="title"]')?.focus(); }));
   document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => { button.closest('.modal-backdrop')?.classList.remove('open'); }));
   document.querySelectorAll('.modal-backdrop').forEach((backdrop) => backdrop.addEventListener('click', (event) => { if (event.target === backdrop) backdrop.classList.remove('open'); }));
+  document.querySelectorAll('.comment-menu .menu-action.danger i[data-lucide="trash-2"]').forEach((icon) => icon.remove());
+  bindNotificationGestures();
+  document.querySelectorAll('[data-warning-close]').forEach((button) => button.addEventListener('click', () => { const modal = button.closest('[data-warning-modal]'); const warningId = modal?.dataset.warningId; modal?.remove(); if (warningId) fetch(`/notifications/${encodeURIComponent(warningId)}/read`, { method: 'POST', headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); }));
+  document.querySelectorAll('.report-action-form select[name="action"]').forEach((select) => select.addEventListener('change', () => { const field = select.form.querySelector('.suspension-field'); if (field) field.hidden = select.value !== 'remove-moderate'; }));
+  document.querySelectorAll('.report-action-form select[name="action"]').forEach((select) => select.dispatchEvent(new Event('change')));
   const hash = window.location.hash.slice(1); if (courseRoot() && ['feed', 'board', 'resources'].includes(hash)) setCourseTab(hash, false);
   syncTodoSummary();
   lucide.createIcons(); bindTodoControls(); connectLiveCourse(); bindCourseReorder(courseRoot()); connectLiveBreakout(); connectLiveTodo(); connectLiveNotifications();

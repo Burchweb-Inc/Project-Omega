@@ -134,7 +134,7 @@
 <summary>
 <i data-lucide="message-circle">
 </i> <span data-comment-count>
-<%= item.comments.length %>
+<%= item.comments.filter(comment => !comment.reported).length %>
 </span> comments</summary>
 <div class="comments">
 <div class="comment-list" data-comment-list>

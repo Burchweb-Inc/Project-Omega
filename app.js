@@ -333,6 +333,13 @@ app.post('/notifications/:notificationId/read', requireUser, (request, response)
   return sendMutation(request, response, { read: Boolean(notification) }, '/dashboard');
 });
 
+app.post('/notifications/:notificationId/delete', requireUser, (request, response) => {
+  const before = request.user.notifications || [];
+  request.user.notifications = before.filter((notification) => notification.id !== request.params.notificationId);
+  persistState();
+  return sendMutation(request, response, { deletedNotificationId: request.params.notificationId, deleted: before.length !== request.user.notifications.length }, '/dashboard');
+});
+
 app.post('/notifications/read-all', requireUser, (request, response) => {
   (request.user.notifications || []).forEach((notification) => { notification.read = true; });
   persistState();
@@ -713,24 +720,30 @@ app.post('/org/:id/reports/:reportId/close', requireUser, (request, response) =>
 
 app.post('/org/:id/admin/reports/:reportId/action', requireUser, async (request, response) => {
   const org = getOrg(request); const actor = membership(org, request.user); const report = org?.reports?.find((entry) => entry.id === request.params.reportId);
-  const action = ['remove', 'remove-moderate', 'close'].includes(request.body.action) ? request.body.action : null;
-  if (!org || actor?.role !== 'admin' || !report || !action) return sendMutation(request, response, { error: 'Only admins can act on this report.' }, `/org/${request.params.id}/admin/report`);
+  const action = ['remove', 'remove-moderate', 'warn', 'ban', 'close'].includes(request.body.action) ? request.body.action : null;
+  if (!org || !['admin', 'moderator'].includes(actor?.role) || !report || !action) return sendMutation(request, response, { error: 'Only admins and moderators can act on this report.' }, `/org/${request.params.id}/admin/report`);
+  const message = String(request.body.message || '').trim().slice(0, 500);
+  if (action === 'warn' && !message) return sendMutation(request, response, { error: 'A warning message is required.' }, `/org/${request.params.id}/admin/report`);
+  if (message && await contentPolicyError({ type: 'text', text: message })) return sendMutation(request, response, { error: 'That moderation message could not be sent.' }, `/org/${request.params.id}/admin/report`);
   let affectedUser = null;
   if (report.type === 'content' && report.contentId) {
     for (const course of org.courses || []) for (const item of course.items || []) {
       const comment = (item.comments || []).find((entry) => entry.id === report.contentId);
-      if (comment) { affectedUser = users.find((user) => user.id === comment.userId); if (action !== 'close') item.comments = item.comments.filter((entry) => entry.id !== comment.id); break; }
-      if (item.id === report.contentId && action !== 'close') { affectedUser = users.find((user) => user.id === item.createdBy); course.items = course.items.filter((entry) => entry.id !== item.id); break; }
+      if (comment) { affectedUser = users.find((user) => user.id === comment.userId); if (['remove', 'remove-moderate', 'ban'].includes(action)) { item.comments = item.comments.filter((entry) => entry.id !== comment.id); emitCourse(org, course, 'item:comment-deleted', { itemId: item.id, commentId: comment.id }); } break; }
+      if (item.id === report.contentId) { affectedUser = users.find((user) => user.id === item.createdBy); if (['remove', 'remove-moderate', 'ban'].includes(action)) { course.items = course.items.filter((entry) => entry.id !== item.id); emitCourse(org, course, 'item:deleted', { itemId: item.id }); } break; }
+    }
+    if (!affectedUser) for (const group of org.groups || []) {
+      const comment = (group.comments || []).find((entry) => entry.id === report.contentId);
+      if (comment) { affectedUser = users.find((user) => user.id === comment.userId); if (['remove', 'remove-moderate', 'ban'].includes(action)) { group.comments = group.comments.filter((entry) => entry.id !== comment.id); emitGroup(org, 'breakout:comment-deleted', { groupId: group.id, commentId: comment.id }); } break; }
     }
   }
-  if (action === 'remove-moderate' && affectedUser && affectedUser.id !== request.user.id) {
-    const message = String(request.body.message || '').trim().slice(0, 500);
-    affectedUser.moderationStatus = 'suspended'; affectedUser.moderationUntil = new Date(Date.now() + 7 * 86400000).toISOString(); affectedUser.moderationMessage = message || 'Your access is suspended for 7 days after a content moderation action.';
-    addNotification(affectedUser, { type: 'suspension', title: `Moderation action in ${org.name}`, message: affectedUser.moderationMessage });
-    sessions.forEach((userId, token) => { if (userId === affectedUser.id) sessions.delete(token); });
+  if (['remove-moderate', 'warn', 'ban'].includes(action) && affectedUser && affectedUser.id !== request.user.id) {
+    const days = Math.min(30, Math.max(1, Number(request.body.days) || 7));
+    if (action === 'warn') addNotification(affectedUser, { type: 'warning', title: `Conduct warning from ${org.name}`, message });
+    else { affectedUser.moderationStatus = action === 'ban' ? 'banned' : 'suspended'; affectedUser.moderationUntil = action === 'ban' ? '' : new Date(Date.now() + days * 86400000).toISOString(); affectedUser.moderationMessage = message || (action === 'ban' ? 'Your access is permanently suspended until an administrator lifts the ban.' : `Your access is suspended for ${days} days after a content moderation action.`); addNotification(affectedUser, { type: action === 'ban' ? 'ban' : 'suspension', title: `Moderation action in ${org.name}`, message: affectedUser.moderationMessage }); sessions.forEach((userId, token) => { if (userId === affectedUser.id) sessions.delete(token); }); }
   }
   report.status = 'closed'; report.action = action; report.actionBy = request.user.username; report.actionAt = new Date().toISOString(); persistState();
-  return sendMutation(request, response, { action, reportId: report.id, successMessage: action === 'close' ? 'Report closed.' : action === 'remove-moderate' ? 'Content removed and moderation action applied.' : 'Reported content removed.' }, `/org/${org.id}/admin/report`);
+  return sendMutation(request, response, { action, reportId: report.id, successMessage: action === 'close' ? 'Report closed.' : action === 'warn' ? 'Warning sent.' : action === 'remove-moderate' ? 'Content removed and temporary suspension applied.' : action === 'ban' ? 'Content removed and permanent ban applied.' : 'Reported content removed.' }, `/org/${org.id}/admin/report`);
 });
 
 app.get('/share/:code', (request, response) => {

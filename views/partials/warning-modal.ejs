@@ -1,0 +1,12 @@
+<% const warningNotifications = (typeof notifications === 'undefined' ? (user.notifications || []) : notifications).filter(notification => !notification.read && notification.type === 'warning'); const warning = warningNotifications[0]; %>
+<% if (warning) { %>
+<div class="warning-modal-backdrop open" data-warning-modal data-warning-id="<%= warning.id %>" role="dialog" aria-modal="true" aria-labelledby="warning-modal-title">
+  <div class="warning-modal">
+    <i data-lucide="shield-alert"></i>
+    <p class="kicker">MODERATION NOTICE</p>
+    <h2 id="warning-modal-title"><%= warning.title %></h2>
+    <p><%= warning.message %></p>
+    <button class="button primary" type="button" data-warning-close>I understand</button>
+  </div>
+</div>
+<% } %>

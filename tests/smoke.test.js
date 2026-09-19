@@ -24,7 +24,10 @@ assert.match(app, /\/org\/:id\/admin\/share/, 'Sharing should have its own admin
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'moderation', 'comments.js'), 'utf8'), /admin\/comments\/:commentId\/review/, 'Admins should be able to mark comments reviewed.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /Review new comments/, 'The admin page should expose the moderation queue.');
 assert.match(app, /admin\/reports\/:reportId\/action/, 'Admins should have report action handling.');
-assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /Remove \+ suspend/, 'Reports should expose removal and moderation actions.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /Mod Action/, 'Reports should expose removal and moderation actions.');
+assert.match(app, /\['remove', 'remove-moderate', 'warn', 'ban', 'close'\]/, 'Report moderation should support warnings.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'warning-modal.ejs'), 'utf8'), /data-warning-modal/, 'Warnings should appear in a persistent modal.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'moderation', 'comments.js'), 'utf8'), /\['admin', 'moderator'\]/, 'Reports should notify admins and moderators.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /reported-content/, 'Reports should show the reported content.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'moderation', 'comments.js'), 'utf8'), /successMessage: 'Report submitted/, 'Report submission should return a success message.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), /notification:added/, 'Notifications should arrive over websockets.');
@@ -37,5 +40,8 @@ assert.match(app, /member\.role === 'moderator' && !\['mod', 'report'\]/, 'Moder
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'people.ejs'), 'utf8'), /Ban permanently/, 'People should expose permanent bans.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'people.ejs'), 'utf8'), /Update access/, 'People should expose access changes.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'topbar.ejs'), 'utf8'), /notification-popover/, 'The topbar should expose notifications.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'course.ejs'), 'utf8'), /filter\(comment => !comment\.reported\)\.length/, 'Comment counts should exclude removed or reported comments.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), /notification-waterfall-out/, 'Notification dismissal should animate out.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), /notification-item\.unread/, 'Notification reads should update the UI live.');
 
 console.log('smoke checks passed');
