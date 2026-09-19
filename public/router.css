@@ -1,1 +1,23 @@
-.route-progress{position:fixed;z-index:30;inset:0 100% auto 0;height:3px;background:var(--coral);opacity:0;transition:inset .25s ease,opacity .15s ease}.route-progress.active{inset:0 0 auto 0;opacity:1}.main-content{transition:opacity .18s ease,transform .18s ease}.is-navigating .main-content{opacity:.45;transform:translateY(4px)}
+.route-progress {
+    position: fixed;
+    z-index: 30;
+    inset: 0 100% auto 0;
+    height: 3px;
+    background: var(--coral);
+    opacity: 0;
+    transition: inset .25s ease, opacity .15s ease
+}
+
+.route-progress.active {
+    inset: 0 0 auto 0;
+    opacity: 1
+}
+
+.main-content {
+    transition: opacity .18s ease, transform .18s ease
+}
+
+.is-navigating .main-content {
+    opacity: .45;
+    transform: translateY(4px)
+}

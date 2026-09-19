@@ -16,5 +16,26 @@ assert.match(todoView, /data-live-todo-form/, 'The personal todo add form should
 assert.match(todoView, /toggle-task-form/, 'The personal todo should support browser-side add/toggle updates without a full page refresh.');
 assert.match(app, /items\/reorder/, 'Course tasks should have a reorder endpoint.');
 assert.match(client, /course:items-reordered/, 'Course task reordering should update live over websockets.');
+assert.match(client, /response\.redirected/, 'Client navigation should not render redirected content at the requested URL.');
+assert.match(app, /\/org\/:id\/admin\/:tab\?/, 'Groups should expose tabbed admin routes.');
+assert.match(app, /render\(request, response, 'admin', \{/, 'Admin should render through the page renderer.');
+assert.match(app, /selectedOrg: org,/, 'Admin should render with group context.');
+assert.match(app, /\/org\/:id\/admin\/share/, 'Sharing should have its own admin mutation.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'moderation', 'comments.js'), 'utf8'), /admin\/comments\/:commentId\/review/, 'Admins should be able to mark comments reviewed.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /Review new comments/, 'The admin page should expose the moderation queue.');
+assert.match(app, /admin\/reports\/:reportId\/action/, 'Admins should have report action handling.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /Remove \+ suspend/, 'Reports should expose removal and moderation actions.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /reported-content/, 'Reports should show the reported content.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'moderation', 'comments.js'), 'utf8'), /successMessage: 'Report submitted/, 'Report submission should return a success message.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), /notification:added/, 'Notifications should arrive over websockets.');
+assert.match(app, /notifications\/:notificationId\/read/, 'Users should be able to mark notifications read.');
+assert.match(app, /members\/:userId\/repercussion/, 'Admins should have member conduct actions.');
+assert.match(app, /members\/:userId\/access/, 'Admins should be able to change member access.');
+assert.match(app, /\['viewer', 'editor', 'moderator'\]/, 'Member access should support viewer, editor, and moderator.');
+assert.match(app, /'moderator', 'admin'/, 'Member access should support assigning admins.');
+assert.match(app, /member\.role === 'moderator' && !\['mod', 'report'\]/, 'Moderators should be limited to moderation and reports tabs.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'people.ejs'), 'utf8'), /Ban permanently/, 'People should expose permanent bans.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'people.ejs'), 'utf8'), /Update access/, 'People should expose access changes.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'topbar.ejs'), 'utf8'), /notification-popover/, 'The topbar should expose notifications.');
 
 console.log('smoke checks passed');

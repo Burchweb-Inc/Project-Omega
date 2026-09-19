@@ -689,6 +689,14 @@ test('Iffy uses strict local matching when OpenRouter returns 429', async () => 
   assert.ok(result.badScore >= 20);
 });
 
+test('content-checker catches configured words without restoring neutral terms', async () => {
+  const moderator = createIffyModerator({ apiKey: null, urlSourceUrl: null });
+  const blocked = await moderator.scan({ type: 'comment', text: 'abbo' });
+  const neutral = await moderator.scan({ type: 'comment', text: 'An Australian student felt aroused while reading Chinese history.' });
+  assert.ok(blocked.findings.some((finding) => finding.category === 'content-checker' || finding.category === 'bad-word-list'));
+  assert.equal(neutral.badScore, 0);
+});
+
 // ---------------------------------------------------------------------------
 // Determinism
 // ---------------------------------------------------------------------------

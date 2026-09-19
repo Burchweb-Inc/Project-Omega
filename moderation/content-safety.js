@@ -188,4 +188,4 @@ function createContentSafetyAdapter({ provider, fallbackOptions } = {}) {
   return { async scan(input) { return provider?.scan ? provider.scan(input) : scanContent(input, fallbackOptions); } };
 }
 
-module.exports = { DEFAULT_RULES, SCORE_BANDS, createContentSafetyAdapter, scanContent };
+module.exports = { BAD_WORDS, DEFAULT_RULES, SCORE_BANDS, createContentSafetyAdapter, scanContent };

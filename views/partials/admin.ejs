@@ -1,22 +1,54 @@
-<section class="content-wrap admin-page">
-  <a class="back-link" href="/group/<%= selectedOrg.slug %>"><i data-lucide="arrow-left"></i> <%= selectedOrg.name %></a>
-  <div class="page-heading hero-heading">
-    <div><p class="eyebrow">GROUP ADMINISTRATION</p><h1>Admin console</h1><p class="lead">Review shared activity, manage people, and keep this group healthy.</p></div>
-    <div class="admin-actions"><a class="button secondary" href="/org/<%= selectedOrg.id %>/people"><i data-lucide="users-round"></i> People</a><a class="button secondary" href="/org/<%= selectedOrg.id %>/settings"><i data-lucide="settings-2"></i> Settings</a></div>
+<% const adminOrg = selectedOrg || {}; const adminStatsData = adminStats || { members: 0, openReports: 0, comments: 0, courses: 0 }; const adminComments = moderationComments || []; %>
+<section class="content-wrap admin-page theme-<%= adminOrg.theme || 'coral' %>">
+  <a class="back-link" href="/org/<%= adminOrg.id || '' %>"><i data-lucide="arrow-left"></i> <%= adminOrg.name || 'Group' %></a>
+  <div class="page-heading hero-heading admin-heading">
+    <div><p class="eyebrow">GROUP ADMINISTRATION</p><h1>Admin</h1><p class="lead">Keep <%= adminOrg.name || 'This group' %> welcoming, useful, and easy to manage.</p></div>
+    <% if (member?.role === 'admin') { %><a class="button secondary" href="/org/<%= adminOrg.id || '' %>/people"><i data-lucide="users-round"></i> People</a><% } %>
   </div>
-  <div class="metric-grid admin-metrics"><article class="metric-card metric-accent"><span>Open reports</span><strong><%= adminStats.openReports %></strong><small>Needs a decision</small></article><article class="metric-card"><span>Recent comments</span><strong><%= adminStats.comments %></strong><small>Across this group</small></article><article class="metric-card"><span>People</span><strong><%= adminStats.members %></strong><small>With access</small></article><article class="metric-card"><span>Courses</span><strong><%= adminStats.courses %></strong><small>In this group</small></article></div>
-  <div class="admin-layout">
-    <section class="feed-panel">
-      <div class="panel-heading"><div><p class="eyebrow">MODERATE</p><h2>Recent comments</h2></div><span class="filter-label"><i data-lucide="clock-3"></i> Newest first</span></div>
-      <div class="moderation-list">
-        <% if (moderationComments.length) { moderationComments.forEach(comment => { %>
-          <article class="moderation-row"><div class="moderation-copy"><div><strong><%= comment.author %></strong><span class="muted"> in <%= comment.source %></span></div><p><%= comment.text %></p><small><%= comment.sourceType %> · <%= new Date(comment.createdAt).toLocaleString() %></small></div><form data-live-form action="/group/<%= selectedOrg.slug %>/admin/comments/<%= comment.id %>/remove" method="post"><button class="icon-button" type="submit" aria-label="Remove comment"><i data-lucide="trash-2"></i></button></form></article>
-        <% }) } else { %><div class="empty-panel"><i data-lucide="message-square"></i><h3>No comments to review</h3><p>New shared discussion will appear here.</p></div><% } %>
-      </div>
+  <nav class="admin-tabs" aria-label="Admin sections">
+    <a class="<%= adminTab === 'mod' ? 'active' : '' %>" href="/org/<%= adminOrg.id || '' %>/admin/mod"><i data-lucide="message-square-more"></i> Moderate <span><%= adminStatsData.comments %></span></a>
+    <a class="<%= adminTab === 'report' ? 'active' : '' %>" href="/org/<%= adminOrg.id || '' %>/admin/report"><i data-lucide="flag"></i> Reports <span><%= adminStatsData.openReports %></span></a>
+    <% if (member?.role === 'admin') { %><a class="<%= adminTab === 'settings' ? 'active' : '' %>" href="/org/<%= adminOrg.id || '' %>/admin/settings"><i data-lucide="sliders-horizontal"></i> Settings</a>
+    <a class="<%= adminTab === 'share' ? 'active' : '' %>" href="/org/<%= adminOrg.id || '' %>/admin/share"><i data-lucide="link-2"></i> Share</a><% } %>
+  </nav>
+
+  <% if (adminTab === 'mod') { %>
+    <div class="admin-queue-head"><div><h2>Review new comments</h2><p class="muted">Work from the top until every new comment has a decision.</p></div><strong class="queue-count"><%= adminComments.length %> left</strong></div>
+    <section class="mod-queue">
+      <% if (adminComments.length) { adminComments.forEach((comment, index) => { %>
+        <article class="mod-card<%= index === 0 ? ' is-next' : '' %>" data-comment-id="<%= comment.id %>">
+          <div class="mod-card-top"><span class="mod-number"><%= index + 1 %></span><div><strong><%= comment.author %></strong><span class="muted"> in <%= comment.source %></span></div><small><%= new Date(comment.createdAt).toLocaleString() %></small></div>
+          <p class="mod-text"><%= comment.text %></p>
+          <% if (comment.editedAt) { %><small class="comment-edited">Edited <%= new Date(comment.editedAt).toLocaleString() %></small><% } %>
+          <div class="mod-actions"><form data-live-form action="/org/<%= adminOrg.id || '' %>/admin/comments/<%= comment.id %>/review" method="post"><button class="button primary" type="submit"><i data-lucide="check"></i> Keep and mark reviewed</button></form><form data-live-form action="/org/<%= adminOrg.id || '' %>/admin/comments/<%= comment.id %>/remove" method="post"><button class="button danger" type="submit"><i data-lucide="trash-2"></i> Remove</button></form></div>
+        </article>
+      <% }) } else { %>
+        <div class="empty-panel mod-empty"><i data-lucide="badge-check"></i><h3>Everything is reviewed</h3><p>New comments will appear here when they need an admin decision.</p></div>
+      <% } %>
     </section>
-    <aside class="dashboard-rail">
-      <section class="rail-panel"><div class="panel-heading"><div><p class="eyebrow">REVIEW</p><h2>Reports</h2></div><i data-lucide="flag"></i></div><% if (selectedOrg.reports?.filter(report => report.status === 'open').length) { %><div class="mini-tasks"><% selectedOrg.reports.filter(report => report.status === 'open').slice(0, 5).forEach(report => { %><div class="mini-task"><span class="mini-check"></span><div><strong><%= report.reason %></strong><small><%= report.detail %></small></div></div><% }) %></div><% } else { %><p class="muted">No open reports.</p><% } %><a class="rail-link" href="/org/<%= selectedOrg.id %>/settings#safety">Open safety reports <i data-lucide="arrow-up-right"></i></a></section>
-      <section class="rail-panel group-callout"><h3>People and access</h3><p>Manage roles, invitations, and member access from the People page.</p><a class="button secondary full" href="/org/<%= selectedOrg.id %>/people">Manage people</a></section>
-    </aside>
-  </div>
+  <% } else if (adminTab === 'report') { %>
+    <div class="admin-section-heading"><div><h2>Reports</h2><p class="muted">Review reports from members and close the ones you have handled.</p></div><strong class="queue-count"><%= adminStatsData.openReports %> open</strong></div>
+    <section class="report-list admin-panel">
+      <% const openReports = (adminOrg.reports || []).filter(report => report.status === 'open'); if (openReports.length) { openReports.forEach(report => { %>
+        <article class="report-row" data-report-id="<%= report.id %>"><div><div class="report-meta"><span><%= report.type === 'content' ? 'Content report' : 'Group report' %></span><small><%= new Date(report.createdAt).toLocaleString() %></small></div><h3><%= report.reason %></h3><blockquote class="reported-content"><%= report.contentText || report.detail || 'No content snapshot was recorded.' %></blockquote><p><%= report.detail || 'No additional details.' %></p><small>Reported by @<%= report.reporter %><% if (report.reporterRole === 'moderator') { %> · Moderator<% } %></small></div><div class="report-actions"><form data-live-form action="/org/<%= adminOrg.id || '' %>/admin/reports/<%= report.id %>/action" method="post"><input type="hidden" name="action" value="remove"><button class="button danger" type="submit">Remove content</button></form><form data-live-form action="/org/<%= adminOrg.id || '' %>/admin/reports/<%= report.id %>/action" method="post"><input type="hidden" name="action" value="remove-moderate"><input name="message" placeholder="Optional moderation message"><button class="button danger" type="submit">Remove + suspend</button></form><form data-live-form action="/org/<%= adminOrg.id || '' %>/admin/reports/<%= report.id %>/action" method="post"><input type="hidden" name="action" value="close"><button class="button secondary" type="submit">Close report</button></form></div></article>
+      <% }) } else { %><div class="empty-panel"><i data-lucide="flag"></i><h3>No open reports</h3><p>Reports from your group will appear here.</p></div><% } %>
+    </section>
+  <% } else if (adminTab === 'settings') { %>
+    <div class="admin-section-heading"><div><h2>Group settings</h2><p class="muted">Give this group a clear identity for everyone who uses it.</p></div></div>
+    <form action="/org/<%= adminOrg.id || '' %>/admin/settings" method="post" class="admin-panel page-form admin-form">
+      <label>Group name<input name="name" value="<%= adminOrg.name || '' %>" required></label>
+      <label>Description<textarea name="description"><%= adminOrg.description || '' %></textarea></label>
+      <label>Theme<select name="theme"><option value="coral" <%= (adminOrg.theme || 'coral') === 'coral' ? 'selected' : '' %>>Coral</option><option value="green" <%= adminOrg.theme === 'green' ? 'selected' : '' %>>Green</option><option value="blue" <%= adminOrg.theme === 'blue' ? 'selected' : '' %>>Blue</option><option value="gold" <%= adminOrg.theme === 'gold' ? 'selected' : '' %>>Gold</option></select></label>
+      <button class="button primary" type="submit">Save group settings</button>
+    </form>
+  <% } else { %>
+    <div class="admin-section-heading"><div><h2>Sharing and access</h2><p class="muted">Control who can find this group and how invitations work.</p></div></div>
+    <form action="/org/<%= adminOrg.id || '' %>/admin/share" method="post" class="admin-panel page-form admin-form">
+      <label>Visibility<select name="visibility"><option value="private" <%= adminOrg.visibility === 'private' ? 'selected' : '' %>>Private · members only</option><option value="share" <%= adminOrg.visibility === 'share' ? 'selected' : '' %>>Share · anyone with a link</option><option value="public" <%= adminOrg.visibility === 'public' ? 'selected' : '' %>>Public · discoverable by everyone</option></select></label>
+      <div class="share-link-note"><i data-lucide="link-2"></i><div><strong>Active share link</strong><a href="/share/<%= adminOrg.shareCode || '' %>">studyline.local/share/<%= adminOrg.shareCode || '' %></a></div></div>
+      <label>Default permission<select name="sharePermission"><option value="viewer" <%= adminOrg.sharePermission === 'viewer' ? 'selected' : '' %>>Viewer</option><option value="editor" <%= adminOrg.sharePermission === 'editor' ? 'selected' : '' %>>Editor</option></select></label>
+      <label>Uses before deactivation<input name="shareUses" type="number" min="1" value="<%= adminOrg.shareUses || 1 %>"></label>
+      <button class="button primary" type="submit">Update share settings</button>
+    </form>
+  <% } %>
 </section>

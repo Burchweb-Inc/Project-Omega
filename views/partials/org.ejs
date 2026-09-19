@@ -1,1 +1,68 @@
-<section class="content-wrap space-page"><div class="page-heading hero-heading"><div><a class="back-link" href="/groups"><i data-lucide="arrow-left"></i> All groups</a><div class="title-lockup"><span class="space-symbol" style="background:<%= selectedOrg.courses[0]?.color || '#e56b4f' %>"><%= selectedOrg.name[0] %></span><div><p class="eyebrow">GROUP</p><h1><%= selectedOrg.name %></h1><p class="lead"><%= selectedOrg.description || 'A shared place for your people and courses.' %></p></div></div></div><% if (member?.role === 'admin') { %><a class="button secondary" href="/org/<%= selectedOrg.id %>/settings"><i data-lucide="settings-2"></i> Manage group</a><% } %></div><div class="space-nav"><a class="active" href="/org/<%= selectedOrg.id %>">Courses <span><%= selectedOrg.courses.length %></span></a><a href="/org/<%= selectedOrg.id %>/people">People <span><%= selectedOrg.members.length %></span></a><a href="/org/<%= selectedOrg.id %>/settings#safety">Report</a></div><div class="panel-heading section-gap"><div><p class="eyebrow">COURSES IN THIS GROUP</p><h2>Each subject gets its own folder.</h2></div><% if (canEdit(member)) { %><a class="text-button" href="/org/<%= selectedOrg.id %>/courses/new"><i data-lucide="plus"></i> Add course</a><% } %></div><div class="course-grid"><% selectedOrg.courses.forEach(course => { %><a class="course-tile" href="/org/<%= selectedOrg.id %>/course/<%= course.id %>"><div class="course-tile-top"><span class="course-color" style="background:<%= course.color %>"></span><span><%= course.code %></span><i data-lucide="arrow-up-right"></i></div><h3><%= course.name %></h3><p><%= course.items.filter(item => item.type !== 'Event' && !item.done).length %> open tasks · <%= course.items.length %> feed posts</p><div class="course-tags"><span>Homework <strong><%= course.items.filter(item => item.type === 'Homework').length %></strong></span><span>Tests <strong><%= course.items.filter(item => item.type === 'Upcoming test').length %></strong></span><span>Events <strong><%= course.items.filter(item => item.type === 'Event').length %></strong></span></div></a><% }) %><% if (!selectedOrg.courses.length) { %><div class="empty-panel"><i data-lucide="book-open"></i><h3>No courses yet</h3><p>Add the first course folder to this group.</p><a class="button primary" href="/org/<%= selectedOrg.id %>/courses/new">Add course</a></div><% } %></div></section>
+<section class="content-wrap space-page">
+    <div class="page-heading hero-heading">
+        <div><a class="back-link" href="/groups"><i data-lucide="arrow-left"></i> All groups</a>
+            <div class="title-lockup"><span class="space-symbol"
+                    style="background:<%= selectedOrg.courses[0]?.color || '#e56b4f' %>">
+                    <%= selectedOrg.name[0] %>
+                </span>
+                <div>
+                    <p class="eyebrow">GROUP</p>
+                    <h1>
+                        <%= selectedOrg.name %>
+                    </h1>
+                    <p class="lead">
+                        <%= selectedOrg.description || 'A shared place for your people and courses.' %>
+                    </p>
+                </div>
+            </div>
+        </div>
+        <% if (member?.role==='admin' ) { %><a class="button secondary" href="/org/<%= selectedOrg.id %>/settings"><i
+                    data-lucide="settings-2"></i> Manage group</a>
+            <% } %>
+    </div>
+    <div class="space-nav"><a class="active" href="/org/<%= selectedOrg.id %>">Courses <span>
+                <%= selectedOrg.courses.length %>
+            </span></a><a href="/org/<%= selectedOrg.id %>/people">People <span>
+                <%= selectedOrg.members.length %>
+            </span></a><a href="/org/<%= selectedOrg.id %>/admin/report">Report</a></div>
+    <div class="panel-heading section-gap">
+        <div>
+            <p class="eyebrow">COURSES IN THIS GROUP</p>
+            <h2>Each subject gets its own folder.</h2>
+        </div>
+        <% if (canEdit(member)) { %><a class="text-button" href="/org/<%= selectedOrg.id %>/courses/new"><i
+                    data-lucide="plus"></i> Add course</a>
+            <% } %>
+    </div>
+    <div class="course-grid">
+        <% selectedOrg.courses.forEach(course=> { %><a class="course-tile"
+                href="/org/<%= selectedOrg.id %>/course/<%= course.id %>">
+                <div class="course-tile-top"><span class="course-color"
+                        style="background:<%= course.color %>"></span><span>
+                        <%= course.code %>
+                    </span><i data-lucide="arrow-up-right"></i></div>
+                <h3>
+                    <%= course.name %>
+                </h3>
+                <p>
+                    <%= course.items.filter(item=> item.type !== 'Event' && !item.done).length %> open tasks · <%=
+                            course.items.length %> feed posts
+                </p>
+                <div class="course-tags"><span>Homework <strong>
+                            <%= course.items.filter(item=> item.type === 'Homework').length %>
+                        </strong></span><span>Tests <strong>
+                            <%= course.items.filter(item=> item.type === 'Upcoming test').length %>
+                        </strong></span><span>Events <strong>
+                            <%= course.items.filter(item=> item.type === 'Event').length %>
+                        </strong></span></div>
+            </a>
+            <% }) %>
+                <% if (!selectedOrg.courses.length) { %>
+                    <div class="empty-panel"><i data-lucide="book-open"></i>
+                        <h3>No courses yet</h3>
+                        <p>Add the first course folder to this group.</p><a class="button primary"
+                            href="/org/<%= selectedOrg.id %>/courses/new">Add course</a>
+                    </div>
+                    <% } %>
+    </div>
+</section>

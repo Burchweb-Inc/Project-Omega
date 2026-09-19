@@ -19,6 +19,8 @@ The signup flow rejects accounts younger than 13, but COPPA compliance also requ
 
 ## Content moderation
 
-Moderated titles, tasks, comments, and resources use the local regex scanner, the newline-delimited list in `moderation/bad-words.txt`, and Iffy-style structured review through OpenRouter. Set `OPENROUTER_API_KEY` to enable `nvidia/nemotron-3.5-content-safety:free`; without a key, the local scanner remains active. A `429` response falls back to strict local matching.
+Moderated titles, tasks, comments, and resources use the local regex scanner, the newline-delimited list in `moderation/bad-words.txt`, utilityfueled's `content-checker`, and Iffy-style structured review through OpenRouter. Set `OPENROUTER_API_KEY` to enable `nvidia/nemotron-3.5-content-safety:free`; without a key, the local scanners remain active. A `429` response falls back to strict local matching.
+
+Comments live in `moderation/comments.js`. Authors can edit their own comments, edits retain a version history, and group/site admins can reveal that history or remove comments. Comment actions are available from the small three-dot menu.
 
 URL submissions are checked against the historical NSFW URL corpus from [EBazarov/nsfw_data_source_urls](https://github.com/EBazarov/nsfw_data_source_urls). For a complete local corpus, set `NSFW_URL_LIST_PATH` to a downloaded newline-delimited corpus. `NSFW_URL_SOURCE_URL` can point at a smaller raw corpus file for development; it defaults to a representative source file because the upstream repository contains more than 1.5 million URLs.

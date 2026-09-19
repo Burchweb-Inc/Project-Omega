@@ -2,7 +2,7 @@ const routeProgress = document.createElement('div');
 routeProgress.className = 'route-progress';
 document.body.appendChild(routeProgress);
 
-const liveState = { socket: null, pending: new Map() };
+const liveState = { socket: null, notificationSocket: null, pending: new Map() };
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
 
 function courseRoot() { return document.querySelector('[data-course-live]'); }
@@ -13,10 +13,27 @@ function itemCard(item) {
   return `<article class="feed-card feed-item" data-item-id="${itemId}" data-position="${Number(item.position) || 0}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(item.due)}</span><h3>${escapeHtml(item.title)}</h3></div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="text-button" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="text-button" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>0</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><button class="button primary" type="submit">Reply</button></form></div></details></div></article>`;
 }
 
+function commentMenuMarkup(comment, context) {
+  const { orgId, itemId, groupId, canEdit, canDelete, canViewHistory } = context;
+  const base = groupId ? `/org/${escapeHtml(orgId)}/breakout/${escapeHtml(groupId)}/comments/${escapeHtml(comment.id)}` : `/org/${escapeHtml(orgId)}/items/${escapeHtml(itemId)}/comments/${escapeHtml(comment.id)}`;
+  const report = `<form data-live-form action="/org/${escapeHtml(orgId)}/content-reports" method="post"><input type="hidden" name="contentId" value="${escapeHtml(comment.id)}"><button class="menu-action" type="submit"><i data-lucide="flag"></i> Report comment</button></form>`;
+  const edit = canEdit ? `<details class="comment-edit"><summary><i data-lucide="pencil"></i> Edit comment</summary><form data-live-form action="${base}/update" method="post"><textarea name="comment" required>${escapeHtml(comment.text)}</textarea><button class="button secondary" type="submit">Save</button></form></details>` : '';
+  const remove = canDelete ? `<form data-live-form action="${base}/delete" method="post"><button class="menu-action danger" type="submit"><i data-lucide="trash-2"></i> Delete comment</button></form>` : '';
+  const history = canViewHistory && comment.history?.length ? `<details class="comment-history"><summary><i data-lucide="history"></i> Show edited comment</summary><div>${comment.history.slice().reverse().map((version) => `<p>${escapeHtml(version.text)}<small>${escapeHtml(version.editedAt)} · ${escapeHtml(version.editorName)}</small></p>`).join('')}</div></details>` : '';
+  return `<details class="comment-menu"><summary class="icon-button" aria-label="More comment actions"><i data-lucide="ellipsis"></i></summary><div class="comment-menu-popover">${edit}${report}${remove}${history}</div></details>`;
+}
+
+function commentMarkup(comment, context) {
+  const edited = comment.editedAt ? '<small class="comment-edited">edited</small>' : '';
+  return `<div class="comment-entry" data-comment-id="${escapeHtml(comment.id)}"><div class="comment-body"><strong>${escapeHtml(comment.author)}</strong> ${escapeHtml(comment.text)}${edited}</div>${commentMenuMarkup(comment, context)}</div>`;
+}
+
 function appendUniqueComment(itemId, comment) {
   const card = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"]`); if (!card || !comment) return;
   const list = card.querySelector('[data-comment-list]'); if (!list || list.querySelector(`[data-comment-id="${CSS.escape(comment.id || '')}"]`)) return;
-  const paragraph = document.createElement('p'); paragraph.dataset.commentId = comment.id || `local-${Date.now()}`; paragraph.innerHTML = `<strong>${escapeHtml(comment.author)}</strong> ${escapeHtml(comment.text)}`; list.appendChild(paragraph);
+  const root = courseRoot(); const canAdmin = root.dataset.isAdmin === 'true'; const canEdit = canAdmin || comment.userId === root.dataset.userId;
+  list.insertAdjacentHTML('beforeend', commentMarkup(comment, { orgId: root.dataset.orgId, itemId, canEdit, canDelete: canAdmin, canViewHistory: canAdmin }));
+  bindLiveForms(list.lastElementChild); lucide.createIcons();
   const count = card.querySelector('[data-comment-count]'); if (count) count.textContent = list.children.length;
 }
 
@@ -47,6 +64,7 @@ function connectLiveCourse() {
   liveState.socket.on('item:deleted', ({ itemId }) => root.querySelector(`[data-item-id="${CSS.escape(itemId)}"]`)?.remove());
   liveState.socket.on('course:items-reordered', ({ items }) => { if (!items) return; const list = root.querySelector('[data-feed-list]'); const positions = new Map(items.map((item) => [item.id, item.position])); [...list.querySelectorAll('[data-item-id]')].sort((left, right) => (positions.get(left.dataset.itemId) ?? 0) - (positions.get(right.dataset.itemId) ?? 0)).forEach((card, index) => { card.dataset.position = positions.get(card.dataset.itemId) ?? index; list.appendChild(card); }); });
   liveState.socket.on('item:comment-added', ({ itemId, comment }) => appendUniqueComment(itemId, comment));
+  liveState.socket.on('item:comment-updated', ({ itemId, comment }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(comment?.id || '')}"]`); if (entry && comment) { entry.outerHTML = commentMarkup(comment, { orgId: root.dataset.orgId, itemId, canEdit: root.dataset.isAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.isAdmin === 'true', canViewHistory: root.dataset.isAdmin === 'true' }); bindLiveForms(root); lucide.createIcons(); } });
   liveState.socket.on('item:comment-deleted', ({ itemId, commentId }) => root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`)?.remove());
   liveState.socket.on('item:comment-reported', ({ itemId, commentId }) => root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`)?.remove());
   liveState.socket.on('board:card-created', ({ card }) => { if (!card) return; const list = root.querySelector('[data-board-list]'); if (!list || list.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`)) return; root.querySelector('[data-empty-board]')?.remove(); const remove = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/course/${escapeHtml(root.dataset.courseId)}/board/${escapeHtml(card.id)}/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete board task"><i data-lucide="trash-2"></i></button></form>` : '<i data-lucide="arrow-right"></i>'; list.insertAdjacentHTML('beforeend', `<div class="claim-row" data-card-id="${escapeHtml(card.id)}"><span><strong>${escapeHtml(card.title)}</strong><small>${escapeHtml(card.status)}</small></span>${remove}</div>`); bindLiveForms(list.lastElementChild); lucide.createIcons(); });
@@ -86,7 +104,8 @@ function connectLiveBreakout() {
   liveState.socket.on('breakout:task-updated', ({ groupId, task }) => { if (groupId !== root.dataset.groupId || !task) return; const row = root.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`); if (row) { row.outerHTML = breakoutTaskMarkup(task, root); bindLiveForms(root.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`)); lucide.createIcons(); } });
   liveState.socket.on('breakout:task-deleted', ({ groupId, taskId }) => { if (groupId === root.dataset.groupId) root.querySelector(`[data-task-id="${CSS.escape(taskId)}"]`)?.remove(); });
   liveState.socket.on('breakout:board-deleted', ({ groupId }) => { if (groupId === root.dataset.groupId) root.querySelector('[data-breakout-task-list]').innerHTML = '<div class="empty-panel" data-empty-breakout-board><h3>The board is clear</h3></div>'; });
-  liveState.socket.on('breakout:comment-created', ({ groupId, comment }) => { if (groupId !== root.dataset.groupId || !comment) return; const list = root.querySelector('[data-breakout-comment-list]'); if (list && !list.querySelector(`[data-comment-id="${CSS.escape(comment.id)}"]`)) list.insertAdjacentHTML('beforeend', `<div class="comment-entry" data-comment-id="${escapeHtml(comment.id)}"><strong>${escapeHtml(comment.author)}</strong> ${escapeHtml(comment.text)}</div>`); });
+  liveState.socket.on('breakout:comment-created', ({ groupId, comment }) => { if (groupId !== root.dataset.groupId || !comment) return; const list = root.querySelector('[data-breakout-comment-list]'); if (list && !list.querySelector(`[data-comment-id="${CSS.escape(comment.id)}"]`)) { list.insertAdjacentHTML('beforeend', commentMarkup(comment, { orgId: root.dataset.orgId, groupId, canEdit: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.groupAdmin === 'true', canViewHistory: root.dataset.groupAdmin === 'true' })); bindLiveForms(list.lastElementChild); lucide.createIcons(); } });
+  liveState.socket.on('breakout:comment-updated', ({ groupId, comment }) => { if (groupId !== root.dataset.groupId || !comment) return; const entry = root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(comment.id)}"]`); if (entry) { entry.outerHTML = commentMarkup(comment, { orgId: root.dataset.orgId, groupId, canEdit: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.groupAdmin === 'true', canViewHistory: root.dataset.groupAdmin === 'true' }); bindLiveForms(root); lucide.createIcons(); } });
   liveState.socket.on('breakout:comment-deleted', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)?.remove(); });
   liveState.socket.on('breakout:comment-reported', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)?.remove(); });
 }
@@ -172,10 +191,25 @@ async function submitLiveForm(form) {
     const response = await fetch(form.action, { method: 'POST', body: new URLSearchParams(formData), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } });
     const payload = await response.json(); if (!response.ok || payload.error) throw new Error(payload.error || 'Action failed');
     if (payload.groupUrl) { window.location.assign(payload.groupUrl); return; }
+    if (payload.successMessage) showLiveSuccess(payload.successMessage);
+    if (payload.action && payload.reportId) document.querySelector(`[data-report-id="${CSS.escape(payload.reportId)}"]`)?.remove();
+    if (payload.role || (payload.action && payload.userId)) { window.location.reload(); return; }
     if (payload.verifiedBy) { const itemId = form.action.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-verify-count]`); if (count) count.textContent = payload.verifiedBy.length; }
     if (payload.downvotedBy) { const itemId = form.action.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = payload.downvotedBy.length; }
     if (payload.downvoteCount !== undefined) { const itemId = form.action.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = payload.downvoteCount; }
-    if (payload.comment) { const itemId = form.action.split('/').at(-2); document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-list] [data-comment-id="${CSS.escape(optimisticComment?.id || '')}"]`)?.remove(); appendUniqueComment(itemId, payload.comment); }
+    if (payload.comment) {
+      const editedComment = form.action.endsWith('/update');
+      if (editedComment) {
+        const entry = form.closest('[data-comment-id]');
+        const itemCardElement = form.closest('[data-item-id]');
+        const courseLive = form.closest('[data-course-live]');
+        const breakoutLive = form.closest('[data-breakout-live]');
+        const context = itemCardElement && courseLive ? { orgId: courseLive.dataset.orgId, itemId: itemCardElement.dataset.itemId, canEdit: courseLive.dataset.isAdmin === 'true' || payload.comment.userId === courseLive.dataset.userId, canDelete: courseLive.dataset.isAdmin === 'true', canViewHistory: courseLive.dataset.isAdmin === 'true' } : { orgId: breakoutLive.dataset.orgId, groupId: breakoutLive.dataset.groupId, canEdit: breakoutLive.dataset.groupAdmin === 'true' || payload.comment.userId === breakoutLive.dataset.userId, canDelete: breakoutLive.dataset.groupAdmin === 'true', canViewHistory: breakoutLive.dataset.groupAdmin === 'true' };
+        if (entry) { entry.outerHTML = commentMarkup(payload.comment, context); bindLiveForms(form.closest('[data-comment-list], [data-breakout-comment-list]') || document); lucide.createIcons(); }
+      } else {
+        const itemId = form.action.split('/').at(-2); document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-list] [data-comment-id="${CSS.escape(optimisticComment?.id || '')}"]`)?.remove(); appendUniqueComment(itemId, payload.comment);
+      }
+    }
     if (payload.task) {
       const list = document.querySelector('[data-live-todo-list]'); if (list) {
         const existing = list.querySelector(`[data-task-id="${CSS.escape(payload.task.id)}"]`);
@@ -194,7 +228,8 @@ async function submitLiveForm(form) {
     if (payload.deleted && payload.resourceId) document.querySelector(`[data-resource-id="${CSS.escape(payload.resourceId)}"]`)?.remove();
     if (payload.deleted && payload.itemId) document.querySelector(`[data-item-id="${CSS.escape(payload.itemId)}"]`)?.remove();
     if (payload.deleted && payload.cardId) document.querySelector(`[data-card-id="${CSS.escape(payload.cardId)}"]`)?.remove();
-    if (payload.reported && payload.commentId) document.querySelector(`[data-comment-id="${CSS.escape(payload.commentId)}"]`)?.remove();
+    if (payload.reported) { document.querySelector(`[data-comment-id="${CSS.escape(payload.contentId || '')}"]`)?.remove(); showLiveSuccess(payload.successMessage || 'Report submitted.'); }
+    if ((payload.reviewed || payload.removed) && payload.commentId) document.querySelector(`[data-comment-id="${CSS.escape(payload.commentId)}"]`)?.closest('.mod-card')?.remove();
     if (payload.todoPendingCount !== undefined) {
       const countTarget = document.querySelector('[data-live-todo-count]');
       if (countTarget) countTarget.textContent = payload.todoPendingCount;
@@ -232,6 +267,22 @@ function showLiveError(message) {
   lucide.createIcons();
   window.setTimeout(() => alert.remove(), 7000);
 }
+function showLiveSuccess(message) {
+  document.querySelector('[data-live-success]')?.remove();
+  const alert = document.createElement('div'); alert.className = 'live-success'; alert.dataset.liveSuccess = 'true'; alert.setAttribute('role', 'status');
+  alert.innerHTML = `<i data-lucide="circle-check"></i><span>${escapeHtml(message)}</span><button type="button" aria-label="Dismiss message"><i data-lucide="x"></i></button>`;
+  alert.querySelector('button').addEventListener('click', () => alert.remove()); document.body.appendChild(alert); lucide.createIcons(); window.setTimeout(() => alert.remove(), 7000);
+}
+function connectLiveNotifications() {
+  if (typeof io !== 'function') return;
+  liveState.notificationSocket?.disconnect(); liveState.notificationSocket = io();
+  liveState.notificationSocket.on('connect', () => liveState.notificationSocket.emit('notifications:join'));
+  liveState.notificationSocket.on('notification:added', (notification) => {
+    showLiveSuccess(notification.actionLabel ? `${notification.title} · ${notification.actionLabel}` : notification.title);
+    const summary = document.querySelector('.notification-menu>summary');
+    if (summary && !summary.querySelector('.notification-count')) summary.insertAdjacentHTML('beforeend', '<span class="notification-count">1</span>');
+  });
+}
 
 function bindInteractions() {
   document.querySelectorAll('[data-tab]').forEach((tab) => tab.addEventListener('click', () => { document.querySelectorAll('.tab').forEach((item) => item.classList.remove('active')); document.querySelectorAll('.auth-form').forEach((form) => form.classList.add('hidden')); tab.classList.add('active'); document.getElementById(tab.dataset.tab).classList.remove('hidden'); }));
@@ -243,13 +294,13 @@ function bindInteractions() {
   document.querySelectorAll('.modal-backdrop').forEach((backdrop) => backdrop.addEventListener('click', (event) => { if (event.target === backdrop) backdrop.classList.remove('open'); }));
   const hash = window.location.hash.slice(1); if (courseRoot() && ['feed', 'board', 'resources'].includes(hash)) setCourseTab(hash, false);
   syncTodoSummary();
-  lucide.createIcons(); bindTodoControls(); connectLiveCourse(); bindCourseReorder(courseRoot()); connectLiveBreakout(); connectLiveTodo();
+  lucide.createIcons(); bindTodoControls(); connectLiveCourse(); bindCourseReorder(courseRoot()); connectLiveBreakout(); connectLiveTodo(); connectLiveNotifications();
 }
 
 window.addEventListener('live-error', (event) => showLiveError(event.detail || 'Action failed. Please try again.'));
 
 function isInternalGetLink(link) { return link.origin === window.location.origin && link.pathname && !link.pathname.startsWith('/share/') && !link.hasAttribute('download') && link.target !== '_blank' && !link.dataset.noRouter; }
-async function navigate(url, pushState = true) { routeProgress.classList.add('active'); document.body.classList.add('is-navigating'); try { const response = await fetch(url, { headers: { 'X-Studyline-Navigation': 'true' } }); if (!response.ok) throw new Error(`Navigation failed: ${response.status}`); const nextDocument = new DOMParser().parseFromString(await response.text(), 'text/html'); nextDocument.body.querySelectorAll('script').forEach((script) => script.remove()); liveState.socket?.disconnect(); document.body.innerHTML = nextDocument.body.innerHTML; document.body.appendChild(routeProgress); document.title = nextDocument.title; if (pushState) window.history.pushState({}, '', url); window.scrollTo({ top: 0, behavior: 'instant' }); bindInteractions(); requestAnimationFrame(() => document.body.classList.remove('is-navigating')); } catch (error) { window.location.assign(url); } finally { routeProgress.classList.remove('active'); } }
+async function navigate(url, pushState = true) { routeProgress.classList.add('active'); document.body.classList.add('is-navigating'); try { const response = await fetch(url, { headers: { 'X-Studyline-Navigation': 'true' } }); if (!response.ok || response.redirected) throw new Error(`Navigation failed: ${response.status}`); const nextDocument = new DOMParser().parseFromString(await response.text(), 'text/html'); const nextShell = nextDocument.querySelector('.app-shell'); if (!nextShell) throw new Error('Navigation returned an incomplete page.'); nextDocument.body.querySelectorAll('script').forEach((script) => script.remove()); liveState.socket?.disconnect(); liveState.notificationSocket?.disconnect(); document.querySelector('.app-shell')?.replaceWith(nextShell); document.body.className = nextDocument.body.className; document.body.classList.add('is-navigating'); document.body.appendChild(routeProgress); document.title = nextDocument.title; if (pushState) window.history.pushState({}, '', url); window.scrollTo({ top: 0, behavior: 'instant' }); bindInteractions(); requestAnimationFrame(() => document.body.classList.remove('is-navigating')); } catch (error) { window.location.assign(url); } finally { routeProgress.classList.remove('active'); } }
 document.addEventListener('click', (event) => { const link = event.target.closest('a'); if (!link || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !isInternalGetLink(link)) return; const target = new URL(link.href); if (target.hash && target.pathname === window.location.pathname) return; event.preventDefault(); navigate(target.href); });
 window.addEventListener('popstate', () => navigate(window.location.href, false));
 window.addEventListener('hashchange', () => { const hash = window.location.hash.slice(1); if (['feed', 'board', 'resources'].includes(hash)) setCourseTab(hash, false); });

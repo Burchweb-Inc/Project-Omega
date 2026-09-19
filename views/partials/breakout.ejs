@@ -118,19 +118,7 @@
 </div>
 <div class="comment-list" data-breakout-comment-list>
 <% (group.comments || []).filter(comment => !comment.reported).forEach(comment => { %>
-<div class="comment-entry" data-comment-id="<%= comment.id %>">
-<strong>
-<%= comment.author %>
-</strong> <%= comment.text %>
-<% if (groupAdmin) { %>
-<form data-live-form action="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>/comments/<%= comment.id %>/delete" method="post">
-<button class="icon-button" type="submit" aria-label="Delete comment">
-<i data-lucide="trash-2">
-</i>
-</button>
-</form>
-<% } else { %><form data-live-form action="/org/<%= selectedOrg.id %>/content-reports" method="post"><input type="hidden" name="contentId" value="<%= comment.id %>"><button class="icon-button" type="submit" aria-label="Report comment"><i data-lucide="flag"></i></button></form>
-<% } %>
+<div class="comment-entry" data-comment-id="<%= comment.id %>"><div class="comment-body"><strong><%= comment.author %></strong> <%= comment.text %><% if (comment.editedAt) { %><small class="comment-edited">edited</small><% } %></div><details class="comment-menu"><summary class="icon-button" aria-label="More comment actions"><i data-lucide="ellipsis"></i></summary><div class="comment-menu-popover"><% if (comment.userId === user.id || groupAdmin) { %><details class="comment-edit"><summary><i data-lucide="pencil"></i> Edit comment</summary><form data-live-form action="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>/comments/<%= comment.id %>/update" method="post"><textarea name="comment" required><%= comment.text %></textarea><button class="button secondary" type="submit">Save</button></form></details><% } %><form data-live-form action="/org/<%= selectedOrg.id %>/content-reports" method="post"><input type="hidden" name="contentId" value="<%= comment.id %>"><button class="menu-action" type="submit"><i data-lucide="flag"></i> Report comment</button></form><% if (groupAdmin) { %><form data-live-form action="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>/comments/<%= comment.id %>/delete" method="post"><button class="menu-action danger" type="submit"><i data-lucide="trash-2"></i> Delete comment</button></form><% if (comment.history?.length) { %><details class="comment-history"><summary><i data-lucide="history"></i> Show edited comment</summary><div><% comment.history.slice().reverse().forEach(version => { %><p><%= version.text %><small><%= new Date(version.editedAt).toLocaleString() %> · <%= version.editorName %></small></p><% }) %></div></details><% } %><% } %></div></details>
 </div>
 <% }) %>
 </div>
