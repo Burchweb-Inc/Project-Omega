@@ -1,0 +1,16 @@
+You are reviewing moderation entries for a student collaboration app.
+Keep only entries that are genuinely profane, abusive, threatening, hateful, or explicitly targeted harassment.
+A short phrase can be harmful even when the individual words are not inherently bad; example: i will kill you.
+Do not keep neutral or context-only terms such as doofus, bully, awkward, weird, noisy, or ordinary uses of hate.
+OUTPUT FORMAT RULES:
+- Return ONLY the approved words or phrases.
+- One entry per line.
+- Lowercase only.
+- No markdown, no bullets, no numbering, no code fences, no headings, no quotes, no explanation, no commentary, no extra text.
+- No blank lines.
+- Remove punctuation, but keep contractions, commas if not at the end of the phrase, etc.
+- Example output format:
+stupid
+i will kill you
+bitch
+If an entry is not clearly harmful, leave it out.

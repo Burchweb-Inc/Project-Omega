@@ -6,7 +6,7 @@
                 <%= locals.selectedOrg?.name || ({ dashboard: 'Overview' , todo: 'Personal Todo' ,
                     calendar: 'Academic calendar' , groups: 'Breakout groups' }[page] || 'Study space' ) %>
             </strong></div>
-        <div class="top-actions"><a href="/about" style="text-decoration:none;"><span class="offline-status"><i data-lucide="hand-heart"></i> Support Us</span></a>
+        <div class="top-actions"><a href="/support" style="text-decoration:none;"><span class="offline-status"><i data-lucide="hand-heart"></i> Support Us</span></a>
             <details class="notification-menu">
                 <summary class="icon-button" aria-label="Notifications"><i data-lucide="bell"></i>
                     <% if (unreadNotifications.length) { %><span class="notification-count">

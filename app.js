@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const crypto = require('crypto');
@@ -7,9 +9,11 @@ const Database = require('better-sqlite3');
 const { Server } = require('socket.io');
 const { createIffyModerator } = require('./moderation/iffy');
 const { moderationComments, registerCommentRoutes } = require('./moderation/comments');
+const { appendRemovedTextForReview, reviewQueuedBadWords } = require('./moderation/bad-word-queue');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = Number(process.env.PORT) || 3000;
+const host = process.env.HOST || '0.0.0.0';
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const dbPath = path.join(dataDir, 'studyline.db');
 const contentModerator = createIffyModerator();
@@ -54,7 +58,7 @@ app.use((request, response, next) => {
   response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
 });
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 const users = [];
 const orgs = [];
@@ -116,7 +120,7 @@ function loadOrgsFromDatabase() {
   orgs.splice(0, orgs.length, ...rows.map((row) => {
     const org = JSON.parse(row.payload);
     org.courses = (org.courses || []).map((course) => { normalizeCourseItems(course); return { ...course, items: course.items.map((item) => ({ ...item, comments: item.comments || [], verifiedBy: item.verifiedBy || [], downvotedBy: item.downvotedBy || [] })), board: course.board || [], resources: course.resources || [] }; });
-    org.groups = (org.groups || []).map((group) => ({ ...group, members: group.members || [], roles: group.roles || {}, itemId: group.itemId || null, createdBy: group.createdBy || group.members?.[0] || null, tasks: group.tasks || [], resources: group.resources || [], polls: group.polls || [], comments: group.comments || [] }));
+    org.groups = (org.groups || []).map((group) => { const task = group.itemId ? org.courses.flatMap((course) => course.items).find((item) => item.id === group.itemId) : null; return { ...group, members: group.members || [], roles: group.roles || {}, itemId: group.itemId || null, taskSlug: group.taskSlug || (task ? breakoutTaskSlug(task) : null), shareCode: group.shareCode || crypto.randomBytes(12).toString('base64url'), createdBy: group.createdBy || group.members?.[0] || null, tasks: group.tasks || [], resources: group.resources || [], polls: group.polls || [], comments: (group.comments || []).map((comment) => ({ ...comment, parentId: comment.parentId || null })) }; });
       org.members = (org.members || []).map((member) => ({ ...member, role: member.role === 'writer' ? 'editor' : member.role || 'viewer' }));
       return { ...org, slug: org.slug || secureSlug(org.name), reports: org.reports || [], groups: org.groups || [], shareCode: org.shareCode || crypto.randomBytes(32).toString('base64url') };
   }));
@@ -202,6 +206,14 @@ function currentUser(request) {
 }
 const server = http.createServer(app);
 const io = new Server(server);
+const badWordReviewIntervalMs = Number(process.env.BAD_WORD_REVIEW_INTERVAL_MS || (Number(process.env.BAD_WORD_REVIEW_INTERVAL_MINUTES || '10') * 60000));
+const badWordReviewInterval = Number.isFinite(badWordReviewIntervalMs) && badWordReviewIntervalMs > 0 ? badWordReviewIntervalMs : 10 * 60 * 1000;
+const reviewQueuedBadWordsNow = () => {
+  reviewQueuedBadWords().catch((error) => console.error('bad-word review failed', error));
+};
+reviewQueuedBadWordsNow();
+setInterval(reviewQueuedBadWordsNow, badWordReviewInterval);
+
 function liveRequest(request) { return request.is('application/json') || request.get('X-Live-Request') === 'true'; }
 function sendMutation(request, response, payload, fallback) {
   if (liveRequest(request)) return response.status(payload.error ? 400 : 200).json(payload);
@@ -248,12 +260,20 @@ function requireUser(request, response, next) {
 }
 function membership(org, user) { return org && user ? org.members.find((member) => member.userId === user.id) : null; }
 function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs, canEdit, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, ...extra }); }
+function renderPublicPage(request, response, page) { response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: null }); }
 function getOrg(request) { return orgs.find((entry) => entry.id === request.params.id || entry.slug === request.params.slug); }
 function getCourse(org, courseId) { return org?.courses.find((course) => course.id === courseId); }
 function isOrgModerator(org, user) { const role = membership(org, user)?.role; return role === 'admin' || role === 'moderator'; }
 function canEdit(member) { return member?.role === 'admin' || member?.role === 'editor' || member?.role === 'moderator'; }
 function isOrgAdmin(org, user) { return membership(org, user)?.role === 'admin'; }
 function getBreakoutGroup(org, groupId) { return org?.groups?.find((group) => group.id === groupId); }
+function breakoutTaskSlug(item) { return `${slug(item.title)}-${item.id.slice(-8)}`; }
+function getBreakoutTask(org, courseId, taskSlug) {
+  const course = getCourse(org, courseId);
+  return course?.items.find((item) => item.type === 'Project' && breakoutTaskSlug(item) === taskSlug);
+}
+function breakoutGroupsForTask(org, itemId) { return (org?.groups || []).filter((group) => group.itemId === itemId); }
+function breakoutGroupsUrl(org, course, item) { return `/org/${org.id}/course/${course.id}/task/${breakoutTaskSlug(item)}/breakout-groups`; }
 function canManageBreakoutGroup(org, group, user) { return Boolean(group && user && (isOrgModerator(org, user) || group.createdBy === user.id || group.roles?.[user.id] === 'Organizer' || group.roles?.[user.id] === 'Admin')); }
 function canManageItem(org, item, user) { const group = org?.groups?.find((entry) => entry.itemId === item?.id); return Boolean(item && user && (item.createdBy === user.id || isOrgAdmin(org, user) || canManageBreakoutGroup(org, group, user))); }
 function canAccess(org, user) { return Boolean(org && user && (org.visibility === 'public' || membership(org, user))); }
@@ -291,7 +311,7 @@ io.on('connection', (socket) => {
   });
 });
 
-registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse, emitGroup, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification });
+registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse, emitGroup, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification, appendRemovedTextForReview });
 
 app.get('/', (request, response) => {
   request.user = currentUser(request);
@@ -299,11 +319,19 @@ app.get('/', (request, response) => {
   render(request, response, 'landing', { error: request.query.error });
 });
 
+app.get('/healthz', (request, response) => response.status(200).json({ status: 'ok' }));
+
 app.get(['/signup', '/login'], (request, response) => {
   request.user = currentUser(request);
   if (request.user) return response.redirect('/dashboard');
   response.redirect('/');
 });
+
+app.get('/about', (request, response) => renderPublicPage(request, response, 'about'));
+app.get('/support', (request, response) => renderPublicPage(request, response, 'support'));
+app.get('/privacy', (request, response) => renderPublicPage(request, response, 'privacy'));
+app.get('/terms', (request, response) => renderPublicPage(request, response, 'terms'));
+app.get('/understand', (request, response) => renderPublicPage(request, response, 'understand'));
 
 app.post('/signup', (request, response) => {
   const { name, username, password, age } = request.body;
@@ -376,7 +404,24 @@ app.get('/org/:id', requireUser, (request, response) => {
 app.get('/org/:id/breakout/:groupId', requireUser, (request, response) => {
   const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId);
   if (!group || !canAccess(org, request.user)) return response.redirect(`/org/${request.params.id}`);
-  renderOrgPage(request, response, 'breakout', { group, groupAdmin: canManageBreakoutGroup(org, group, request.user), groupCourse: getCourse(org, group.courseId), groupItem: getCourse(org, group.courseId)?.items.find((item) => item.id === group.itemId) });
+  renderOrgPage(request, response, 'breakout', { group, groupAdmin: canManageBreakoutGroup(org, group, request.user), groupMember: group.members.includes(request.user.id), groupCourse: getCourse(org, group.courseId), groupItem: getCourse(org, group.courseId)?.items.find((item) => item.id === group.itemId) });
+});
+
+app.get('/org/:id/course/:courseId/task/:taskSlug/breakout-groups', requireUser, (request, response) => {
+  const org = getOrg(request); const course = getCourse(org, request.params.courseId); const item = getBreakoutTask(org, request.params.courseId, request.params.taskSlug);
+  if (!org || !course || !item || !canAccess(org, request.user)) return response.redirect(`/org/${request.params.id}/course/${request.params.courseId}`);
+  renderOrgPage(request, response, 'breakout-groups', { course, task: item, breakoutGroups: breakoutGroupsForTask(org, item.id), canCreateBreakoutGroup: canEdit(membership(org, request.user)) });
+});
+
+app.get('/b/:code', requireUser, (request, response) => {
+  const org = orgs.find((entry) => entry.groups?.some((group) => group.shareCode === request.params.code));
+  const group = org?.groups?.find((entry) => entry.shareCode === request.params.code);
+  if (!org || !group || !canAccess(org, request.user)) return response.status(404).send('This breakout group link is no longer available.');
+  if (!group.members.includes(request.user.id)) {
+    if (group.members.length >= group.limit) return response.status(409).send('This breakout group is full.');
+    group.members.push(request.user.id); group.roles ||= {}; group.roles[request.user.id] = 'Member'; persistState(); emitGroup(org, 'breakout:member-joined', { groupId: group.id, userId: request.user.id });
+  }
+  response.redirect(`/org/${org.id}/breakout/${group.id}`);
 });
 
 app.get('/org/:id/course/:courseId', requireUser, (request, response) => {
@@ -458,17 +503,35 @@ app.post('/org/:id/course/:courseId/items/reorder', requireUser, (request, respo
 
 app.post('/groups', requireUser, async (request, response) => {
   const org = getOrg({ params: { id: request.body.orgId } }); const course = getCourse(org, request.body.courseId);
-  if (!org || !course || !membership(org, request.user)) return sendMutation(request, response, { error: 'You cannot create a subgroup here.' }, '/groups');
+  if (!org || !course || !canEdit(membership(org, request.user))) return sendMutation(request, response, { error: 'Only course editors, moderators, and admins can create breakout groups.' }, '/groups');
   const item = course.items.find((entry) => entry.id === request.body.itemId);
   if (request.body.itemId && (!item || item.type !== 'Project')) return sendMutation(request, response, { error: 'Breakout groups can only be created for projects.' }, `/org/${org.id}/course/${course.id}`);
-  const existing = item && org.groups?.find((group) => group.itemId === item.id);
-  if (existing) return sendMutation(request, response, { group: existing, groupUrl: `/org/${org.id}/breakout/${existing.id}` }, `/org/${org.id}/breakout/${existing.id}`);
+  if (item && breakoutGroupsForTask(org, item.id).length >= 50) return sendMutation(request, response, { error: 'This project already has the maximum of 50 breakout groups.' }, breakoutGroupsUrl(org, course, item));
   org.groups ||= []; const groupName = String(request.body.name || `${item?.title || course.name} breakout group`).trim();
   if (await contentPolicyError({ type: 'group', text: groupName })) return sendMutation(request, response, { error: 'This content violates our content policy. Edit it, then try again.' }, `/org/${org.id}/course/${course.id}`);
-  const group = { id: id(), name: groupName, courseId: course.id, courseName: course.name, itemId: item?.id || null, createdBy: request.user.id, limit: Math.max(2, Number(request.body.limit) || 4), members: [request.user.id], roles: { [request.user.id]: 'Organizer' }, tasks: [{ id: id(), title: 'Choose a direction', claimedBy: request.user.id, done: false }, { id: id(), title: 'Upload shared resources', claimedBy: null, done: false }], resources: [], polls: [{ question: 'When should we meet?', options: ['Today after school', 'Tomorrow at lunch', 'This weekend'], votes: {} }] };
+  const group = { id: id(), name: groupName, taskSlug: item ? breakoutTaskSlug(item) : null, shareCode: crypto.randomBytes(12).toString('base64url'), courseId: course.id, courseName: course.name, itemId: item?.id || null, createdBy: request.user.id, limit: Math.min(50, Math.max(2, Number(request.body.limit) || 4)), members: [request.user.id], roles: { [request.user.id]: 'Organizer' }, tasks: [{ id: id(), title: 'Choose a direction', claimedBy: request.user.id, done: false }, { id: id(), title: 'Upload shared resources', claimedBy: null, done: false }], resources: [], polls: [{ question: 'When should we meet?', options: ['Today after school', 'Tomorrow at lunch', 'This weekend'], votes: {} }] };
   if (!group.name) return sendMutation(request, response, { error: 'A subgroup name is required.' }, '/groups');
   org.groups.push(group); persistState(); emitCourse(org, course, 'subgroup:created', { group }); emitGroup(org, 'subgroup:created', { group });
-  return sendMutation(request, response, { group, groupUrl: `/org/${org.id}/breakout/${group.id}` }, `/org/${org.id}/breakout/${group.id}`);
+  const groupUrl = item ? breakoutGroupsUrl(org, course, item) : `/org/${org.id}/breakout/${group.id}`;
+  return sendMutation(request, response, { group, groupUrl }, groupUrl);
+});
+
+app.post('/org/:id/breakout/:groupId/settings', requireUser, (request, response) => {
+  const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId);
+  if (!group || !canManageBreakoutGroup(org, group, request.user)) return sendMutation(request, response, { error: 'You cannot edit this breakout group.' }, `/org/${request.params.id}`);
+  const limit = Number(request.body.limit); if (!Number.isInteger(limit) || limit < group.members.length || limit < 2 || limit > 50) return sendMutation(request, response, { error: `Choose a capacity between ${Math.max(2, group.members.length)} and 50.` }, `/org/${org.id}/breakout/${group.id}`);
+  group.limit = limit; persistState(); emitGroup(org, 'breakout:updated', { group });
+  return sendMutation(request, response, { group }, `/org/${org.id}/breakout/${group.id}`);
+});
+
+app.post('/org/:id/breakout/:groupId/members', requireUser, (request, response) => {
+  const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId); const username = String(request.body.username || '').trim().toLowerCase(); const target = users.find((user) => user.username === username);
+  if (!group || !canManageBreakoutGroup(org, group, request.user)) return sendMutation(request, response, { error: 'You cannot add people to this breakout group.' }, `/org/${request.params.id}`);
+  if (!target || !membership(org, target)) return sendMutation(request, response, { error: 'That username is not a member of this study space.' }, `/org/${org.id}/breakout/${group.id}`);
+  if (group.members.includes(target.id)) return sendMutation(request, response, { error: 'That person is already in the breakout group.' }, `/org/${org.id}/breakout/${group.id}`);
+  if (group.members.length >= group.limit) return sendMutation(request, response, { error: 'This breakout group is full.' }, `/org/${org.id}/breakout/${group.id}`);
+  group.members.push(target.id); group.roles ||= {}; group.roles[target.id] = 'Member'; persistState(); emitGroup(org, 'breakout:member-joined', { groupId: group.id, userId: target.id });
+  return sendMutation(request, response, { member: target.id }, `/org/${org.id}/breakout/${group.id}`);
 });
 
 app.post('/org/:id/items/:itemId/verify', requireUser, (request, response) => {
@@ -501,6 +564,7 @@ app.post('/org/:id/items/:itemId/update', requireUser, async (request, response)
 app.post('/org/:id/items/:itemId/delete', requireUser, (request, response) => {
   const org = getOrg(request); const course = org?.courses.find((entry) => entry.items.some((item) => item.id === request.params.itemId)); const item = course?.items.find((entry) => entry.id === request.params.itemId);
   if (!org || !item || !canManageItem(org, item, request.user)) return sendMutation(request, response, { error: 'You cannot delete this item.' }, `/org/${org?.id || ''}`);
+  appendRemovedTextForReview(item.title || '');
   course.items = course.items.filter((entry) => entry.id !== item.id); org.groups = (org.groups || []).filter((group) => group.itemId !== item.id);
   users.forEach((user) => { const task = (user.tasks || []).find((entry) => entry.sourceId === item.id); if (task) { task.sourceId = null; task.linked = false; task.source = 'Unlinked course task'; emitTodo(user.id, 'todo:task-updated', { task: normalizeTask(task) }); } });
   persistState(); emitCourse(org, course, 'item:deleted', { itemId: item.id });
@@ -729,12 +793,12 @@ app.post('/org/:id/admin/reports/:reportId/action', requireUser, async (request,
   if (report.type === 'content' && report.contentId) {
     for (const course of org.courses || []) for (const item of course.items || []) {
       const comment = (item.comments || []).find((entry) => entry.id === report.contentId);
-      if (comment) { affectedUser = users.find((user) => user.id === comment.userId); if (['remove', 'remove-moderate', 'ban'].includes(action)) { item.comments = item.comments.filter((entry) => entry.id !== comment.id); emitCourse(org, course, 'item:comment-deleted', { itemId: item.id, commentId: comment.id }); } break; }
-      if (item.id === report.contentId) { affectedUser = users.find((user) => user.id === item.createdBy); if (['remove', 'remove-moderate', 'ban'].includes(action)) { course.items = course.items.filter((entry) => entry.id !== item.id); emitCourse(org, course, 'item:deleted', { itemId: item.id }); } break; }
+      if (comment) { affectedUser = users.find((user) => user.id === comment.userId); if (['remove', 'remove-moderate', 'ban'].includes(action)) { appendRemovedTextForReview(comment.text || report.contentText || report.reason || ''); item.comments = item.comments.filter((entry) => entry.id !== comment.id); emitCourse(org, course, 'item:comment-deleted', { itemId: item.id, commentId: comment.id }); } break; }
+      if (item.id === report.contentId) { affectedUser = users.find((user) => user.id === item.createdBy); if (['remove', 'remove-moderate', 'ban'].includes(action)) { appendRemovedTextForReview(item.title || report.contentText || report.reason || ''); course.items = course.items.filter((entry) => entry.id !== item.id); emitCourse(org, course, 'item:deleted', { itemId: item.id }); } break; }
     }
     if (!affectedUser) for (const group of org.groups || []) {
       const comment = (group.comments || []).find((entry) => entry.id === report.contentId);
-      if (comment) { affectedUser = users.find((user) => user.id === comment.userId); if (['remove', 'remove-moderate', 'ban'].includes(action)) { group.comments = group.comments.filter((entry) => entry.id !== comment.id); emitGroup(org, 'breakout:comment-deleted', { groupId: group.id, commentId: comment.id }); } break; }
+      if (comment) { affectedUser = users.find((user) => user.id === comment.userId); if (['remove', 'remove-moderate', 'ban'].includes(action)) { appendRemovedTextForReview(comment.text || report.contentText || report.reason || ''); group.comments = group.comments.filter((entry) => entry.id !== comment.id); emitGroup(org, 'breakout:comment-deleted', { groupId: group.id, commentId: comment.id }); } break; }
     }
   }
   if (['remove-moderate', 'warn', 'ban'].includes(action) && affectedUser && affectedUser.id !== request.user.id) {
@@ -747,17 +811,18 @@ app.post('/org/:id/admin/reports/:reportId/action', requireUser, async (request,
 });
 
 app.get('/share/:code', (request, response) => {
-    for (const group of org.groups || []) {
-      const comment = (group.comments || []).find((entry) => entry.id === report.contentId);
-      if (comment) { affectedUser = users.find((user) => user.id === comment.userId); if (action !== 'close') group.comments = group.comments.filter((entry) => entry.id !== comment.id); break; }
-    }
   const org = orgs.find((entry) => entry.shareCode === request.params.code);
   if (!org || org.shareUses < 1) return response.status(404).send('This share link is no longer active.');
   const user = currentUser(request); if (!user) return response.redirect('/');
   if (!membership(org, user)) org.members.push({ userId: user.id, role: org.sharePermission }); org.shareUses -= 1; persistState(); response.redirect(`/org/${org.id}`);
 });
 
-server.listen(port, () => console.log(`StudyHub running at http://localhost:${port}`));
+server.listen(port, host, () => {
+  const codespacesUrl = process.env.CODESPACES && process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN
+    ? `https://${process.env.CODESPACE_NAME}-${port}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`
+    : null;
+  console.log(`StudyHub running at http://${host}:${port}${codespacesUrl ? ` (${codespacesUrl})` : ''}`);
+});
 function shutdown() { server.close(() => { db.close(); process.exit(0); }); }
 process.once('SIGTERM', shutdown);
 process.once('SIGINT', shutdown);

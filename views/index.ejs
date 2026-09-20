@@ -10,6 +10,8 @@
 <body class="<%= page %>">
 <% if (page === 'landing') { %>
   <%- include('partials/landing') %>
+<% } else if (['about', 'support', 'privacy', 'terms', 'understand'].includes(page)) { %>
+  <%- include('partials/public-shell', { view }) %>
 <% } else { %>
   <%- include('partials/app-layout', { view }) %>
 <% } %><script src="/socket.io/socket.io.js"></script><script src="/app.js"></script></body></html>

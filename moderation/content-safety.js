@@ -40,21 +40,43 @@ const CONTEXT_RULES = Object.freeze([
 const LEET_MAP = Object.freeze({ '0': 'o', '1': 'i', '!': 'i', '|': 'i', '3': 'e', '4': 'a', '@': 'a', '5': 's', '$': 's', '7': 't', '8': 'b' });
 const HOMOGLYPH_MAP = Object.freeze({ 'а': 'a', 'А': 'a', 'е': 'e', 'Е': 'e', 'і': 'i', 'І': 'i', 'о': 'o', 'О': 'o', 'р': 'p', 'Р': 'p', 'с': 'c', 'С': 'c', 'х': 'x', 'Х': 'x', 'у': 'y', 'У': 'y', 'ѕ': 's', 'Ѕ': 's' });
 
-function loadBadWords(filePath = path.join(__dirname, 'bad-words.txt')) {
-  if (!fs.existsSync(filePath)) return [];
-  return fs.readFileSync(filePath, 'utf8')
-    .split(/\r?\n/)
-    .map((word) => word.trim().toLowerCase())
-    .filter((word) => word && !word.startsWith('#'));
+function resolveBadWordFiles(filePath) {
+  if (filePath) return [filePath];
+  const presetPath = process.env.BAD_WORDS_FILE ? path.resolve(process.cwd(), process.env.BAD_WORDS_FILE) : path.join(__dirname, 'bad-words.txt');
+  const userPath = process.env.USER_BAD_WORDS_FILE ? path.resolve(process.cwd(), process.env.USER_BAD_WORDS_FILE) : path.join(__dirname, 'user-bad-words.txt');
+  return [presetPath, userPath];
+}
+
+function loadBadWords(filePath = null) {
+  const sources = resolveBadWordFiles(filePath);
+  const entries = new Set();
+  for (const sourcePath of sources) {
+    if (!fs.existsSync(sourcePath)) continue;
+    for (const entry of fs.readFileSync(sourcePath, 'utf8').split(/\r?\n/)) {
+      const word = entry.trim().toLowerCase();
+      if (word && !word.startsWith('#')) entries.add(word);
+    }
+  }
+  return [...entries].sort();
 }
 
 const BAD_WORDS = Object.freeze(loadBadWords());
 const CURATED_WORDS = new Set('damn hell crap shit fuck bitch asshole idiot moron stupid awful worthless nazi power racial slur fag retard people from those that group community disgusting inferior dirty explicit sexual content sexually explicit sexual material sexual content hurt myself harm myself intention to hurt myself want to hurt myself thinking about hurting myself suicidal suicide dangerous challenge unsafe challenge dangerous stunt unsafe stunt bypass evade avoid beat defeat get around filter moderation moderator safety filter'.split(' '));
-const BAD_WORD_RULES = Object.freeze(BAD_WORDS.map((word) => ({
-  pattern: new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'),
-  points: 20,
-  category: 'bad-word-list'
-})).filter((rule, index) => !CURATED_WORDS.has(BAD_WORDS[index])));
+
+function buildBadWordRules(filePath = null) {
+  const words = loadBadWords(filePath);
+  return words.map((word) => {
+    const normalized = word.trim().toLowerCase().replace(/\s+/g, ' ');
+    const phrasePattern = normalized.split(/\s+/).map((piece) => piece.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+    return {
+      pattern: new RegExp(`\\b${phrasePattern}\\b`, 'gi'),
+      points: normalized.split(/\s+/).length > 1 ? 30 : 20,
+      category: 'bad-word-list'
+    };
+  }).filter((rule, index) => !CURATED_WORDS.has(words[index].split(/\s+/)[0]));
+}
+
+const BAD_WORD_RULES = Object.freeze(buildBadWordRules());
 
 function clamp(value, min = 0, max = 100) {
   const number = Number(value);
@@ -176,8 +198,11 @@ function scanContent(input = {}, options = {}) {
   text = String(text || '');
   const quotedTextApplies = ['file', 'pdf', 'url', 'website'].includes(type);
   const scanText = quotedTextApplies ? withoutQuotedText(text) : text;
+  const badWordFilePath = options.badWordFilePath || null;
+  const dynamicBadWordRules = buildBadWordRules(badWordFilePath);
+  const activeRules = options.rules || [...DEFAULT_RULES, ...dynamicBadWordRules];
   const findings = [];
-  let score = scoreText(scanText, [...(options.rules || [...DEFAULT_RULES, ...BAD_WORD_RULES]), ...CONTEXT_RULES], findings);
+  let score = scoreText(scanText, [...activeRules, ...CONTEXT_RULES], findings);
   urlsIn(text).forEach((url) => { const urlFindings = []; score += Math.min(10, scoreText(url, options.rules || DEFAULT_RULES, urlFindings, 'url')); urlFindings.forEach((finding) => findings.push(finding)); });
   score += contextScore(scanText, input.previousMessages, findings);
   const badScore = clamp(score);

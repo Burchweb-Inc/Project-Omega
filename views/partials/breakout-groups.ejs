@@ -1,0 +1,19 @@
+<section class="content-wrap space-page breakout-groups-page">
+  <a class="back-link" href="/org/<%= selectedOrg.id %>/course/<%= course.id %>#board"><i data-lucide="arrow-left"></i> <%= course.name %></a>
+  <div class="page-heading hero-heading">
+    <div><p class="eyebrow">BREAKOUT GROUPS</p><h1><%= task.title %></h1><p class="lead">Choose a team space for this project. There can be up to 50 groups.</p></div>
+    <% if (canCreateBreakoutGroup && breakoutGroups.length < 50) { %><details class="create-breakout-details"><summary class="button primary"><i data-lucide="plus"></i> Create group</summary><form class="page-form breakout-create-form" data-live-form action="/groups" method="post"><input type="hidden" name="orgId" value="<%= selectedOrg.id %>"><input type="hidden" name="courseId" value="<%= course.id %>"><input type="hidden" name="itemId" value="<%= task.id %>"><label>Group name<input name="name" placeholder="Team name" required></label><label>People capacity<input name="limit" type="number" min="2" max="50" value="4" required></label><button class="button primary" type="submit">Create group</button></form></details><% } %>
+  </div>
+  <div class="breakout-groups-summary"><strong><%= breakoutGroups.length %>/50</strong><span>groups created for this project</span></div>
+  <div class="breakout-group-grid">
+    <% breakoutGroups.forEach(group => { const joined = group.members.includes(user.id); const creator = users.find(person => person.id === group.createdBy) || { name: 'A member' }; %>
+      <article class="breakout-group-card <%= joined ? 'is-joined' : '' %>">
+        <div class="breakout-group-card-top"><div><h2><%= group.name %></h2><p><%= joined ? 'You are in this group' : 'Open team space' %></p></div><i data-lucide="users-round"></i></div>
+        <div class="breakout-group-meta"><span><i data-lucide="users"></i> <%= group.members.length %>/<%= group.limit %> people</span><span><i data-lucide="list-checks"></i> <%= (group.tasks || []).length %> tasks</span></div>
+        <p class="muted">Organized by <%= creator.name %></p>
+        <div class="breakout-group-actions"><a class="button <%= joined ? 'primary' : 'secondary' %>" href="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>"><i data-lucide="message-square"></i> <%= joined ? 'Open group' : 'View group' %></a><% if (group.members.length < group.limit && !joined) { %><a class="text-button" href="/b/<%= group.shareCode %>"><i data-lucide="user-plus"></i> Join group</a><% } %></div>
+      </article>
+    <% }) %>
+    <% if (!breakoutGroups.length) { %><div class="empty-panel"><i data-lucide="users-round"></i><h3>No breakout groups yet</h3><p>Create the first team space for this project.</p></div><% } %>
+  </div>
+</section>

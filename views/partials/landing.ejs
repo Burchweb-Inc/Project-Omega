@@ -1,1 +1,49 @@
-<main class="auth-layout"><section class="welcome-panel"><div class="wordmark"><span class="mark">H</span><span>studyhub</span></div><div class="welcome-copy"><p class="eyebrow">PEER-POWERED STUDY SPACE</p><h1>Make room for<br><em>the work that matters.</em></h1><p>A quiet place for classes, deadlines, project teams, and the details your LMS misses.</p><div class="landing-notes"><span><i data-lucide="shield-check"></i> Ad-free</span><span><i data-lucide="wifi-off"></i> School-Wi-Fi friendly</span><span><i data-lucide="users"></i> Built by peers</span></div></div><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div></section><section class="auth-panel"><div class="auth-card"><p class="eyebrow">STUDENT WORKSPACE</p><h2>Start with a clear desk.</h2><p class="muted">Create an account to organize your semester.</p><% if (error) { %><div class="form-alert" role="alert"><i data-lucide="circle-alert"></i><span><%= error === 'locked' ? 'Too many attempts. Try again in a few minutes.' : error === 'signup' ? 'Check your details. Passwords need at least 8 characters and accounts are for students 13+.' : 'We could not sign you in. Check your username and password.' %></span></div><% } %><div class="tabs"><button type="button" class="tab <%= error === 'login' || error === 'locked' ? '' : 'active' %>" data-tab="signup">Create account</button><button type="button" class="tab <%= error === 'login' || error === 'locked' ? 'active' : '' %>" data-tab="login">Sign in</button></div><form id="signup" class="auth-form <%= error === 'login' || error === 'locked' ? 'hidden' : '' %>" action="/signup" method="post"><label>What should we call you?<input name="name" autocomplete="name" placeholder="Alex Morgan" required></label><label>Choose a username<input name="username" autocomplete="username" placeholder="alexm" required></label><label>How old are you?<input name="age" type="number" min="13" placeholder="18" required></label><label>Create a password<input name="password" type="password" minlength="8" autocomplete="new-password" placeholder="At least 8 characters" required></label><button class="button primary full" type="submit">Create my workspace <i data-lucide="arrow-up-right"></i></button></form><form id="login" class="auth-form <%= error === 'login' || error === 'locked' ? '' : 'hidden' %>" action="/login" method="post"><label>Username<input name="username" autocomplete="username" placeholder="alexm" required></label><label>Password<input name="password" type="password" autocomplete="current-password" placeholder="Your password" required></label><button class="button primary full" type="submit">Open my workspace <i data-lucide="arrow-up-right"></i></button></form></div></section></main>
+<main class="auth-layout">
+    <section class="welcome-panel">
+        <div class="wordmark"><span class="mark">H</span><span>studyhub</span></div>
+        <div class="welcome-copy">
+            <p class="eyebrow">PEER-POWERED STUDY SPACE</p>
+            <h1>Make room for<br><em>the work that matters.</em></h1>
+            <p>A quiet place for classes, deadlines, project teams, and the details your LMS misses.</p>
+            <div class="landing-notes"><span><i data-lucide="shield-check"></i> Ad-free</span><span><i
+                        data-lucide="wifi-off"></i> School-Wi-Fi friendly</span><span><i data-lucide="users"></i> Built
+                    by peers</span></div>
+        </div>
+        <div class="orbit orbit-one"></div>
+        <div class="orbit orbit-two"></div>
+    </section>
+    <section class="auth-panel">
+        <div class="auth-card">
+            <p class="eyebrow">STUDENT WORKSPACE</p>
+            <h2>Start with a clear desk.</h2>
+            <p class="muted">Create an account to organize your semester.</p>
+            <% if (error) { %>
+                <div class="form-alert" role="alert"><i data-lucide="circle-alert"></i><span>
+                        <%= error==='locked' ? 'Too many attempts. Try again in a few minutes.' : error==='signup'
+                            ? 'Check your details. Passwords need at least 8 characters and accounts are for students 13+.'
+                            : 'We could not sign you in. Check your username and password.' %>
+                    </span></div>
+                <% } %>
+                    <div class="tabs"><button type="button"
+                            class="tab <%= error === 'login' || error === 'locked' ? '' : 'active' %>"
+                            data-tab="signup">Create account</button><button type="button"
+                            class="tab <%= error === 'login' || error === 'locked' ? 'active' : '' %>"
+                            data-tab="login">Sign in</button></div>
+                    <form id="signup" class="auth-form <%= error === 'login' || error === 'locked' ? 'hidden' : '' %>"
+                        action="/signup" method="post"><label>What should we call you?<input name="name"
+                                autocomplete="name" placeholder="Alex Morgan" required></label><label>Choose a
+                            username<input name="username" autocomplete="username" placeholder="alexm"
+                                required></label><label>How old are you?<input name="age" type="number" min="13"
+                                placeholder="18" required></label><label>Create a password<input name="password"
+                                type="password" minlength="8" autocomplete="new-password"
+                                placeholder="At least 8 characters" required></label><button class="button primary full"
+                            type="submit">Create my workspace <i data-lucide="arrow-up-right"></i></button></form>
+                    <form id="login" class="auth-form <%= error === 'login' || error === 'locked' ? '' : 'hidden' %>"
+                        action="/login" method="post"><label>Username<input name="username" autocomplete="username"
+                                placeholder="alexm" required></label><label>Password<input name="password"
+                                type="password" autocomplete="current-password" placeholder="Your password"
+                                required></label><button class="button primary full" type="submit">Open my workspace <i
+                                data-lucide="arrow-up-right"></i></button></form>
+        </div>
+    </section>
+</main>

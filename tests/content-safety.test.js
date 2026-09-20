@@ -1,5 +1,8 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
@@ -8,6 +11,11 @@ const {
   scanContent
 } = require('../moderation/content-safety');
 const { createIffyModerator } = require('../moderation/iffy');
+const {
+  appendBadWordCandidate,
+  getPendingBadWordCandidates,
+  reviewQueuedBadWords
+} = require('../moderation/bad-word-queue');
 
 /*
  * Content Safety Test Suite
@@ -753,6 +761,105 @@ test('every scanner result satisfies the public safety contract', () => {
     const result = scanContent(input);
     assertValidResult(result);
   }
+});
+
+test('reloads the live bad-word file during scans instead of freezing startup values', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'studyhub-badwords-'));
+  const badWordsFile = path.join(dir, 'bad-words.txt');
+  fs.writeFileSync(badWordsFile, 'dragon\n');
+
+  const result = scanContent({ type: 'comment', text: 'dragon' }, { badWordFilePath: badWordsFile });
+  assertValidResult(result);
+  assert.ok(result.badScore > 0, 'expected a newly-added bad word to be recognized live');
+});
+
+test('recognizes phrase-level user-generated moderation entries', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'studyhub-phrases-'));
+  const userWordsFile = path.join(dir, 'user-bad-words.txt');
+  fs.writeFileSync(userWordsFile, 'i will kill you\n');
+
+  const result = scanContent({ type: 'comment', text: 'i will kill you' }, { badWordFilePath: userWordsFile });
+  assertValidResult(result);
+  assert.ok(result.badScore > 0, 'expected a phrase-level bad word to be recognized');
+});
+
+test('parses only plain word-or-phrase entries from AI output and drops explanatory text', () => {
+  const parsed = require('../moderation/bad-word-queue').parseAiWordList(
+    'Approved entries:\n- stupid\n- i will kill you\n- "bitch"\n'
+  );
+
+  assert.deepEqual(parsed, ['stupid', 'i will kill you', 'bitch']);
+});
+
+test('appends new bad words with a newline separator if the file is missing one', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'studyhub-newline-'));
+  const queuePath = path.join(dir, 'queue.txt');
+  const checkpointPath = path.join(dir, 'checkpoint.txt');
+  const badWordsPath = path.join(dir, 'bad-words.txt');
+  const instructionsPath = path.join(dir, 'instructions.txt');
+
+  fs.writeFileSync(queuePath, 'stupid\n');
+  fs.writeFileSync(checkpointPath, '0\n');
+  fs.writeFileSync(badWordsPath, 'idiot');
+  fs.writeFileSync(instructionsPath, 'Return only bad words, one per line.');
+
+  const result = reviewQueuedBadWords({
+    queuePath,
+    checkpointPath,
+    badWordsPath,
+    instructionsPath,
+    apiKey: 'test-key',
+    model: 'test-model',
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ message: { content: 'stupid\n' } }] })
+    })
+  });
+
+  return result.then((outcome) => {
+    assert.equal(outcome.kept.includes('stupid'), true);
+    assert.match(fs.readFileSync(badWordsPath, 'utf8'), /idiot\nstupid\n/);
+  });
+});
+
+test('moves reviewed items into bad or discard files and removes them from the queue', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'studyhub-queue-lifecycle-'));
+  const queuePath = path.join(dir, 'queue.txt');
+  const badWordsPath = path.join(dir, 'bad-words.txt');
+  const discardPath = path.join(dir, 'discard.txt');
+  const instructionsPath = path.join(dir, 'instructions.txt');
+
+  fs.writeFileSync(queuePath, ['doofus', 'stupid', 'hello'].join('\n'));
+  fs.writeFileSync(badWordsPath, 'idiot\n');
+  fs.writeFileSync(instructionsPath, 'Return only bad words, one per line.');
+
+  const result = await reviewQueuedBadWords({
+    queuePath,
+    badWordsPath,
+    discardPath,
+    instructionsPath,
+    apiKey: 'test-key',
+    model: 'test-model',
+    fetchImpl: async (_url, options) => {
+      const payload = JSON.parse(options.body);
+      assert.equal(payload.messages[1].content.includes('doofus'), true);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ choices: [{ message: { content: 'stupid\n' } }] })
+      };
+    }
+  });
+
+  assert.equal(result.checked, 3);
+  assert.equal(result.kept.includes('stupid'), true);
+  assert.equal(result.removed.includes('doofus'), true);
+  assert.equal(result.removed.includes('hello'), true);
+  assert.equal(fs.readFileSync(queuePath, 'utf8').trim(), '');
+  assert.match(fs.readFileSync(badWordsPath, 'utf8'), /stupid/);
+  assert.match(fs.readFileSync(discardPath, 'utf8'), /doofus/);
+  assert.match(fs.readFileSync(discardPath, 'utf8'), /hello/);
 });
 
 console.log('content safety checks passed');
