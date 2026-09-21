@@ -14,6 +14,7 @@ const { appendRemovedTextForReview, reviewQueuedBadWords } = require('./moderati
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || '0.0.0.0';
+const serviceWorkerVersion = 'lockin-sw-20260921-5';
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const dbPath = path.join(dataDir, 'studyline.db');
 const contentModerator = createIffyModerator();
@@ -57,6 +58,37 @@ app.use((request, response, next) => {
   response.setHeader('Referrer-Policy', 'same-origin');
   response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
+});
+app.get('/service-worker-version.json', (request, response) => {
+  response.setHeader('Cache-Control', 'no-store, max-age=0');
+  response.json({ version: serviceWorkerVersion });
+});
+app.get('/service-worker.js', (request, response) => {
+  response.setHeader('Cache-Control', 'no-store, max-age=0');
+  response.sendFile(path.join(__dirname, 'public', 'service-worker.js'));
+});
+app.get('/media/logo-shimmer.mp4', (request, response, next) => {
+  response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  next();
+});
+app.get('/media/offline/*', (request, response, next) => {
+  response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  next();
+});
+app.get('/media/offline-manifest.json', (request, response) => {
+  const offlineDir = path.join(__dirname, 'public', 'media', 'offline');
+  const files = [];
+  const visit = (directory, prefix) => {
+    if (!fs.existsSync(directory)) return;
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name);
+      const entryPrefix = `${prefix}/${entry.name}`;
+      if (entry.isDirectory()) visit(entryPath, entryPrefix);
+      else files.push(`/media/offline${entryPrefix}`);
+    }
+  };
+  visit(offlineDir, '');
+  response.json(files);
 });
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -821,7 +853,7 @@ server.listen(port, host, () => {
   const codespacesUrl = process.env.CODESPACES && process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN
     ? `https://${process.env.CODESPACE_NAME}-${port}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`
     : null;
-  console.log(`StudyHub running at http://${host}:${port}${codespacesUrl ? ` (${codespacesUrl})` : ''}`);
+  console.log(`LockIn running at http://${host}:${port}${codespacesUrl ? ` (${codespacesUrl})` : ''}`);
 });
 function shutdown() { server.close(() => { db.close(); process.exit(0); }); }
 process.once('SIGTERM', shutdown);

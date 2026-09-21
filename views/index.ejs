@@ -2,12 +2,65 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= page === 'landing' ? 'StudyHub' : `StudyHub | ${locals.selectedOrg?.name || 'Study space'}` %></title>
+  <title><%= page === 'landing' ? 'LockIn' : `LockIn | ${locals.selectedOrg?.name || 'Study space'}` %></title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/pages.css"><link rel="stylesheet" href="/router.css"><link rel="stylesheet" href="/ui-overrides.css"><script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'"><noscript><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"></noscript>
+  <link rel="preload" href="/media/logo-shimmer.mp4" as="video" type="video/mp4">
+  <% if (['landing', 'about', 'support', 'privacy', 'terms', 'understand'].includes(page)) { %>
+    <style>body.page-loading > :not(.page-loader) { opacity: 0; } .page-loader { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; background: #f4f7fa; } .page-loader-video { display: block; width: min(240px, 55vw); height: auto; }</style>
+    <link rel="preload" href="/styles.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><link rel="preload" href="/pages.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><link rel="preload" href="/router.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><link rel="preload" href="/ui-overrides.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/pages.css"><link rel="stylesheet" href="/router.css"><link rel="stylesheet" href="/ui-overrides.css"></noscript>
+  <% } else { %>
+    <link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/pages.css"><link rel="stylesheet" href="/router.css"><link rel="stylesheet" href="/ui-overrides.css">
+  <% } %><script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      (async () => {
+        const isVanityPage = <%= ['landing', 'about', 'support', 'privacy', 'terms', 'understand'].includes(page) ? 'true' : 'false' %>;
+        const versionResponse = await fetch('/service-worker-version.json', { cache: 'no-store' });
+        const { version } = await versionResponse.json();
+        const workerUrl = `/service-worker.js?v=${encodeURIComponent(version)}`;
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        const isCurrent = (worker) => worker && new URL(worker.scriptURL).searchParams.get('v') === version;
+        const hasStaleWorker = registrations.some((registration) => [registration.active, registration.waiting, registration.installing].some((worker) => worker && !isCurrent(worker)));
+        if (hasStaleWorker) {
+          console.warn('[LockIn] Stale service worker detected. Purging registrations and caches.', { version });
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+          await Promise.all((await caches.keys()).map((cacheName) => caches.delete(cacheName)));
+        }
+        const registration = await navigator.serviceWorker.register(workerUrl, { updateViaCache: 'none' });
+        await registration.update();
+        await navigator.serviceWorker.ready;
+        const reloadKey = `lockin-sw-reloaded-${version}`;
+        const needsControlReload = !navigator.serviceWorker.controller && (hasStaleWorker || isVanityPage);
+        if (needsControlReload && sessionStorage.getItem(reloadKey) !== 'true') {
+          console.info('[LockIn] Service worker ready. Reloading under the current version.', { version });
+          sessionStorage.setItem(reloadKey, 'true');
+          window.location.reload();
+        } else if (navigator.serviceWorker.controller) {
+          sessionStorage.removeItem(reloadKey);
+          console.info('[LockIn] Service worker active.', { version });
+        }
+      })().catch((error) => console.warn('[LockIn] Service worker setup failed.', error));
+    }
+  </script>
 </head>
-<body class="<%= page %>">
+<body class="<%= page %> <%= ['landing', 'about', 'support', 'privacy', 'terms', 'understand'].includes(page) ? 'page-loading' : '' %>">
+<% if (['landing', 'about', 'support', 'privacy', 'terms', 'understand'].includes(page)) { %>
+  <div class="page-loader" data-page-loader aria-label="Loading LockIn" role="status">
+    <video class="page-loader-video" data-page-loader-video autoplay muted playsinline preload="auto">
+      <source src="/media/logo-shimmer.mp4" type="video/mp4">
+    </video>
+  </div>
+  <script>
+    (() => {
+      const video = document.querySelector('[data-page-loader-video]');
+      if (!video) return;
+      const start = () => { video.dataset.started = 'true'; video.play().catch(() => {}); };
+      if (video.readyState >= 1) start();
+      else video.addEventListener('loadedmetadata', start, { once: true });
+    })();
+  </script>
+<% } %>
 <% if (page === 'landing') { %>
   <%- include('partials/landing') %>
 <% } else if (['about', 'support', 'privacy', 'terms', 'understand'].includes(page)) { %>

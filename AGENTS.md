@@ -32,3 +32,6 @@ Unless the user *wants* a boring website, don’t give them one. Judging by what
 1. Try a different background (not recommended very much) . Maybe take something from Pexels or Unsplash. Either something relevant, or a nice pattern?
 2. Try a different UI design. Users don’t want every site to look the same. Maybe use a thick blur. Maybe a color change effect on scroll. Maybe something that I haven’t suggested on this guideline!
 3. Try new animations. Depending on the site (boring vs creative studio), create custom on scroll, scroll-driven, or on load animations that make content pop. Whether it’s an intro animation for a game studio, a typing effect for a developer, or something else!
+
+
+ALWAYS ask questions if needed. ALWAYS!

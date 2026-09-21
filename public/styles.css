@@ -2239,7 +2239,6 @@ textarea {
 .calendar-week {
     min-width: 630px
 }
-}
 
 /* Landing */
 .auth-layout {
@@ -2559,5 +2558,80 @@ textarea {
     .calendar-days,
     .calendar-week {
         min-width: 630px
+    }
+}
+
+.wordmark img {
+    display: block;
+    width: 142px;
+    height: auto;
+    object-fit: contain
+}
+
+.public-header .wordmark img {
+    width: 150px
+}
+
+.welcome-panel .wordmark img {
+    width: 180px;
+    background: white
+}
+
+.about-hero-video {
+    display: block;
+    width: min(500px, 100%);
+    height: auto;
+    margin: -48px 0 24px;
+    object-fit: contain;
+    /* background: white;
+    border-radius: 8px;
+    box-shadow: 8px 9px 0 var(--gold) */
+}
+
+body.page-loading > :not(.page-loader) {
+    opacity: 0;
+}
+
+body.page-loading > :not(.page-loader),
+body.page-loading > :not(.page-loader) * {
+    animation-play-state: paused !important;
+}
+
+.page-loader {
+    position: fixed;
+    z-index: 1000;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: var(--paper);
+    opacity: 1;
+    transition: opacity 1.1s ease;
+}
+
+.page-loader-video {
+    display: block;
+    width: min(240px, 55vw);
+    height: auto;
+}
+
+body.page-ready > :not(.page-loader) {
+    opacity: 1;
+    transition: opacity 1.1s ease;
+}
+
+body.page-ready > :not(.page-loader),
+body.page-ready > :not(.page-loader) * {
+    animation-play-state: running !important;
+}
+
+body.page-ready .page-loader {
+    pointer-events: none;
+    opacity: 0;
+}
+
+@media(max-width:1000px) {
+    .about-hero-video {
+        width: min(440px, 100%);
+        margin: -20px 0 24px
     }
 }
