@@ -5,173 +5,395 @@
   }
 
   .page-heading .hero {
-  display: inline-block;
-  transition: opacity 2s ease, transform 2s ease;
-  min-height:150px
-}
+    display: inline-block;
+    transition: opacity 2s ease, transform 2s ease;
+    min-height: 150px;
+  }
 
-/* Fading in and sliding up into position */
-.hero-fade-in {
-  opacity: 1;
-  transform: translateY(0);
-}
+  .hero-fade-in {
+    opacity: 1;
+    transform: translateY(0);
+  }
 
-/* Fading out and sliding slightly upwards */
-.hero-fade-out {
-  opacity: 0;
-  transform: translateY(-8px);
-}
+  .hero-fade-out {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
 
-.spbtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width:175px;
-  max-width:175px;
-}
+  .spbtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 175px;
+    max-width: 175px;
+  }
+
+  .dashboard-tabs {
+    display: flex;
+    gap: 20px;
+    margin: 0 0 24px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+  }
+
+  .dashboard-tabs a {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    position: relative;
+    padding: 0 0 12px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .dashboard-tabs a.active {
+    color: var(--blue);
+  }
+
+  .dashboard-tabs a.active::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    background: var(--coral);
+    border-radius: 999px;
+  }
+
+  .dashboard-shell {
+    display: grid;
+    gap: 18px;
+  }
+
+  .dashboard-tab-panel {
+    display: none;
+    gap: 18px;
+  }
+
+  .dashboard-tab-panel.active {
+    display: grid;
+  }
+
+  .dashboard-group-search {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 14px 16px;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  .dashboard-group-search input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .dashboard-group-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .dashboard-group-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 15px 17px;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+  }
+
+  .dashboard-group-item.hidden {
+    display: none;
+  }
+
+  .dashboard-group-item strong {
+    display: block;
+    font-size: 14px;
+  }
+
+  .dashboard-group-item small {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+  }
+
+  .dashboard-group-item .group-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dashboard-moderation-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .dashboard-moderation-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+    padding: 16px 18px;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+  }
+
+  .dashboard-moderation-item[data-dashboard-comment] {
+    border-color: #f1d4c0;
+  }
+
+  .dashboard-moderation-item strong {
+    display: block;
+    font-size: 14px;
+  }
+
+  .dashboard-moderation-item p {
+    margin: 7px 0 0;
+    line-height: 1.55;
+  }
+
+  .dashboard-moderation-item small {
+    display: block;
+    margin-top: 8px;
+    color: var(--muted);
+  }
+
+  .moderation-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .moderation-actions form {
+    margin: 0;
+  }
+
+  @media (max-width: 700px) {
+    .dashboard-group-item,
+    .dashboard-moderation-item {
+      grid-template-columns: 1fr;
+      display: grid;
+    }
+
+    .dashboard-group-item .group-actions,
+    .moderation-actions {
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
+  }
 </style>
-<section class="content-wrap dashboard-page">
+
+<section class="content-wrap dashboard-page" data-dashboard-live>
   <div class="page-heading hero-heading">
     <div>
       <p class="time">TIME TO GET TO BUSINESS</p>
       <h1 class="hero">Make today easier to carry.</h1>
       <p class="lead">Your classes, people, and next steps in one calm view.</p>
-    </div><a class="button primary spbtn" href="/org/new"><i data-lucide="plus"></i> New Group</a>
+    </div>
+    <a class="button primary spbtn" href="/org/new"><i data-lucide="plus"></i> New Group</a>
   </div>
-  <div class="metric-grid">
-    <div class="metric-card metric-accent"><span>Open tasks</span><strong>
-        <%= (user.tasks || []).filter(task=> !task.done).length %>
-      </strong><small>in your private queue</small></div>
-    <div class="metric-card"><span>Course feeds</span><strong>
-        <%= orgs.reduce((count, org)=> count + org.courses.length, 0) %>
-      </strong><small>across your spaces</small></div>
-    <div class="metric-card"><span>Peer signals</span><strong>
-        <%= feedItems.filter(entry=> (entry.verifiedBy || []).length).length %>
-      </strong><small>items checked recently</small></div>
-    <div class="metric-card"><span>Groups</span><strong>
-        <%= orgs.reduce((count, org)=> count + (org.groups || []).length, 0) %>
-      </strong><small>projects in motion</small></div>
-  </div>
-  <div class="dashboard-grid">
-    <section class="feed-panel">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">LIVE FROM YOUR SPACES</p>
-          <h2>Course activity</h2>
-        </div><a class="text-button" href="/calendar">View calendar <i data-lucide="arrow-up-right"></i></a>
+
+  <nav class="dashboard-tabs" aria-label="Dashboard sections">
+    <a class="<%= dashboardTab === 'overview' ? 'active' : '' %>" href="/dashboard?tab=overview">Overview</a>
+    <a class="<%= dashboardTab === 'groups' ? 'active' : '' %>" href="/dashboard?tab=groups">Group list</a>
+    <a class="<%= dashboardTab === 'moderate' ? 'active' : '' %>" href="/dashboard?tab=moderate">Moderate</a>
+  </nav>
+
+  <div class="dashboard-shell">
+    <% if (dashboardTab === 'overview') { %>
+    <section class="dashboard-tab-panel active">
+      <div class="metric-grid">
+        <div class="metric-card metric-accent"><span>Open tasks</span><strong><%= (user.tasks || []).filter(task => !task.done).length %></strong><small>in your private queue</small></div>
+        <div class="metric-card"><span>Course feeds</span><strong><%= orgs.reduce((count, org) => count + org.courses.length, 0) %></strong><small>across your spaces</small></div>
+        <div class="metric-card"><span>Peer signals</span><strong><%= feedItems.filter(entry => (entry.verifiedBy || []).length).length %></strong><small>items checked recently</small></div>
+        <div class="metric-card"><span>Groups</span><strong><%= orgs.reduce((count, org) => count + (org.groups || []).length, 0) %></strong><small>projects in motion</small></div>
       </div>
-      <div class="feed-list">
-        <% feedItems.forEach(entry=> { %><article class="feed-card">
-            <div class="feed-card-head"><span
-                class="category-dot category-<%= entry.type.toLowerCase().replace(/[^a-z]/g, '-') %>"></span>
-              <div><span class="feed-source">
-                  <%= entry.course.name %> · <%= entry.org.name %>
-                </span>
-                <h3>
-                  <%= entry.title %>
-                </h3>
-              </div><span class="feed-date">
-                <%= entry.due %>
-              </span>
+      <div class="dashboard-grid">
+        <section class="feed-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">LIVE FROM YOUR SPACES</p>
+              <h2>Course activity</h2>
             </div>
-            <div class="feed-card-foot"><span class="type-label">
-                <%= entry.type %>
-              </span><span class="trust-count"><i data-lucide="shield-check"></i>
-                <%= (entry.verifiedBy || []).length %> confirmed
-              </span><a href="/org/<%= entry.org.id %>/course/<%= entry.course.id %>">Open thread <i
-                  data-lucide="arrow-right"></i></a></div>
-          </article>
-          <% }) %>
+            <a class="text-button" href="/calendar">View calendar <i data-lucide="arrow-up-right"></i></a>
+          </div>
+          <div class="feed-list">
+            <% feedItems.forEach(entry => { %>
+              <article class="feed-card">
+                <div class="feed-card-head">
+                  <span class="category-dot category-<%= entry.type.toLowerCase().replace(/[^a-z]/g, '-') %>"></span>
+                  <div>
+                    <span class="feed-source"><%= entry.course.name %> · <%= entry.org.name %></span>
+                    <h3><%= entry.title %></h3>
+                  </div>
+                  <span class="feed-date"><%= entry.due %></span>
+                </div>
+                <div class="feed-card-foot">
+                  <span class="type-label"><%= entry.type %></span>
+                  <span class="trust-count"><i data-lucide="shield-check"></i> <%= (entry.verifiedBy || []).length %> confirmed</span>
+                  <a href="/org/<%= entry.org.id %>/course/<%= entry.course.id %>">Open thread <i data-lucide="arrow-right"></i></a>
+                </div>
+              </article>
+            <% }) %>
             <% if (!feedItems.length) { %>
               <div class="empty-panel"><i data-lucide="layers-2"></i>
                 <h3>Your course feed starts here</h3>
-                <p>Add a course and post the first deadline for your classmates.</p><a class="button secondary"
-                  href="/org/new">Create a study space</a>
+                <p>Add a course and post the first deadline for your classmates.</p>
+                <a class="button secondary" href="/org/new">Create a study space</a>
               </div>
+            <% } %>
+          </div>
+        </section>
+
+        <aside class="dashboard-rail">
+          <section class="rail-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">NEXT UP</p>
+                <h2>My Todo</h2>
+              </div>
+              <a class="icon-link" href="/todo" aria-label="Open Personal Todo"><i data-lucide="arrow-up-right"></i></a>
+            </div>
+            <div class="mini-tasks">
+              <% (user.tasks || []).filter(task => !task.done).slice(0, 4).forEach(task => { %>
+                <div class="mini-task"><span class="mini-check"></span>
+                  <div>
+                    <strong><%= task.title %></strong>
+                    <small><%= task.source %></small>
+                  </div>
+                </div>
+              <% }) %>
+              <% if (!(user.tasks || []).filter(task => !task.done).length) { %>
+                <p class="muted">Your private queue is clear.</p>
               <% } %>
+            </div>
+            <a class="rail-link" href="/todo">Open full Todo <i data-lucide="arrow-right"></i></a>
+          </section>
+
+          <section class="rail-panel group-callout">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">WORK TOGETHER</p>
+                <h2>Breakout groups</h2>
+              </div>
+              <i data-lucide="users-round"></i>
+            </div>
+            <p>Split project work, claim responsibilities, and keep the shared deadline visible.</p>
+            <a class="button secondary" href="/groups">Explore groups</a>
+          </section>
+        </aside>
       </div>
     </section>
-    <aside class="dashboard-rail">
-      <section class="rail-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">NEXT UP</p>
-            <h2>My Todo</h2>
-          </div><a class="icon-link" href="/todo" aria-label="Open Personal Todo"><i
-              data-lucide="arrow-up-right"></i></a>
-        </div>
-        <div class="mini-tasks">
-          <% (user.tasks || []).filter(task=> !task.done).slice(0, 4).forEach(task => { %><div class="mini-task"><span
-                class="mini-check"></span>
-              <div><strong>
-                  <%= task.title %>
-                </strong><small>
-                  <%= task.source %>
-                </small></div>
+    <% } else if (dashboardTab === 'groups') { %>
+    <section class="dashboard-tab-panel active">
+      <div class="dashboard-group-search">
+        <i data-lucide="search"></i>
+        <input name="groupSearch" data-dashboard-group-search placeholder="Search groups by name" autocomplete="off">
+      </div>
+      <div class="dashboard-group-list">
+        <% dashboardGroups.forEach(org => { %>
+          <article class="dashboard-group-item" data-org-id="<%= org.id %>">
+            <div>
+              <strong><%= org.name %></strong>
+              <small><%= org.members?.length || 0 %> members · <%= org.groups?.length || 0 %> breakout groups</small>
             </div>
-            <% }) %>
-              <% if (!(user.tasks || []).filter(task=> !task.done).length) { %><p class="muted">Your private queue is
-                  clear.</p>
-                <% } %>
-        </div><a class="rail-link" href="/todo">Open full Todo <i data-lucide="arrow-right"></i></a>
-      </section>
-      <section class="rail-panel group-callout">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">WORK TOGETHER</p>
-            <h2>Breakout groups</h2>
-          </div><i data-lucide="users-round"></i>
-        </div>
-        <p>Split project work, claim responsibilities, and keep the shared deadline visible.</p><a
-          class="button secondary" href="/groups">Explore groups</a>
-      </section>
-    </aside>
+            <div class="group-actions">
+              <a class="button secondary" href="/group/<%= org.slug || org.id %>">Visit group</a>
+            </div>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+    <% } else { %>
+    <section class="dashboard-tab-panel active">
+      <div class="admin-queue-head"><div><h2>Review new comments</h2><p class="muted">Work from the top until every new comment has a decision.</p></div><strong class="queue-count"><%= dashboardModeration.length %> left</strong></div>
+      <div class="dashboard-moderation-list mod-queue">
+        <% if (dashboardModeration.length) { %>
+          <% dashboardModeration.forEach((comment, index) => { %>
+            <article class="dashboard-moderation-item mod-card<%= index === 0 ? ' is-next' : '' %>" data-dashboard-comment data-dashboard-comment-id="<%= comment.id %>" data-org-id="<%= comment.orgId %>">
+              <div class="mod-card-top"><span class="mod-number"><%= index + 1 %></span><div><strong><%= comment.author %></strong><span class="muted"> in <%= comment.source %> · <%= comment.orgName %></span></div><small><%= new Date(comment.createdAt).toLocaleString() %></small></div>
+              <p class="mod-text"><%= comment.text %></p>
+              <% if (comment.editedAt) { %><small class="comment-edited">Edited <%= new Date(comment.editedAt).toLocaleString() %></small><% } %>
+              <div class="mod-actions moderation-actions">
+                <form data-live-form action="/org/<%= comment.orgId %>/admin/comments/<%= comment.id %>/review" method="post">
+                  <button class="button primary" type="submit"><i data-lucide="check"></i> Keep and mark reviewed</button>
+                </form>
+                <form data-live-form action="/org/<%= comment.orgId %>/admin/comments/<%= comment.id %>/remove" method="post">
+                  <button class="button danger" type="submit"><i data-lucide="trash-2"></i> Remove</button>
+                </form>
+              </div>
+            </article>
+          <% }) %>
+        <% } else { %>
+          <div class="empty-panel mod-empty"><i data-lucide="badge-check"></i><h3>Everything is reviewed</h3><p>New comments will appear here when they need an admin decision.</p></div>
+        <% } %>
+      </div>
+    </section>
+    <% } %>
   </div>
 </section>
+
 <script>
   const today = new Date();
-console.log(today.toLocaleDateString()); 
   const options = { weekday: 'long', month: 'long', day: 'numeric' };
   const formattedDate = today.toLocaleDateString(undefined, options);
   const upperCase = formattedDate.toUpperCase();
-  document.querySelector('.page-heading .time').textContent = upperCase;
+  const timeElement = document.querySelector('.page-heading .time');
+  if (timeElement) timeElement.textContent = upperCase;
 
   function rotateHeroMessages() {
-  const heroMessages = [
-    'Make today easier to carry.',
-    'Your classes, people, and next steps in one calm view.',
-    'Stay on top of your tasks and deadlines.',
-    'Collaborate with your study groups seamlessly.',
-    'Keep your learning organized and efficient.'
-  ];
+    const heroMessages = [
+      'Make today easier to carry.',
+      'Your classes, people, and next steps in one calm view.',
+      'Stay on top of your tasks and deadlines.',
+      'Collaborate with your study groups seamlessly.',
+      'Keep your learning organized and efficient.'
+    ];
 
-  const heroElement = document.querySelector('.page-heading .hero');
-  if (!heroElement) return;
+    const heroElement = document.querySelector('.page-heading .hero');
+    if (!heroElement) return;
 
-  // 1. Pick a random starting index
-  let currentIndex = Math.floor(Math.random() * heroMessages.length);
-  
-  // Set initial message and display class
-  heroElement.textContent = heroMessages[currentIndex];
-  heroElement.classList.add('hero-fade-in');
+    let currentIndex = Math.floor(Math.random() * heroMessages.length);
+    heroElement.textContent = heroMessages[currentIndex];
+    heroElement.classList.add('hero-fade-in');
 
-  // 2. Rotate message with smooth transitions
-  setInterval(() => {
-    // Fade out phase
-    heroElement.classList.remove('hero-fade-in');
-    heroElement.classList.add('hero-fade-out');
+    setInterval(() => {
+      heroElement.classList.remove('hero-fade-in');
+      heroElement.classList.add('hero-fade-out');
+      setTimeout(() => {
+        currentIndex = (currentIndex + 1) % heroMessages.length;
+        heroElement.textContent = heroMessages[currentIndex];
+        heroElement.classList.remove('hero-fade-out');
+        heroElement.classList.add('hero-fade-in');
+      }, 2500);
+    }, 10000);
+  }
 
-    // Wait for fade-out CSS transition to finish (300ms) before swapping text
-    setTimeout(() => {
-      currentIndex = (currentIndex + 1) % heroMessages.length;
-      heroElement.textContent = heroMessages[currentIndex];
-      
-      // Fade in phase
-      heroElement.classList.remove('hero-fade-out');
-      heroElement.classList.add('hero-fade-in');
-    }, 2500);
-  }, 10000);
-}
+  const groupSearch = document.querySelector('[data-dashboard-group-search]');
+  if (groupSearch) {
+    groupSearch.addEventListener('input', () => {
+      const query = groupSearch.value.trim().toLowerCase();
+      document.querySelectorAll('.dashboard-group-item').forEach((item) => {
+        const text = item.querySelector('strong')?.textContent?.toLowerCase() || '';
+        item.classList.toggle('hidden', query && !text.includes(query));
+      });
+    });
+  }
 
-document.addEventListener('DOMContentLoaded', rotateHeroMessages);
+  document.addEventListener('DOMContentLoaded', rotateHeroMessages);
 </script>

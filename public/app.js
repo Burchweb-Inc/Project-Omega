@@ -313,12 +313,28 @@ function showWarningModal(notification) {
   modal.querySelector('[data-warning-close]').addEventListener('click', () => { modal.remove(); fetch(`/notifications/${encodeURIComponent(notification.id)}/read`, { method: 'POST', headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); });
   document.body.appendChild(modal); lucide.createIcons();
 }
+function showAnnouncementModal(notification) {
+  document.querySelector('[data-announcement-modal]')?.remove();
+  const size = ['small', 'normal', 'large'].includes(notification.fontSize) ? notification.fontSize : 'normal';
+  const media = notification.mediaUrl && notification.mediaType === 'image' ? `<img class="announcement-media" src="${escapeHtml(notification.mediaUrl)}" alt="Announcement media">` : notification.mediaUrl && notification.mediaType === 'video' ? `<video class="announcement-media" controls preload="metadata" src="${escapeHtml(notification.mediaUrl)}"></video>` : '';
+  const modal = document.createElement('div');
+  modal.className = 'announcement-modal-backdrop open';
+  modal.dataset.announcementModal = 'true';
+  modal.dataset.announcementId = notification.id;
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.innerHTML = `<article class="announcement-modal announcement-size-${size}"><button class="modal-close" type="button" data-announcement-close aria-label="Close announcement"><i data-lucide="x"></i></button><p class="kicker">SITE ANNOUNCEMENT</p><h2>${escapeHtml(notification.title)}</h2><div class="announcement-content">${notification.html || `<p>${escapeHtml(notification.message || '')}</p>`}</div>${media}<button class="button primary" type="button" data-announcement-close>I Gotchu</button></article>`;
+  modal.querySelectorAll('[data-announcement-close]').forEach((button) => button.addEventListener('click', () => { const id = modal.dataset.announcementId; modal.remove(); if (id) fetch(`/notifications/${encodeURIComponent(id)}/read`, { method: 'POST', headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); }));
+  document.body.appendChild(modal);
+  lucide.createIcons();
+}
 function connectLiveNotifications() {
   if (typeof io !== 'function') return;
   liveState.notificationSocket?.disconnect(); liveState.notificationSocket = io();
   liveState.notificationSocket.on('connect', () => liveState.notificationSocket.emit('notifications:join'));
   liveState.notificationSocket.on('notification:added', (notification) => {
     if (notification.type === 'warning') showWarningModal(notification);
+    if (notification.type === 'announcement') showAnnouncementModal(notification);
     const popover = document.querySelector('.notification-popover');
     if (popover && notification.id && !popover.querySelector(`[data-notification-id="${CSS.escape(notification.id)}"]`)) { popover.querySelector('.notification-empty')?.remove(); popover.insertAdjacentHTML('beforeend', notificationMarkup(notification)); bindLiveForms(popover.lastElementChild); bindNotificationGestures(popover.lastElementChild); lucide.createIcons(); }
     showLiveSuccess(notification.actionLabel ? `${notification.title} · ${notification.actionLabel}` : notification.title);
@@ -327,6 +343,29 @@ function connectLiveNotifications() {
       const count = summary.querySelector('.notification-count');
       if (count) count.textContent = String(Number(count.textContent || 0) + 1);
       else summary.insertAdjacentHTML('beforeend', '<span class="notification-count">1</span>');
+    }
+  });
+}
+
+function connectLiveDashboard() {
+  const root = document.querySelector('[data-dashboard-live]');
+  if (!root || typeof io !== 'function') return;
+  liveState.socket?.disconnect();
+  liveState.socket = io();
+  liveState.socket.on('connect', () => {
+    root.querySelectorAll('[data-dashboard-comment]').forEach((item) => {
+      if (item.dataset.orgId) liveState.socket.emit('org:join', { orgId: item.dataset.orgId });
+    });
+  });
+  liveState.socket.on('org:moderation-updated', ({ commentId, action }) => {
+    if (!commentId || !['comment-removed', 'comment-reviewed'].includes(action)) return;
+    const item = root.querySelector(`[data-dashboard-comment-id="${CSS.escape(commentId)}"]`);
+    if (!item) return;
+    item.remove();
+    const list = root.querySelector('.dashboard-moderation-list');
+    if (list && !list.querySelector('.dashboard-moderation-item')) {
+      list.innerHTML = '<div class="empty-panel"><i data-lucide="badge-check"></i><h3>No moderation queue</h3><p>All visible comments are already reviewed.</p></div>';
+      lucide.createIcons();
     }
   });
 }
@@ -342,11 +381,37 @@ function bindInteractions() {
   document.querySelectorAll('.comment-menu .menu-action.danger i[data-lucide="trash-2"]').forEach((icon) => icon.remove());
   bindNotificationGestures();
   document.querySelectorAll('[data-warning-close]').forEach((button) => button.addEventListener('click', () => { const modal = button.closest('[data-warning-modal]'); const warningId = modal?.dataset.warningId; modal?.remove(); if (warningId) fetch(`/notifications/${encodeURIComponent(warningId)}/read`, { method: 'POST', headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); }));
+  document.querySelectorAll('[data-announcement-close]').forEach((button) => button.addEventListener('click', () => { const modal = button.closest('[data-announcement-modal]'); const announcementId = modal?.dataset.announcementId; modal?.remove(); if (announcementId) fetch(`/notifications/${encodeURIComponent(announcementId)}/read`, { method: 'POST', headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); }));
   document.querySelectorAll('.report-action-form select[name="action"]').forEach((select) => select.addEventListener('change', () => { const field = select.form.querySelector('.suspension-field'); if (field) field.hidden = select.value !== 'remove-moderate'; }));
   document.querySelectorAll('.report-action-form select[name="action"]').forEach((select) => select.dispatchEvent(new Event('change')));
+  document.querySelectorAll('[data-user-search]').forEach((input) => {
+    const results = input.closest('label')?.querySelector('[data-user-search-results]');
+    let timer;
+    input.addEventListener('input', () => {
+      window.clearTimeout(timer);
+      const query = input.value.trim();
+      if (!query) { if (results) results.innerHTML = ''; return; }
+      timer = window.setTimeout(async () => {
+        const response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
+        if (!response.ok || !results) return;
+        const users = await response.json();
+        results.innerHTML = users.map((candidate) => `<button type="button" role="option" data-username="${escapeHtml(candidate.username)}"><strong>${escapeHtml(candidate.name)}</strong><small>@${escapeHtml(candidate.username)}</small></button>`).join('') || '<span class="user-search-empty">No users found</span>';
+        results.querySelectorAll('[data-username]').forEach((option) => option.addEventListener('click', () => { input.value = option.dataset.username; results.innerHTML = ''; input.focus(); }));
+      }, 160);
+    });
+  });
+  document.querySelectorAll('[data-group-search]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const query = input.value.trim().toLowerCase();
+      document.querySelectorAll('[data-group-row]').forEach((row) => {
+        const name = (row.dataset.groupName || row.textContent || '').toLowerCase();
+        row.hidden = Boolean(query) && !name.includes(query);
+      });
+    });
+  });
   const hash = window.location.hash.slice(1); if (courseRoot() && ['feed', 'board', 'resources'].includes(hash)) setCourseTab(hash, false);
   syncTodoSummary();
-  lucide.createIcons(); bindTodoControls(); connectLiveCourse(); bindCourseReorder(courseRoot()); connectLiveBreakout(); connectLiveTodo(); connectLiveNotifications();
+  lucide.createIcons(); bindTodoControls(); connectLiveCourse(); bindCourseReorder(courseRoot()); connectLiveBreakout(); connectLiveTodo(); connectLiveNotifications(); connectLiveDashboard();
 }
 
 window.addEventListener('live-error', (event) => showLiveError(event.detail || 'Action failed. Please try again.'));

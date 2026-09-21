@@ -1,2 +1,4 @@
 # Discard pile: entries reviewed and rejected as not bad.
 hi there
+hate
+i hate

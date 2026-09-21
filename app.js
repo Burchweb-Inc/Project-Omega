@@ -6,6 +6,8 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
+const { marked } = require('marked');
+const sanitizeHtml = require('sanitize-html');
 const { Server } = require('socket.io');
 const { createIffyModerator } = require('./moderation/iffy');
 const { moderationComments, registerCommentRoutes } = require('./moderation/comments');
@@ -36,6 +38,7 @@ db.prepare(`CREATE TABLE IF NOT EXISTS users (
 )`).run();
 try { db.prepare("ALTER TABLE users ADD COLUMN tasks TEXT NOT NULL DEFAULT '[]'").run(); } catch (error) { if (!error.message.includes('duplicate column name')) throw error; }
 for (const column of [
+  "is_site_admin INTEGER NOT NULL DEFAULT 0",
   "notifications TEXT NOT NULL DEFAULT '[]'",
   "moderation_status TEXT NOT NULL DEFAULT 'active'",
   "moderation_message TEXT NOT NULL DEFAULT ''",
@@ -47,6 +50,26 @@ db.prepare(`CREATE TABLE IF NOT EXISTS orgs (
   id TEXT PRIMARY KEY,
   payload TEXT NOT NULL,
   updated_at TEXT NOT NULL
+)`).run();
+db.prepare(`CREATE TABLE IF NOT EXISTS site_feedback (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  username TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open'
+)`).run();
+db.prepare(`CREATE TABLE IF NOT EXISTS site_announcements (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  body_markdown TEXT NOT NULL,
+  body_html TEXT NOT NULL,
+  media_url TEXT NOT NULL DEFAULT '',
+  media_type TEXT NOT NULL DEFAULT 'none',
+  font_size TEXT NOT NULL DEFAULT 'normal',
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL
 )`).run();
 
 app.set('view engine', 'ejs');
@@ -139,6 +162,7 @@ function loadUsersFromDatabase() {
     username: row.username,
     age: Number(row.age),
     passwordHash: row.password_hash,
+    isSiteAdmin: Boolean(row.is_site_admin) || row.username === 'admin',
     tasks: decryptTasks(row.tasks).map(normalizeTask),
     notifications: JSON.parse(row.notifications || '[]'),
     moderationStatus: row.moderation_status || 'active',
@@ -159,13 +183,14 @@ function loadOrgsFromDatabase() {
 }
 
 function persistState() {
-  const userWrite = db.prepare(`INSERT INTO users (id, name, username, age, password_hash, tasks, notifications, moderation_status, moderation_message, moderation_until)
-    VALUES (@id, @name, @username, @age, @passwordHash, @tasks, @notifications, @moderationStatus, @moderationMessage, @moderationUntil)
+  const userWrite = db.prepare(`INSERT INTO users (id, name, username, age, password_hash, is_site_admin, tasks, notifications, moderation_status, moderation_message, moderation_until)
+    VALUES (@id, @name, @username, @age, @passwordHash, @isSiteAdmin, @tasks, @notifications, @moderationStatus, @moderationMessage, @moderationUntil)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       username = excluded.username,
       age = excluded.age,
       password_hash = excluded.password_hash,
+      is_site_admin = excluded.is_site_admin,
       tasks = excluded.tasks,
       notifications = excluded.notifications,
       moderation_status = excluded.moderation_status,
@@ -184,6 +209,7 @@ function persistState() {
     username: user.username,
     age: Number(user.age),
     passwordHash: user.passwordHash,
+    isSiteAdmin: user.isSiteAdmin ? 1 : 0,
     tasks: encryptTasks(user.tasks),
     notifications: JSON.stringify(user.notifications || []),
     moderationStatus: user.moderationStatus || 'active',
@@ -253,10 +279,12 @@ function sendMutation(request, response, payload, fallback) {
 }
 function courseRoom(orgId, courseId) { return `course:${orgId}:${courseId}`; }
 function courseAdminRoom(orgId, courseId) { return `course-admin:${orgId}:${courseId}`; }
+function orgRoom(orgId) { return `org:${orgId}`; }
 function groupRoom(orgId) { return `group:${orgId}`; }
 function todoRoom(userId) { return `todo:${userId}`; }
 function notificationRoom(userId) { return `notifications:${userId}`; }
 function emitCourse(org, course, event, payload) { io.to(courseRoom(org.id, course.id)).emit(event, payload); }
+function emitOrg(org, event, payload) { io.to(orgRoom(org.id)).emit(event, payload); }
 function emitGroup(org, event, payload) { io.to(groupRoom(org.id)).emit(event, payload); }
 function emitTodo(userId, event, payload) { io.to(todoRoom(userId)).emit(event, payload); }
 function emitNotification(userId, notification) { io.to(notificationRoom(userId)).emit('notification:added', notification); }
@@ -295,9 +323,10 @@ function render(request, response, page, extra = {}) { normalizeUserTasks(reques
 function renderPublicPage(request, response, page) { response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: null }); }
 function getOrg(request) { return orgs.find((entry) => entry.id === request.params.id || entry.slug === request.params.slug); }
 function getCourse(org, courseId) { return org?.courses.find((course) => course.id === courseId); }
-function isOrgModerator(org, user) { const role = membership(org, user)?.role; return role === 'admin' || role === 'moderator'; }
+function isSiteAdmin(user) { return Boolean(user?.isSiteAdmin); }
+function isOrgModerator(org, user) { return isSiteAdmin(user) || ['admin', 'moderator'].includes(membership(org, user)?.role); }
 function canEdit(member) { return member?.role === 'admin' || member?.role === 'editor' || member?.role === 'moderator'; }
-function isOrgAdmin(org, user) { return membership(org, user)?.role === 'admin'; }
+function isOrgAdmin(org, user) { return isSiteAdmin(user) || membership(org, user)?.role === 'admin'; }
 function getBreakoutGroup(org, groupId) { return org?.groups?.find((group) => group.id === groupId); }
 function breakoutTaskSlug(item) { return `${slug(item.title)}-${item.id.slice(-8)}`; }
 function getBreakoutTask(org, courseId, taskSlug) {
@@ -308,7 +337,25 @@ function breakoutGroupsForTask(org, itemId) { return (org?.groups || []).filter(
 function breakoutGroupsUrl(org, course, item) { return `/org/${org.id}/course/${course.id}/task/${breakoutTaskSlug(item)}/breakout-groups`; }
 function canManageBreakoutGroup(org, group, user) { return Boolean(group && user && (isOrgModerator(org, user) || group.createdBy === user.id || group.roles?.[user.id] === 'Organizer' || group.roles?.[user.id] === 'Admin')); }
 function canManageItem(org, item, user) { const group = org?.groups?.find((entry) => entry.itemId === item?.id); return Boolean(item && user && (item.createdBy === user.id || isOrgAdmin(org, user) || canManageBreakoutGroup(org, group, user))); }
-function canAccess(org, user) { return Boolean(org && user && (org.visibility === 'public' || membership(org, user))); }
+function canAccess(org, user) { return Boolean(org && user && (isSiteAdmin(user) || org.visibility === 'public' || membership(org, user))); }
+function requireSiteAdmin(request, response, next) { if (!isSiteAdmin(request.user)) return response.status(403).send('Site admin access required.'); next(); }
+function siteFeedback() { return db.prepare('SELECT * FROM site_feedback ORDER BY created_at DESC').all(); }
+function siteAnnouncements() { return db.prepare('SELECT * FROM site_announcements ORDER BY created_at DESC').all(); }
+function renderAnnouncementMarkdown(markdown) {
+  const rendered = marked.parse(String(markdown || ''), { breaks: true, gfm: true });
+  return sanitizeHtml(rendered, {
+    allowedTags: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'em', 'del', 'blockquote', 'ul', 'ol', 'li', 'a', 'img', 'code', 'pre', 'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
+    allowedAttributes: { a: ['href', 'target', 'rel'], img: ['src', 'alt', 'title', 'width', 'height'] },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowedSchemesByTag: { img: ['http', 'https'] },
+    transformTags: { a: sanitizeHtml.simpleTransform('a', { rel: 'noreferrer noopener', target: '_blank' }) }
+  });
+}
+function announcementPayload(announcement) {
+  return { id: announcement.id, type: 'announcement', title: announcement.title, message: 'A new announcement is waiting for you.', html: announcement.body_html, mediaUrl: announcement.media_url, mediaType: announcement.media_type, fontSize: announcement.font_size, createdAt: announcement.created_at, read: false };
+}
+function globalModerationComments() { return orgs.flatMap((org) => moderationComments(org).map((comment) => ({ ...comment, orgId: org.id, orgName: org.name }))); }
+function globalReports() { return orgs.flatMap((org) => (org.reports || []).map((report) => ({ ...report, orgId: org.id, orgName: org.name }))); }
 async function contentPolicyError(input) {
   const result = await contentModerator.scan(input);
   const blockingCategories = new Set(['profanity', 'heavy-profanity', 'insult', 'harassment', 'targeted-insult', 'targeted-profanity', 'targeted-abuse', 'bad-word-list', 'content-checker']);
@@ -333,6 +380,10 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
   socket.on('notifications:join', () => socket.join(notificationRoom(socket.user.id)));
   socket.on('todo:join', () => socket.join(todoRoom(socket.user.id)));
+  socket.on('org:join', ({ orgId } = {}) => {
+    const org = orgs.find((entry) => entry.id === orgId);
+    if (org && canAccess(org, socket.user)) socket.join(orgRoom(org.id));
+  });
   socket.on('course:join', ({ orgId, courseId } = {}) => {
     const org = orgs.find((entry) => entry.id === orgId); const course = getCourse(org, courseId);
     if (canAccess(org, socket.user) && course) { socket.join(courseRoom(org.id, course.id)); if (isOrgAdmin(org, socket.user)) socket.join(courseAdminRoom(org.id, course.id)); }
@@ -343,7 +394,7 @@ io.on('connection', (socket) => {
   });
 });
 
-registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse, emitGroup, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification, appendRemovedTextForReview });
+registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse, emitGroup, emitOrg, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification, appendRemovedTextForReview });
 
 app.get('/', (request, response) => {
   request.user = currentUser(request);
@@ -364,11 +415,13 @@ app.get('/support', (request, response) => renderPublicPage(request, response, '
 app.get('/privacy', (request, response) => renderPublicPage(request, response, 'privacy'));
 app.get('/terms', (request, response) => renderPublicPage(request, response, 'terms'));
 app.get('/understand', (request, response) => renderPublicPage(request, response, 'understand'));
+app.get('/beta', (request, response) => renderPublicPage(request, response, 'beta'));
 
 app.post('/signup', (request, response) => {
   const { name, username, password, age } = request.body;
   if (!name || !username || !password || password.length < 8 || !age || Number(age) < 13 || users.some((user) => user.username === username.trim().toLowerCase())) return response.redirect('/?error=signup');
-  const user = { id: id(), name: name.trim(), username: username.trim().toLowerCase(), age: Number(age), passwordHash: passwordHash(password), tasks: [] };
+  const normalizedUsername = username.trim().toLowerCase();
+  const user = { id: id(), name: name.trim(), username: normalizedUsername, age: Number(age), passwordHash: passwordHash(password), isSiteAdmin: normalizedUsername === 'admin', tasks: [] };
   users.push(user); persistState(); setSession(response, user.id); response.redirect('/dashboard');
 });
 
@@ -406,7 +459,67 @@ app.post('/notifications/read-all', requireUser, (request, response) => {
   return sendMutation(request, response, { readAll: true }, '/dashboard');
 });
 
-app.get('/dashboard', requireUser, (request, response) => render(request, response, 'dashboard', { feedItems: allItems().filter((entry) => entry.org.members.some((member) => member.userId === request.user.id)).slice(0, 8) }));
+app.get('/dashboard', requireUser, (request, response) => {
+  const dashboardTab = ['overview', 'groups', 'moderate'].includes(request.query.tab) ? request.query.tab : 'overview';
+  const dashboardGroups = request.user.isSiteAdmin ? orgs.slice().sort((left, right) => left.name.localeCompare(right.name)) : orgs.filter((org) => membership(org, request.user)).sort((left, right) => left.name.localeCompare(right.name));
+  const dashboardModeration = (request.user.isSiteAdmin ? orgs : dashboardGroups).flatMap((org) => moderationComments(org).filter((comment) => !comment.reviewedAt).map((comment) => ({ ...comment, orgId: org.id, orgName: org.name })));
+  render(request, response, 'dashboard', {
+    feedItems: allItems().filter((entry) => entry.org.members.some((member) => member.userId === request.user.id)).slice(0, 8),
+    dashboardTab,
+    dashboardGroups,
+    dashboardModeration
+  });
+});
+app.get('/site-admin', requireUser, requireSiteAdmin, (request, response) => render(request, response, 'site-admin', {
+  siteAdminTab: ['admins', 'groups', 'moderation', 'feedback', 'announcements'].includes(request.query.tab) ? request.query.tab : 'admins',
+  siteAdminComments: globalModerationComments().filter((comment) => !comment.reviewedAt),
+  siteAdminReports: globalReports().filter((report) => report.status === 'open'),
+  feedback: siteFeedback(),
+  siteAdminUsers: users.filter((user) => user.isSiteAdmin),
+  announcements: siteAnnouncements()
+}));
+app.get('/api/users/search', requireUser, (request, response) => {
+  const query = String(request.query.q || '').trim().toLowerCase();
+  if (query.length < 1) return response.json([]);
+  response.json(users.filter((candidate) => candidate.username.includes(query) || candidate.name.toLowerCase().includes(query)).slice(0, 8).map((candidate) => ({ id: candidate.id, name: candidate.name, username: candidate.username })));
+});
+app.post('/site-admin/users', requireUser, requireSiteAdmin, (request, response) => {
+  const username = String(request.body.username || '').trim().toLowerCase();
+  const target = users.find((candidate) => candidate.username === username);
+  if (target) { target.isSiteAdmin = true; persistState(); }
+  return sendMutation(request, response, { successMessage: target ? `@${username} is now a site admin.` : 'User not found.' }, '/site-admin?tab=admins');
+});
+app.post('/site-admin/feedback/:id/status', requireUser, requireSiteAdmin, (request, response) => {
+  db.prepare('UPDATE site_feedback SET status = ? WHERE id = ?').run(request.body.status === 'closed' ? 'closed' : 'open', request.params.id);
+  return sendMutation(request, response, { successMessage: 'Feedback updated.' }, '/site-admin?tab=feedback');
+});
+app.post('/site-admin/force-ai-update', requireUser, requireSiteAdmin, (request, response) => {
+  reviewQueuedBadWordsNow();
+  return sendMutation(request, response, { successMessage: 'The AI update queue review has started.' }, '/site-admin?tab=moderation');
+});
+app.post('/site-admin/announcements', requireUser, requireSiteAdmin, (request, response) => {
+  const title = String(request.body.title || '').trim().slice(0, 160);
+  const bodyMarkdown = String(request.body.body || '').trim().slice(0, 30000);
+  const mediaUrl = String(request.body.mediaUrl || '').trim().slice(0, 2000);
+  const mediaType = ['none', 'image', 'video'].includes(request.body.mediaType) ? request.body.mediaType : 'none';
+  const fontSize = ['small', 'normal', 'large'].includes(request.body.fontSize) ? request.body.fontSize : 'normal';
+  if (!title || !bodyMarkdown) return sendMutation(request, response, { error: 'Announcements need a title and message.' }, '/site-admin?tab=announcements');
+  if (mediaUrl && !/^https?:\/\//i.test(mediaUrl)) return sendMutation(request, response, { error: 'Media links must start with http:// or https://.' }, '/site-admin?tab=announcements');
+  const announcement = { id: id(), title, body_html: renderAnnouncementMarkdown(bodyMarkdown), media_url: mediaUrl, media_type: mediaType, font_size: fontSize, created_by: request.user.id, created_at: new Date().toISOString() };
+  db.prepare('INSERT INTO site_announcements (id, title, body_markdown, body_html, media_url, media_type, font_size, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(announcement.id, announcement.title, bodyMarkdown, announcement.body_html, announcement.media_url, announcement.media_type, announcement.font_size, announcement.created_by, announcement.created_at);
+  const payload = announcementPayload(announcement);
+  users.forEach((user) => addNotification(user, payload));
+  persistState();
+  return sendMutation(request, response, { successMessage: `Announcement sent to ${users.length} users.` }, '/site-admin?tab=announcements');
+});
+app.post('/beta/feedback', requireUser, async (request, response) => {
+  const message = String(request.body.message || '').trim().slice(0, 2000);
+  if (!message) return sendMutation(request, response, { error: 'Tell us what you noticed in beta.' }, '/beta');
+  const policyError = await contentPolicyError({ type: 'text', text: message });
+  if (policyError) return sendMutation(request, response, { error: policyError }, '/beta');
+  db.prepare('INSERT INTO site_feedback (id, user_id, username, kind, message, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(id(), request.user.id, request.user.username, String(request.body.kind || 'general').slice(0, 40), message, new Date().toISOString());
+  return sendMutation(request, response, { successMessage: 'Thanks. Your beta feedback is in.' }, '/beta');
+});
 app.get('/todo', requireUser, (request, response) => render(request, response, 'todo'));
 app.get('/calendar', requireUser, (request, response) => render(request, response, 'calendar', { calendarItems: allItems().filter((entry) => entry.due && entry.due !== 'No date') }));
 app.get('/groups', requireUser, (request, response) => render(request, response, 'groups', { groups: orgs.filter((org) => membership(org, request.user)) }));
@@ -487,7 +600,7 @@ app.get('/org/:id/admin/:tab?', requireUser, (request, response) => {
   const org = getOrg(request); const member = membership(org, request.user);
   if (!org || !isOrgModerator(org, request.user)) return response.redirect(`/org/${request.params.id}`);
   const requestedTab = ['mod', 'report', 'settings', 'share'].includes(request.params.tab) ? request.params.tab : 'mod';
-  const adminTab = member.role === 'moderator' && !['mod', 'report'].includes(requestedTab) ? 'mod' : requestedTab;
+  const adminTab = member && member.role === 'moderator' && !['mod', 'report'].includes(requestedTab) ? 'mod' : requestedTab;
   const comments = moderationComments(org || { courses: [], groups: [] });
   render(request, response, 'admin', {
     selectedOrg: org,
@@ -839,6 +952,7 @@ app.post('/org/:id/admin/reports/:reportId/action', requireUser, async (request,
     else { affectedUser.moderationStatus = action === 'ban' ? 'banned' : 'suspended'; affectedUser.moderationUntil = action === 'ban' ? '' : new Date(Date.now() + days * 86400000).toISOString(); affectedUser.moderationMessage = message || (action === 'ban' ? 'Your access is permanently suspended until an administrator lifts the ban.' : `Your access is suspended for ${days} days after a content moderation action.`); addNotification(affectedUser, { type: action === 'ban' ? 'ban' : 'suspension', title: `Moderation action in ${org.name}`, message: affectedUser.moderationMessage }); sessions.forEach((userId, token) => { if (userId === affectedUser.id) sessions.delete(token); }); }
   }
   report.status = 'closed'; report.action = action; report.actionBy = request.user.username; report.actionAt = new Date().toISOString(); persistState();
+  emitOrg(org, 'org:moderation-updated', { orgId: org.id, reportId: report.id, commentId: report.contentId, action });
   return sendMutation(request, response, { action, reportId: report.id, successMessage: action === 'close' ? 'Report closed.' : action === 'warn' ? 'Warning sent.' : action === 'remove-moderate' ? 'Content removed and temporary suspension applied.' : action === 'ban' ? 'Content removed and permanent ban applied.' : 'Reported content removed.' }, `/org/${org.id}/admin/report`);
 });
 

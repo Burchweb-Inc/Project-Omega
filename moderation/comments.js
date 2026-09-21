@@ -44,7 +44,7 @@ function editComment(comment, text, user) {
   comment.editedBy = user.id;
 }
 
-function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse, emitGroup, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification, appendRemovedTextForReview }) {
+function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse, emitGroup, emitOrg, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification, appendRemovedTextForReview }) {
   app.post('/org/:id/items/:itemId/comments', requireUser, async (request, response) => {
     const org = getOrg(request);
     const item = canAccess(org, request.user) ? org.courses.flatMap((course) => course.items).find((entry) => entry.id === request.params.itemId) : null;
@@ -137,6 +137,7 @@ function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse,
     if (group) { group.comments = group.comments.filter((comment) => comment.id !== request.params.commentId); emitGroup(org, 'breakout:comment-deleted', { groupId: group.id, commentId: request.params.commentId }); }
     if (removedComment?.userId && removedComment.userId !== request.user.id) addNotification?.(users.find((user) => user.id === removedComment.userId), { type: 'comment-removed', title: `Comment removed in ${org.name}`, message: 'A group administrator removed one of your comments for review.' });
     persistState();
+    emitOrg(org, 'org:moderation-updated', { orgId: org.id, commentId: request.params.commentId, action: 'comment-removed' });
     return sendMutation(request, response, { removed: Boolean(item || group), commentId: request.params.commentId }, `/org/${org.id}/admin/mod`);
   });
 
@@ -144,6 +145,7 @@ function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse,
     const org = getOrg(request); const target = findReportedComment(org, request.params.commentId);
     if (!org || !target || !isOrgModerator(org, request.user)) return sendMutation(request, response, { error: 'That comment is unavailable or you are not a moderator.' }, `/org/${request.params.id}/admin/mod`);
     target.comment.reviewedAt = new Date().toISOString(); target.comment.reviewedBy = request.user.id; persistState();
+    emitOrg(org, 'org:moderation-updated', { orgId: org.id, commentId: target.comment.id, action: 'comment-reviewed' });
     return sendMutation(request, response, { reviewed: true, commentId: target.comment.id }, `/org/${org.id}/admin/mod`);
   });
 }

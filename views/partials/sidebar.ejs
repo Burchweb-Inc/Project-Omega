@@ -7,8 +7,9 @@
     <a class="nav-link <%= page === 'calendar' ? 'selected' : '' %>" href="/calendar"><i data-lucide="calendar-days"></i><span>Academic calendar</span></a>
     <div class="nav-label space-label">YOUR GROUPS</div>
     <a class="nav-link <%= page === 'groups' ? 'selected' : '' %>" href="/groups"><i data-lucide="users-round"></i><span>All groups</span></a>
+    <% if (user.isSiteAdmin) { %><a class="nav-link site-admin-link <%= page === 'site-admin' ? 'selected' : '' %>" href="/site-admin"><i data-lucide="shield-check"></i><span>Site Admin</span></a><% } %>
     <% orgs.filter(org => org.members.some(member => member.userId === user.id)).forEach(org => { %><a class="space-link" href="/group/<%= org.slug || org.id %>"><span class="space-dot" style="background:<%= org.courses[0]?.color || '#e56b4f' %>"></span><span><%= org.name %></span></a><% }) %>
     <a class="new-space" href="/group/new"><i data-lucide="plus"></i><span>New group</span></a>
   </nav>
-  <div class="sidebar-foot"><div class="user-chip"><span class="avatar"><%= user.name[0] %></span><div><strong><%= user.name %></strong><small>@<%= user.username %></small></div></div><form action="/logout" method="post"><button class="icon-button" aria-label="Sign out" title="Sign out"><i data-lucide="log-out"></i></button></form></div>
+  <div class="sidebar-foot"><% if (process.env.APP_MODE === 'beta') { %><a class="beta-badge" href="/beta" title="Learn about beta">BETA</a><% } %><div class="user-chip"><span class="avatar"><%= user.name[0] %></span><div><strong><%= user.name %></strong><small>@<%= user.username %></small></div></div><form action="/logout" method="post"><button class="icon-button" aria-label="Sign out" title="Sign out"><i data-lucide="log-out"></i></button></form></div>
 </aside>

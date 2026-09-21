@@ -1,0 +1,31 @@
+<style>
+  .announcement-modal-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: rgba(23, 43, 77, .55); }
+  .announcement-modal { position: relative; width: min(720px, 100%); max-height: min(88vh, 820px); overflow: auto; padding: 34px; background: var(--white); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 24px 80px rgba(23, 43, 77, .25); }
+  .announcement-modal .modal-close { position: absolute; top: 14px; right: 14px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+  .announcement-modal h2 { max-width: 85%; margin: 8px 0 20px; }
+  .announcement-content { line-height: 1.7; }
+  .announcement-content h1, .announcement-content h2, .announcement-content h3 { margin: 22px 0 10px; }
+  .announcement-content p, .announcement-content ul, .announcement-content ol, .announcement-content blockquote, .announcement-content pre, .announcement-content table { margin: 12px 0; }
+  .announcement-content img, .announcement-media { display: block; max-width: 100%; height: auto; margin: 18px 0; border-radius: 8px; }
+  .announcement-content blockquote { padding: 10px 16px; border-left: 3px solid var(--coral); background: var(--paper); }
+  .announcement-content pre { overflow: auto; padding: 14px; background: #edf2f7; border-radius: 8px; }
+  .announcement-content a { color: var(--blue); }
+  .announcement-size-small { font-size: 13px; }
+  .announcement-size-normal { font-size: 15px; }
+  .announcement-size-large { font-size: 18px; }
+  .announcement-modal > .button { margin-top: 18px; }
+</style>
+<% const announcementNotifications = (typeof notifications === 'undefined' ? (user.notifications || []) : notifications).filter(notification => !notification.read && notification.type === 'announcement'); const announcement = announcementNotifications[0]; %>
+<% if (announcement) { %>
+<div class="announcement-modal-backdrop open" data-announcement-modal data-announcement-id="<%= announcement.id %>" role="dialog" aria-modal="true" aria-labelledby="announcement-modal-title">
+  <article class="announcement-modal announcement-size-<%= announcement.fontSize || 'normal' %>">
+    <button class="modal-close" type="button" data-announcement-close aria-label="Close announcement"><i data-lucide="x"></i></button>
+    <p class="kicker">SITE ANNOUNCEMENT</p>
+    <h2 id="announcement-modal-title"><%= announcement.title %></h2>
+    <div class="announcement-content"><%- announcement.html %></div>
+    <% if (announcement.mediaUrl && announcement.mediaType === 'image') { %><img class="announcement-media" src="<%= announcement.mediaUrl %>" alt="Announcement media"><% } %>
+    <% if (announcement.mediaUrl && announcement.mediaType === 'video') { %><video class="announcement-media" controls preload="metadata" src="<%= announcement.mediaUrl %>"></video><% } %>
+    <button class="button primary" type="button" data-announcement-close>I Gotchu</button>
+  </article>
+</div>
+<% } %>
