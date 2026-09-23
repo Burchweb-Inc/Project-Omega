@@ -2,7 +2,7 @@ const routeProgress = document.createElement('div');
 routeProgress.className = 'route-progress';
 document.body.appendChild(routeProgress);
 
-const liveState = { socket: null, notificationSocket: null, pending: new Map() };
+const liveState = { socket: null, notificationSocket: null, pending: new Map(), dashboardHeroTimer: null, dashboardHeroFadeTimer: null };
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
 
 function courseRoot() { return document.querySelector('[data-course-live]'); }
@@ -307,6 +307,34 @@ function showLiveSuccess(message) {
   alert.innerHTML = `<i data-lucide="circle-check"></i><span>${escapeHtml(message)}</span><button type="button" aria-label="Dismiss message"><i data-lucide="x"></i></button>`;
   alert.querySelector('button').addEventListener('click', () => alert.remove()); document.body.appendChild(alert); lucide.createIcons(); window.setTimeout(() => alert.remove(), 7000);
 }
+async function purgeClientCache() {
+  const registrations = await navigator.serviceWorker?.getRegistrations?.() || [];
+  await Promise.all(registrations.map((registration) => registration.unregister()));
+  if (window.caches) await Promise.all((await caches.keys()).map((cacheName) => caches.delete(cacheName)));
+}
+function showDebugModal(remote = false) {
+  document.querySelector('[data-debug-modal]')?.remove();
+  const modal = document.createElement('div');
+  modal.className = 'debug-modal-backdrop open';
+  modal.dataset.debugModal = 'true';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.innerHTML = `<article class="debug-modal"><button class="modal-close" type="button" data-debug-close aria-label="Close debug menu"><i data-lucide="x"></i></button><p class="kicker">${remote ? 'REMOTE CACHE COMMAND' : 'DEBUG TOOLS'}</p><h2>${remote ? 'Cache purge requested' : 'Browser cache'}</h2>${remote ? '<p>A site admin requested a full cache purge for this browser. The page will unregister its service workers, delete every site cache, and reload.</p><button class="button danger" type="button" data-debug-nuke><i data-lucide="bomb"></i> Start purge</button>' : '<p>Use this when updated service workers or media files are not appearing. Nuking cache removes this site\'s service workers and every Cache Storage entry, then reloads the page.</p><p class="debug-warning"><i data-lucide="triangle-alert"></i> Offline media will be removed. The next load downloads fresh files and may be slower. This does not delete your account, tasks, groups, or server data.</p><button class="button danger" type="button" data-debug-nuke><i data-lucide="bomb"></i> NUKE CACHE</button>'}</article>`;
+  modal.querySelector('[data-debug-close]').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (event) => { if (event.target === modal) modal.remove(); });
+  modal.querySelector('[data-debug-nuke]').addEventListener('click', async (event) => {
+    event.currentTarget.disabled = true;
+    modal.classList.add('debug-launching');
+    modal.querySelector('.debug-modal').insertAdjacentHTML('beforeend', '<div class="nuclear-animation" aria-label="Nuclear cache purge in progress" role="status"><span class="nuclear-cloud"></span><span class="nuclear-stem"></span></div><p class="debug-status">Deleting service workers and site caches...</p>');
+    await new Promise((resolve) => window.setTimeout(resolve, 1900));
+    try { await purgeClientCache(); } finally { window.location.reload(); }
+  });
+  document.body.appendChild(modal);
+  lucide.createIcons();
+}
+function bindDebugTools() {
+  document.querySelectorAll('[data-debug-open]').forEach((button) => button.addEventListener('click', () => { button.closest('details')?.removeAttribute('open'); showDebugModal(); }));
+}
 function showWarningModal(notification) {
   document.querySelector('[data-warning-modal]')?.remove();
   const modal = document.createElement('div'); modal.className = 'warning-modal-backdrop open'; modal.dataset.warningModal = 'true'; modal.dataset.warningId = notification.id; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.innerHTML = `<div class="warning-modal"><i data-lucide="shield-alert"></i><p class="kicker">MODERATION NOTICE</p><h2>${escapeHtml(notification.title)}</h2><p>${escapeHtml(notification.message)}</p><button class="button primary" type="button" data-warning-close>I understand</button></div>`;
@@ -332,6 +360,7 @@ function connectLiveNotifications() {
   if (typeof io !== 'function') return;
   liveState.notificationSocket?.disconnect(); liveState.notificationSocket = io();
   liveState.notificationSocket.on('connect', () => liveState.notificationSocket.emit('notifications:join'));
+  liveState.notificationSocket.on('cache:nuke', () => showDebugModal(true));
   liveState.notificationSocket.on('notification:added', (notification) => {
     if (notification.type === 'warning') showWarningModal(notification);
     if (notification.type === 'announcement') showAnnouncementModal(notification);
@@ -370,9 +399,53 @@ function connectLiveDashboard() {
   });
 }
 
+function bindDashboardInteractions() {
+  window.clearInterval(liveState.dashboardHeroTimer);
+  window.clearTimeout(liveState.dashboardHeroFadeTimer);
+  const dashboard = document.querySelector('[data-dashboard-live]');
+  if (!dashboard) return;
+
+  const timeElement = dashboard.querySelector('.page-heading .time');
+  if (timeElement) timeElement.textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase();
+
+  const heroElement = dashboard.querySelector('.page-heading .hero');
+  if (heroElement) {
+    const heroMessages = [
+      'Make today easier to carry.',
+      'Your classes, people, and next steps in one calm view.',
+      'Stay on top of your tasks and deadlines.',
+      'Collaborate with your study groups seamlessly.',
+      'Keep your learning organized and efficient.'
+    ];
+    let currentIndex = Math.floor(Math.random() * heroMessages.length);
+    heroElement.textContent = heroMessages[currentIndex];
+    heroElement.classList.add('hero-fade-in');
+    liveState.dashboardHeroTimer = window.setInterval(() => {
+      heroElement.classList.remove('hero-fade-in');
+      heroElement.classList.add('hero-fade-out');
+      liveState.dashboardHeroFadeTimer = window.setTimeout(() => {
+        currentIndex = (currentIndex + 1) % heroMessages.length;
+        heroElement.textContent = heroMessages[currentIndex];
+        heroElement.classList.remove('hero-fade-out');
+        heroElement.classList.add('hero-fade-in');
+      }, 2500);
+    }, 10000);
+  }
+
+  const groupSearch = dashboard.querySelector('[data-dashboard-group-search]');
+  groupSearch?.addEventListener('input', () => {
+    const query = groupSearch.value.trim().toLowerCase();
+    dashboard.querySelectorAll('.dashboard-group-item').forEach((item) => {
+      const text = item.querySelector('strong')?.textContent?.toLowerCase() || '';
+      item.classList.toggle('hidden', Boolean(query) && !text.includes(query));
+    });
+  });
+}
+
 function bindInteractions() {
   document.querySelectorAll('[data-tab]').forEach((tab) => tab.addEventListener('click', () => { document.querySelectorAll('.tab').forEach((item) => item.classList.remove('active')); document.querySelectorAll('.auth-form').forEach((form) => form.classList.add('hidden')); tab.classList.add('active'); document.getElementById(tab.dataset.tab).classList.remove('hidden'); }));
   bindLiveForms();
+  bindDebugTools();
   document.querySelectorAll('[data-inline-create]').forEach((button) => button.addEventListener('click', () => { const form = document.querySelector('.inline-create-form'); form?.classList.remove('hidden'); form?.querySelector('input[name="title"]')?.focus(); form?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }));
   document.querySelectorAll('[data-course-tab]').forEach((tab) => tab.addEventListener('click', (event) => { event.preventDefault(); setCourseTab(tab.dataset.courseTab); }));
   document.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => { const target = document.getElementById(button.dataset.open); target?.classList.add('open'); target?.querySelector('input[name="title"]')?.focus(); }));
@@ -411,7 +484,7 @@ function bindInteractions() {
   });
   const hash = window.location.hash.slice(1); if (courseRoot() && ['feed', 'board', 'resources'].includes(hash)) setCourseTab(hash, false);
   syncTodoSummary();
-  lucide.createIcons(); bindTodoControls(); connectLiveCourse(); bindCourseReorder(courseRoot()); connectLiveBreakout(); connectLiveTodo(); connectLiveNotifications(); connectLiveDashboard();
+  lucide.createIcons(); bindTodoControls(); bindDashboardInteractions(); connectLiveCourse(); connectLiveBreakout(); connectLiveTodo(); connectLiveNotifications(); connectLiveDashboard();
 }
 
 window.addEventListener('live-error', (event) => showLiveError(event.detail || 'Action failed. Please try again.'));

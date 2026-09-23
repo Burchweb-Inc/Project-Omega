@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const creators = require('./data/creators');
 const express = require('express');
 const http = require('http');
 const crypto = require('crypto');
@@ -320,7 +321,7 @@ function requireUser(request, response, next) {
 }
 function membership(org, user) { return org && user ? org.members.find((member) => member.userId === user.id) : null; }
 function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs, canEdit, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, ...extra }); }
-function renderPublicPage(request, response, page) { response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: null }); }
+function renderPublicPage(request, response, page, extra = {}) { response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: null, ...extra }); }
 function getOrg(request) { return orgs.find((entry) => entry.id === request.params.id || entry.slug === request.params.slug); }
 function getCourse(org, courseId) { return org?.courses.find((course) => course.id === courseId); }
 function isSiteAdmin(user) { return Boolean(user?.isSiteAdmin); }
@@ -410,7 +411,7 @@ app.get(['/signup', '/login'], (request, response) => {
   response.redirect('/');
 });
 
-app.get('/about', (request, response) => renderPublicPage(request, response, 'about'));
+app.get('/about', (request, response) => renderPublicPage(request, response, 'about', { creators }));
 app.get('/support', (request, response) => renderPublicPage(request, response, 'support'));
 app.get('/privacy', (request, response) => renderPublicPage(request, response, 'privacy'));
 app.get('/terms', (request, response) => renderPublicPage(request, response, 'terms'));
@@ -471,7 +472,7 @@ app.get('/dashboard', requireUser, (request, response) => {
   });
 });
 app.get('/site-admin', requireUser, requireSiteAdmin, (request, response) => render(request, response, 'site-admin', {
-  siteAdminTab: ['admins', 'groups', 'moderation', 'feedback', 'announcements'].includes(request.query.tab) ? request.query.tab : 'admins',
+  siteAdminTab: ['admins', 'groups', 'moderation', 'feedback', 'announcements', 'cache'].includes(request.query.tab) ? request.query.tab : 'admins',
   siteAdminComments: globalModerationComments().filter((comment) => !comment.reviewedAt),
   siteAdminReports: globalReports().filter((report) => report.status === 'open'),
   feedback: siteFeedback(),
@@ -488,6 +489,19 @@ app.post('/site-admin/users', requireUser, requireSiteAdmin, (request, response)
   const target = users.find((candidate) => candidate.username === username);
   if (target) { target.isSiteAdmin = true; persistState(); }
   return sendMutation(request, response, { successMessage: target ? `@${username} is now a site admin.` : 'User not found.' }, '/site-admin?tab=admins');
+});
+app.post('/site-admin/cache', requireUser, requireSiteAdmin, (request, response) => {
+  const username = String(request.body.username || '').trim().toLowerCase();
+  const target = username ? users.find((user) => user.username === username) : null;
+  if (username && !target) return sendMutation(request, response, { error: 'User not found.' }, '/site-admin?tab=cache');
+  const payload = { reason: 'A site admin requested a cache purge.' };
+  if (target) {
+    io.to(notificationRoom(target.id)).emit('cache:nuke', payload);
+    const connected = io.sockets.adapter.rooms.get(notificationRoom(target.id))?.size || 0;
+    return sendMutation(request, response, { successMessage: `Cache purge sent to @${target.username} (${connected} connected device${connected === 1 ? '' : 's'}).` }, '/site-admin?tab=cache');
+  }
+  io.emit('cache:nuke', payload);
+  return sendMutation(request, response, { successMessage: `Cache purge sent to all ${users.length} users.` }, '/site-admin?tab=cache');
 });
 app.post('/site-admin/feedback/:id/status', requireUser, requireSiteAdmin, (request, response) => {
   db.prepare('UPDATE site_feedback SET status = ? WHERE id = ?').run(request.body.status === 'closed' ? 'closed' : 'open', request.params.id);
@@ -963,11 +977,38 @@ app.get('/share/:code', (request, response) => {
   if (!membership(org, user)) org.members.push({ userId: user.id, role: org.sharePermission }); org.shareUses -= 1; persistState(); response.redirect(`/org/${org.id}`);
 });
 
+app.use((request, response) => {
+  response.status(404).render('error', {
+    status: 404,
+    title: 'That page wandered off.',
+    message: 'We looked everywhere we could think of. The page you wanted is not here, but the rest of LockIn is still taking attendance.'
+  });
+});
+
+app.use((error, request, response, next) => {
+  if (response.headersSent) return next(error);
+  console.error('Unhandled request error:', error);
+  response.status(500).render('error', {
+    status: 500,
+    title: 'The server missed a step.',
+    message: 'Something went sideways on our end. No need to debug it from your side; head back to LockIn and try again.'
+  });
+});
+
 server.listen(port, host, () => {
   const codespacesUrl = process.env.CODESPACES && process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN
     ? `https://${process.env.CODESPACE_NAME}-${port}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`
     : null;
-  console.log(`LockIn running at http://${host}:${port}${codespacesUrl ? ` (${codespacesUrl})` : ''}`);
+  // VS Code's integrated terminal detects a forwarded port and shows the
+  // "Your app is running at http://localhost:PORT" popup plus the Ports panel
+  // entry by recognizing a browsable http://localhost:PORT / 127.0.0.1:PORT
+  // URL in the startup output. `0.0.0.0` is not browsable, so advertising it
+  // makes VS Code ignore the port. The server still listens on `host` (0.0.0.0)
+  // so the app stays reachable on the local network; we only change the log.
+  const displayUrl = !host || host === '0.0.0.0' || host === '::'
+    ? `http://localhost:${port}`
+    : `http://${host}:${port}`;
+  console.log(`LockIn running at ${displayUrl}${codespacesUrl ? ` (${codespacesUrl})` : ''}`);
 });
 function shutdown() { server.close(() => { db.close(); process.exit(0); }); }
 process.once('SIGTERM', shutdown);

@@ -19,6 +19,7 @@
     <a class="<%= siteAdminTab === 'moderation' ? 'active' : '' %>" href="/site-admin?tab=moderation"><i data-lucide="message-square-more"></i> Moderation</a>
     <a class="<%= siteAdminTab === 'feedback' ? 'active' : '' %>" href="/site-admin?tab=feedback"><i data-lucide="messages-square"></i> Feedback</a>
     <a class="<%= siteAdminTab === 'announcements' ? 'active' : '' %>" href="/site-admin?tab=announcements"><i data-lucide="megaphone"></i> Announcements</a>
+    <a class="<%= siteAdminTab === 'cache' ? 'active' : '' %>" href="/site-admin?tab=cache"><i data-lucide="database-zap"></i> Cache</a>
   </nav>
 
   <% if (siteAdminTab === 'admins') { %>
@@ -44,6 +45,12 @@
     <section class="admin-panel">
       <div class="admin-section-heading"><div><h2>Feedback</h2><p class="muted">Notes from people using beta and the rest of the site.</p></div></div>
       <% if (feedback.length) { feedback.forEach(item => { %><div class="site-admin-row" data-feedback-id="<%= item.id %>"><div><strong><%= item.kind %> · @<%= item.username %></strong><p><%= item.message %></p><small><%= new Date(item.created_at).toLocaleString() %></small></div><form data-live-form action="/site-admin/feedback/<%= item.id %>/status" method="post"><input type="hidden" name="status" value="<%= item.status === 'open' ? 'closed' : 'open' %>"><button class="text-button" type="submit"><%= item.status === 'open' ? 'Close' : 'Reopen' %></button></form></div><% }) } else { %><p class="muted">No feedback yet.</p><% } %>
+    </section>
+  <% } else if (siteAdminTab === 'cache') { %>
+    <section class="admin-panel">
+      <div class="admin-section-heading"><div><h2>Remote cache control</h2><p class="muted">This tells connected browsers to unregister their service workers, delete every Cache Storage entry for this site, and reload. It does not delete user data.</p></div></div>
+      <form class="inline-admin-form" data-live-form action="/site-admin/cache" method="post"><label class="cache-target-field">Username <span class="muted">leave blank for everyone</span><input name="username" placeholder="username"></label><button class="button danger" type="submit"><i data-lucide="bomb"></i> Nuke cache</button></form>
+      <p class="muted cache-warning"><i data-lucide="triangle-alert"></i> The selected browser will lose offline media and any locally cached files. The next load downloads fresh versions and may take longer.</p>
     </section>
   <% } else { %>
     <section class="admin-panel">

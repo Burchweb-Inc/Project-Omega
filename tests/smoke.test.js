@@ -53,7 +53,12 @@ assert.ok(pkg.dependencies.marked, 'Announcements should have a Markdown parser 
 assert.ok(pkg.dependencies['sanitize-html'], 'Announcements should sanitize rendered Markdown.');
 assert.match(app, /site_announcements/, 'Announcements should persist in their own database table.');
 assert.match(app, /app\.post\('\/site-admin\/announcements'/, 'Site admins should have an announcement broadcast endpoint.');
+assert.match(app, /app\.post\('\/site-admin\/cache'/, 'Site admins should have a remote cache purge endpoint.');
+assert.match(app, /cache:nuke/, 'Remote cache purge should notify connected clients.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Announcements|Broadcast announcement/, 'Site Admin should expose an announcements tab.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Remote cache control|Nuke cache/, 'Site Admin should expose a cache control tab.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'sidebar.ejs'), 'utf8'), /data-debug-open|account-menu/, 'The sidebar should expose debug tools from the account menu.');
+assert.match(client, /purgeClientCache|cache:nuke/, 'The client should purge service workers and Cache Storage.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'announcement-modal.ejs'), 'utf8'), /data-announcement-modal/, 'Announcements should appear in an acknowledgement popup.');
 assert.match(client, /showAnnouncementModal|type === 'announcement'/, 'Announcements should arrive as live rich popups.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'understand.ejs'), 'utf8'), /informational only/, 'The student guide should clearly disclaim legal force.');
