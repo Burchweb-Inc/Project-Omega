@@ -561,6 +561,101 @@ function bindPageLoader() {
   else shimmer.addEventListener('loadedmetadata', startShimmer, { once: true });
 }
 
+function bindLandingShader() {
+  const canvas = document.querySelector('[data-landing-shader]');
+  if (!canvas) return;
+  const context = canvas.getContext('webgl', { alpha: false, antialias: true });
+  if (!context) return;
+  const vertexSource = 'attribute vec2 position; void main() { gl_Position = vec4(position, 0.0, 1.0); }';
+  const fragmentSource = `precision highp float;
+    uniform vec2 resolution;
+    uniform float time;
+    uniform vec2 mouse;
+    #define PI 3.14159265359
+    void main() {
+      vec2 uv = gl_FragCoord.xy / resolution.xy;
+      vec2 point = uv - 0.5;
+      point.x *= resolution.x / resolution.y;
+      vec2 cursor = (mouse - 0.5) * vec2(0.24, 0.16);
+      float waveOne = sin(point.x * 3.4 + time * 0.42 + cursor.x) * 0.14;
+      float waveTwo = cos(point.y * 4.8 - time * 0.28 + cursor.y) * 0.12;
+      float ribbon = smoothstep(0.18, 0.0, abs(point.y - waveOne - waveTwo));
+      float orbit = smoothstep(0.025, 0.0, abs(length(point + vec2(0.12, -0.04)) - 0.34));
+      vec3 navy = vec3(0.07, 0.18, 0.31);
+      vec3 blue = vec3(0.10, 0.34, 0.51);
+      vec3 coral = vec3(0.91, 0.32, 0.22);
+      vec3 gold = vec3(0.93, 0.63, 0.22);
+      vec3 color = mix(navy, blue, smoothstep(-0.7, 0.8, point.x + point.y * 0.4));
+      color += coral * ribbon * 0.55;
+      color += gold * orbit * 0.65;
+      float cursorLight = smoothstep(0.34, 0.0, length(point - cursor));
+      color += vec3(0.12, 0.08, 0.02) * cursorLight;
+      color += 0.035 * sin(vec3(0.0, 1.7, 3.1) + time * 0.12 + point.xyx * 4.0);
+      gl_FragColor = vec4(color, 1.0);
+    }`;
+  const compile = (type, source) => {
+    const shader = context.createShader(type);
+    context.shaderSource(shader, source);
+    context.compileShader(shader);
+    if (!context.getShaderParameter(shader, context.COMPILE_STATUS)) return null;
+    return shader;
+  };
+  const vertexShader = compile(context.VERTEX_SHADER, vertexSource);
+  const fragmentShader = compile(context.FRAGMENT_SHADER, fragmentSource);
+  if (!vertexShader || !fragmentShader) return;
+  const program = context.createProgram();
+  context.attachShader(program, vertexShader);
+  context.attachShader(program, fragmentShader);
+  context.linkProgram(program);
+  if (!context.getProgramParameter(program, context.LINK_STATUS)) return;
+  const buffer = context.createBuffer();
+  context.bindBuffer(context.ARRAY_BUFFER, buffer);
+  context.bufferData(context.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), context.STATIC_DRAW);
+  const positionLocation = context.getAttribLocation(program, 'position');
+  const resolutionLocation = context.getUniformLocation(program, 'resolution');
+  const timeLocation = context.getUniformLocation(program, 'time');
+  const mouseLocation = context.getUniformLocation(program, 'mouse');
+  const hero = canvas.closest('.landing-hero');
+  const targetMouse = { x: 0.5, y: 0.5 };
+  const currentMouse = { x: 0.5, y: 0.5 };
+  const updateMouse = (event) => {
+    const bounds = canvas.getBoundingClientRect();
+    targetMouse.x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+    targetMouse.y = Math.max(0, Math.min(1, 1 - (event.clientY - bounds.top) / bounds.height));
+  };
+  hero?.addEventListener('pointermove', updateMouse, { passive: true });
+  hero?.addEventListener('pointerleave', () => { targetMouse.x = 0.5; targetMouse.y = 0.5; }, { passive: true });
+  const resize = () => {
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+    const width = Math.max(1, Math.floor(canvas.clientWidth * pixelRatio));
+    const height = Math.max(1, Math.floor(canvas.clientHeight * pixelRatio));
+    if (canvas.width === width && canvas.height === height) return;
+    canvas.width = width;
+    canvas.height = height;
+    context.viewport(0, 0, width, height);
+  };
+  const draw = (timestamp) => {
+    resize();
+    context.useProgram(program);
+    context.bindBuffer(context.ARRAY_BUFFER, buffer);
+    context.enableVertexAttribArray(positionLocation);
+    context.vertexAttribPointer(positionLocation, 2, context.FLOAT, false, 0, 0);
+    context.uniform2f(resolutionLocation, canvas.width, canvas.height);
+    context.uniform1f(timeLocation, timestamp * 0.001);
+    currentMouse.x += (targetMouse.x - currentMouse.x) * 0.045;
+    currentMouse.y += (targetMouse.y - currentMouse.y) * 0.045;
+    context.uniform2f(mouseLocation, currentMouse.x, currentMouse.y);
+    context.drawArrays(context.TRIANGLE_STRIP, 0, 4);
+  };
+  let frameId;
+  const animate = (timestamp) => { draw(timestamp); frameId = window.requestAnimationFrame(animate); };
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) draw(0);
+  else frameId = window.requestAnimationFrame(animate);
+  window.addEventListener('resize', resize, { passive: true });
+  canvas.addEventListener('webglcontextlost', () => window.cancelAnimationFrame(frameId), { once: true });
+}
+
 bindInteractions();
 playAboutHero();
 bindPageLoader();
+bindLandingShader();
