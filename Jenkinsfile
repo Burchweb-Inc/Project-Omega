@@ -6,7 +6,7 @@ pipeline {
             steps {
                 echo 'Building';
                 script {
-                    docker.build '${env.BUILD_TAG}'
+                    docker.build 'project-omega:${env.BUILD_TAG}'
                 }
             }
         }
