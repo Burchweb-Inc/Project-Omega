@@ -3,10 +3,13 @@ pipeline {
     agent any;
     stages {
         stage('Build') {
+            environment {
+                TAG = "project-omega:branch-${GIT_LOCAL_BRANCH}-latest"
+            }
             steps {
-                echo 'Building';
+                echo "Building ${TAG}"
                 script {
-                    docker.build 'project-omega:branch-${env.GIT_BRANCH}-latest'
+                    docker.build(env.TAG)
                 }
             }
         }
