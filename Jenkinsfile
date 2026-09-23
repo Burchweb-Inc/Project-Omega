@@ -5,7 +5,9 @@ pipeline {
         stage('Build') {
             steps {
                 echo 'Building';
-                docker.build '${env.BUILD_TAG}'
+                script {
+                    docker.build '${env.BUILD_TAG}'
+                }
             }
         }
     }
