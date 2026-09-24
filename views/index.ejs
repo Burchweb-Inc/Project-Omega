@@ -63,6 +63,8 @@
 <% } %>
 <% if (page === 'landing') { %>
   <%- include('partials/landing') %>
+<% } else if (page === 'signup' || page === 'login') { %>
+  <%- include('partials/auth-page', { mode: page }) %>
 <% } else if (['about', 'support', 'privacy', 'terms', 'understand', 'beta'].includes(page)) { %>
   <%- include('partials/public-shell', { view }) %>
 <% } else { %>

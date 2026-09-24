@@ -1,0 +1,50 @@
+<main class="auth-page auth-page-<%= mode %>" aria-labelledby="auth-title">
+  <div class="auth-transition" data-auth-transition aria-hidden="true">
+    <div class="auth-transition-light"></div>
+    <div class="auth-transition-line"></div>
+    <p data-auth-transition-label><%= mode === 'signup' ? 'Opening your desk' : 'Returning to your desk' %></p>
+  </div>
+  <div class="auth-visual" aria-hidden="true">
+    <div class="auth-visual-grid"></div>
+    <div class="auth-orbit auth-orbit-one"></div>
+    <div class="auth-orbit auth-orbit-two"></div>
+    <div class="auth-signal"><span></span><span></span><span></span></div>
+    <div class="auth-visual-copy">
+      <span class="auth-visual-index"><%= mode === 'signup' ? '01 / BEGIN' : '02 / RETURN' %></span>
+      <strong><%= mode === 'signup' ? 'Make room' : 'Come back' %><br><%= mode === 'signup' ? 'for the work.' : 'to the room.' %></strong>
+      <span><%= mode === 'signup' ? 'A clearer place for the everyday work around school.' : 'Your classes, people, and next steps are waiting.' %></span>
+    </div>
+    <span class="auth-visual-stamp"><%= mode === 'signup' ? 'OPEN DESK' : 'WELCOME BACK' %></span>
+  </div>
+  <section class="auth-page-panel">
+    <header class="auth-page-header">
+      <a class="auth-page-brand" href="/" aria-label="LockIn home"><img src="/media/logo-text.png" alt="LockIn"></a>
+      <a class="auth-back-link" href="/"><i data-lucide="arrow-left"></i> Back home</a>
+    </header>
+    <div class="auth-page-content">
+      <p class="auth-page-kicker"><%= mode === 'signup' ? 'A place to begin' : 'Pick up where you left off' %></p>
+      <h1 id="auth-title"><%= mode === 'signup' ? 'Build your desk.' : 'Welcome back.' %></h1>
+      <p class="auth-page-lead"><%= mode === 'signup' ? 'Create a calm, useful space for classes, deadlines, and shared work.' : 'Sign in to return to your classes, deadlines, and people.' %></p>
+      <% if (error) { %>
+        <div class="auth-page-alert" role="alert"><i data-lucide="circle-alert"></i><span><%= error === 'locked' ? 'Too many attempts. Try again in a few minutes.' : mode === 'signup' ? 'Check your details. Passwords need at least 8 characters and accounts are for students 13+.' : 'We could not sign you in. Check your username and password.' %></span></div>
+      <% } %>
+      <% if (mode === 'signup') { %>
+        <form class="auth-page-form" action="/signup" method="post" data-auth-form>
+          <label>What should we call you?<input name="name" autocomplete="name" placeholder="Alex Morgan" required></label>
+          <label>Choose a username<input name="username" autocomplete="username" placeholder="alexm" required></label>
+          <div class="auth-form-row"><label>How old are you?<input name="age" type="number" min="13" placeholder="18" required></label><label>Create a password<input name="password" type="password" minlength="8" autocomplete="new-password" placeholder="8+ characters" required></label></div>
+          <button class="button primary full" type="submit">Create my workspace <i data-lucide="arrow-up-right"></i></button>
+        </form>
+        <p class="auth-page-switch">Already have a desk? <a href="/login">Sign in</a></p>
+      <% } else { %>
+        <form class="auth-page-form" action="/login" method="post" data-auth-form>
+          <label>Username<input name="username" autocomplete="username" placeholder="alexm" required></label>
+          <label>Password<input name="password" type="password" autocomplete="current-password" placeholder="Your password" required></label>
+          <button class="button primary full" type="submit">Open my workspace <i data-lucide="arrow-up-right"></i></button>
+        </form>
+        <p class="auth-page-switch">New to LockIn? <a href="/signup">Create an account</a></p>
+      <% } %>
+      <p class="auth-page-note"><i data-lucide="shield-check"></i> Ad-free, privacy-minded, and built for school networks.</p>
+    </div>
+  </section>
+</main>

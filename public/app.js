@@ -445,6 +445,15 @@ function bindDashboardInteractions() {
 function bindInteractions() {
   document.querySelectorAll('[data-tab]').forEach((tab) => tab.addEventListener('click', () => { document.querySelectorAll('.tab').forEach((item) => item.classList.remove('active')); document.querySelectorAll('.auth-form').forEach((form) => form.classList.add('hidden')); tab.classList.add('active'); document.getElementById(tab.dataset.tab).classList.remove('hidden'); }));
   bindLiveForms();
+  document.querySelectorAll('[data-auth-form]').forEach((form) => form.addEventListener('submit', (event) => {
+    if (!form.reportValidity() || form.dataset.submitting === 'true') return;
+    event.preventDefault();
+    form.dataset.submitting = 'true';
+    form.closest('.auth-page')?.classList.add('is-transitioning');
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.disabled = true;
+    window.setTimeout(() => HTMLFormElement.prototype.submit.call(form), 900);
+  }));
   bindDebugTools();
   document.querySelectorAll('[data-inline-create]').forEach((button) => button.addEventListener('click', () => { const form = document.querySelector('.inline-create-form'); form?.classList.remove('hidden'); form?.querySelector('input[name="title"]')?.focus(); form?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }));
   document.querySelectorAll('[data-course-tab]').forEach((tab) => tab.addEventListener('click', (event) => { event.preventDefault(); setCourseTab(tab.dataset.courseTab); }));

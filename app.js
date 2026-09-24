@@ -408,7 +408,8 @@ app.get('/healthz', (request, response) => response.status(200).json({ status: '
 app.get(['/signup', '/login'], (request, response) => {
   request.user = currentUser(request);
   if (request.user) return response.redirect('/dashboard');
-  response.redirect('/');
+  const page = request.path.slice(1) === 'login' ? 'login' : 'signup';
+  response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: request.query.error });
 });
 
 app.get('/about', (request, response) => renderPublicPage(request, response, 'about', { creators }));
@@ -420,17 +421,17 @@ app.get('/beta', (request, response) => renderPublicPage(request, response, 'bet
 
 app.post('/signup', (request, response) => {
   const { name, username, password, age } = request.body;
-  if (!name || !username || !password || password.length < 8 || !age || Number(age) < 13 || users.some((user) => user.username === username.trim().toLowerCase())) return response.redirect('/?error=signup');
+  if (!name || !username || !password || password.length < 8 || !age || Number(age) < 13 || users.some((user) => user.username === username.trim().toLowerCase())) return response.redirect('/signup?error=signup');
   const normalizedUsername = username.trim().toLowerCase();
   const user = { id: id(), name: name.trim(), username: normalizedUsername, age: Number(age), passwordHash: passwordHash(password), isSiteAdmin: normalizedUsername === 'admin', tasks: [] };
   users.push(user); persistState(); setSession(response, user.id); response.redirect('/dashboard');
 });
 
 app.post('/login', (request, response) => {
-  if (!loginAllowed(request)) return response.redirect('/?error=locked');
+  if (!loginAllowed(request)) return response.redirect('/login?error=locked');
   const username = String(request.body.username || '').trim().toLowerCase();
   const user = users.find((candidate) => candidate.username === username);
-  if (!user || !passwordMatches(request.body.password || '', user.passwordHash)) { recordLoginFailure(request); return response.redirect('/?error=login'); }
+  if (!user || !passwordMatches(request.body.password || '', user.passwordHash)) { recordLoginFailure(request); return response.redirect('/login?error=login'); }
   loginAttempts.delete(request.ip || 'local');
   setSession(response, user.id); response.redirect('/dashboard');
 });
