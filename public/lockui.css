@@ -1,0 +1,91 @@
+/* LockUI: shared primitives. Keep product-specific composition in pages.css. */
+:root {
+  --lui-space-1: 4px;
+  --lui-space-2: 8px;
+  --lui-space-3: 12px;
+  --lui-space-4: 16px;
+  --lui-space-5: 20px;
+  --lui-space-6: 24px;
+  --lui-space-7: 32px;
+  --lui-space-8: 40px;
+  --lui-radius-sm: 6px;
+  --lui-radius-md: 9px;
+  --lui-radius-lg: 12px;
+  --lui-focus: 0 0 0 3px rgba(44, 110, 159, .22);
+  --lui-success: #27633b;
+  --lui-danger: #a3483d;
+  --lui-warning: #805722;
+}
+.lui-page { min-height: 100vh; padding: clamp(24px, 5vw, 64px); background: var(--paper); }
+.lui-wrap { width: min(1180px, 100%); margin: 0 auto; }
+.lui-stack { display: grid; gap: var(--lui-space-4); }
+.lui-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--lui-space-2); }
+.lui-grid { display: grid; gap: var(--lui-space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.lui-grid-wide { grid-column: 1 / -1; }
+.lui-section { display: grid; gap: var(--lui-space-4); margin-top: var(--lui-space-8); }
+.lui-section-title { display: flex; align-items: end; justify-content: space-between; gap: var(--lui-space-4); padding-bottom: var(--lui-space-3); border-bottom: 1px solid var(--line); }
+.lui-section-title h2 { margin: 0; font-size: 20px; }
+.lui-section-title p { max-width: 52ch; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.lui-eyebrow { color: var(--coral); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.lui-muted { color: var(--muted); }
+.lui-panel, .lui-card { padding: var(--lui-space-5); background: var(--white); border: 1px solid var(--line); border-radius: var(--lui-radius-lg); box-shadow: var(--shadow); }
+.lui-card { box-shadow: none; }
+.lui-card h3, .lui-panel h3 { margin: 0 0 var(--lui-space-2); font-size: 15px; }
+.lui-card p, .lui-panel p { color: var(--ink-soft); line-height: 1.55; }
+.lui-divider { height: 1px; margin: var(--lui-space-2) 0; background: var(--line); border: 0; }
+.lui-button, .button { display: inline-flex; align-items: center; justify-content: center; gap: var(--lui-space-2); min-height: 38px; padding: 9px 14px; border: 1px solid transparent; border-radius: var(--lui-radius-sm); font: inherit; font-size: 12px; font-weight: 700; line-height: 1.1; text-decoration: none; cursor: pointer; transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .18s ease; }
+.lui-button:hover, .button:hover { transform: translateY(-1px); }
+.lui-button:focus-visible, .button:focus-visible, .lui-icon-button:focus-visible, .lui-input:focus-visible, .lui-select:focus-visible, .lui-textarea:focus-visible { outline: 0; box-shadow: var(--lui-focus); }
+.lui-button-primary, .button.primary { background: var(--coral); color: #fff; }
+.lui-button-primary:hover, .button.primary:hover { background: #cf5f46; }
+.lui-button-secondary, .button.secondary { background: #eef5f7; border-color: #d6e5e9; color: var(--navy); }
+.lui-button-quiet { background: transparent; border-color: var(--line); color: var(--ink-soft); }
+.lui-button-danger { background: #fff0e9; border-color: #f1c2b3; color: var(--danger); }
+.lui-button[disabled], .button[disabled] { opacity: .48; cursor: not-allowed; transform: none; }
+.lui-icon-button { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: var(--lui-radius-sm); background: var(--white); color: var(--ink-soft); cursor: pointer; }
+.lui-icon-button svg { width: 16px; height: 16px; }
+.lui-link { color: var(--blue); font-weight: 700; text-underline-offset: 3px; }
+.lui-field { display: grid; gap: var(--lui-space-2); color: var(--ink); font-size: 11px; font-weight: 700; }
+.lui-input, .lui-select, .lui-textarea, .lui-field input, .lui-field select, .lui-field textarea { width: 100%; min-height: 40px; padding: 9px 11px; border: 1px solid #cbdbe4; border-radius: var(--lui-radius-sm); background: #fff; color: var(--ink); font: inherit; font-size: 12px; }
+.lui-textarea, .lui-field textarea { min-height: 94px; resize: vertical; }
+.lui-help { color: var(--muted); font-size: 10px; font-weight: 400; line-height: 1.4; }
+.lui-check { display: flex; align-items: center; gap: var(--lui-space-2); color: var(--ink-soft); font-size: 12px; }
+.lui-check input { accent-color: var(--blue); }
+.lui-badge, .lui-status { display: inline-flex; align-items: center; gap: 5px; width: max-content; padding: 5px 8px; border-radius: 999px; background: #eef5f7; color: var(--blue); font-size: 10px; font-weight: 700; }
+.lui-status-success { background: #edf8f1; color: var(--lui-success); }
+.lui-status-warning { background: #fff4e6; color: var(--lui-warning); }
+.lui-status-danger { background: #fff0e9; color: var(--lui-danger); }
+.lui-avatar { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--mint); color: var(--navy); font-weight: 700; }
+.lui-avatar-sm { width: 26px; height: 26px; font-size: 10px; }
+.lui-alert { display: flex; align-items: flex-start; gap: var(--lui-space-3); padding: var(--lui-space-3); border: 1px solid #d6e5e9; border-radius: var(--lui-radius-md); background: #f3f8f9; color: var(--ink-soft); font-size: 12px; line-height: 1.45; }
+.lui-alert svg { flex: none; width: 17px; margin-top: 1px; }
+.lui-alert-success { border-color: #b9dfc5; background: #edf8f1; color: var(--lui-success); }
+.lui-alert-warning { border-color: #f2d2a5; background: #fff4e6; color: var(--lui-warning); }
+.lui-alert-danger { border-color: #f1c2b3; background: #fff0e9; color: var(--lui-danger); }
+.lui-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.lui-list > li { display: flex; align-items: center; justify-content: space-between; gap: var(--lui-space-3); padding: var(--lui-space-3) 0; border-bottom: 1px solid #edf1f4; }
+.lui-list > li:last-child { border-bottom: 0; }
+.lui-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--lui-radius-md); }
+.lui-table { width: 100%; min-width: 520px; border-collapse: collapse; font-size: 12px; text-align: left; }
+.lui-table th, .lui-table td { padding: 12px 14px; border-bottom: 1px solid #edf1f4; vertical-align: middle; }
+.lui-table th { background: #f7fafb; color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.lui-table tr:last-child td { border-bottom: 0; }
+.lui-progress { overflow: hidden; height: 7px; border-radius: 999px; background: #e6eef1; }
+.lui-progress span { display: block; height: 100%; border-radius: inherit; background: var(--coral); }
+.lui-tabs { display: flex; gap: var(--lui-space-5); overflow-x: auto; border-bottom: 1px solid var(--line); }
+.lui-tab { padding: 0 0 11px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.lui-tab[aria-selected="true"], .lui-tab:hover { border-bottom-color: var(--coral); color: var(--blue); }
+.lui-dialog { width: min(100%, 520px); padding: var(--lui-space-7); border: 1px solid var(--line); border-radius: var(--lui-radius-lg); box-shadow: 0 24px 70px rgba(23, 43, 77, .22); }
+.lui-dialog::backdrop { background: rgba(23, 43, 77, .48); }
+.lui-dialog header { display: flex; align-items: start; justify-content: space-between; gap: var(--lui-space-4); margin-bottom: var(--lui-space-5); }
+.lui-dialog h2 { margin: 0; }
+.lui-empty { display: grid; justify-items: center; gap: var(--lui-space-3); padding: var(--lui-space-8); border: 1px dashed #cbdbe4; border-radius: var(--lui-radius-md); color: var(--muted); text-align: center; }
+.lui-empty svg { width: 24px; color: var(--blue); }
+.lui-kbd { padding: 3px 6px; border: 1px solid #cbdbe4; border-bottom-width: 2px; border-radius: 4px; background: #f7fafb; color: var(--ink-soft); font-size: 10px; }
+.lui-code-sample { position: relative; display: grid; gap: var(--lui-space-2); padding: var(--lui-space-3); border: 1px solid #dce6ef; border-radius: var(--lui-radius-md); background: #f7fafb; }
+.lui-code-sample pre { overflow-x: auto; margin: 0; padding-right: 96px; color: var(--ink-soft); font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre-wrap; }
+.lui-copy-button { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--lui-radius-sm); background: var(--white); color: var(--ink-soft); font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; }
+.lui-copy-button:hover { border-color: #b8d0dd; color: var(--blue); }
+.lui-copy-button.is-copied { border-color: #b9dfc5; background: #edf8f1; color: var(--lui-success); }
+.lui-copy-button svg { width: 13px; height: 13px; }
+@media (max-width: 700px) { .lui-page { padding: 24px 16px; } .lui-section-title { display: grid; align-items: start; } .lui-panel { padding: 16px; } .lui-dialog { padding: 24px; } }

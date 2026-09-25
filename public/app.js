@@ -410,12 +410,22 @@ function bindDashboardInteractions() {
 
   const heroElement = dashboard.querySelector('.page-heading .hero');
   if (heroElement) {
+    const fullName = dashboard.dataset.userName?.trim() || '';
+    const firstName = fullName.split(/\s+/)[0] || fullName;
     const heroMessages = [
       'Make today easier to carry.',
+      `Good to see you, ${firstName}.`,
+      `${fullName}, your next step is waiting.`,
       'Your classes, people, and next steps in one calm view.',
       'Stay on top of your tasks and deadlines.',
-      'Collaborate with your study groups seamlessly.',
-      'Keep your learning organized and efficient.'
+      'Keep your learning organized and efficient.',
+      `Do your homework, ${fullName}, or else I will tell your mother`,
+      'Worried about grades? They\'ll be fine. Just keep working hard.',
+      'Remember to take breaks and stay hydrated.',
+      'Learning is a journey, not a race. Pace yourself.',
+      'Your dedication to learning is inspiring. Keep it up!',
+      'It\'s okay to ask for help. Try our comments feature to ask questions.',
+      'Working on a group project? Use Breakout Groups to stay connected with your team.',
     ];
     let currentIndex = Math.floor(Math.random() * heroMessages.length);
     heroElement.textContent = heroMessages[currentIndex];
@@ -429,7 +439,7 @@ function bindDashboardInteractions() {
         heroElement.classList.remove('hero-fade-out');
         heroElement.classList.add('hero-fade-in');
       }, 2500);
-    }, 10000);
+    }, 15000);
   }
 
   const groupSearch = dashboard.querySelector('[data-dashboard-group-search]');
@@ -526,15 +536,13 @@ function playAboutHero() {
 
 function bindPageLoader() {
   const loader = document.querySelector('[data-page-loader]');
-  const shimmer = document.querySelector('[data-page-loader-video]');
-  if (!loader || !shimmer) return;
-  const pageMedia = [...document.querySelectorAll('video:not([data-page-loader-video])')];
+  if (!loader) return;
+  const pageMedia = [...document.querySelectorAll('video')];
   pageMedia.forEach((video) => video.pause());
   let pageLoaded = document.readyState === 'complete';
-  let shimmerFinished = false;
   let finished = false;
   const reveal = () => {
-    if (finished || !pageLoaded || !shimmerFinished) return;
+    if (finished || !pageLoaded) return;
     finished = true;
     document.body.classList.add('page-ready');
     pageMedia.forEach((video) => {
@@ -543,31 +551,8 @@ function bindPageLoader() {
     document.dispatchEvent(new Event('page-reveal'));
     window.setTimeout(() => loader.remove(), 1150);
   };
-  const finishShimmer = () => {
-    shimmer.pause();
-    shimmerFinished = true;
-    reveal();
-  };
-  const finishOrLoopShimmer = () => {
-    if (pageLoaded) {
-      finishShimmer();
-      return;
-    }
-    shimmer.currentTime = 0;
-    shimmer.play().catch(finishShimmer);
-  };
   window.addEventListener('load', () => { pageLoaded = true; reveal(); }, { once: true });
-  shimmer.addEventListener('ended', finishOrLoopShimmer);
-  shimmer.addEventListener('error', finishShimmer, { once: true });
-  if (shimmer.ended) finishOrLoopShimmer();
-  const startShimmer = () => {
-    if (shimmer.dataset.started === 'true') return;
-    shimmer.dataset.started = 'true';
-    shimmer.currentTime = 0;
-    shimmer.play().catch(finishShimmer);
-  };
-  if (shimmer.readyState >= 1) startShimmer();
-  else shimmer.addEventListener('loadedmetadata', startShimmer, { once: true });
+  if (pageLoaded) reveal();
 }
 
 function bindLandingShader() {
@@ -664,7 +649,46 @@ function bindLandingShader() {
   canvas.addEventListener('webglcontextlost', () => window.cancelAnimationFrame(frameId), { once: true });
 }
 
+function bindLockUiCopy() {
+  document.querySelectorAll('[data-copy-code-button]').forEach((button) => {
+    if (button.dataset.copyBound === 'true') return;
+    button.dataset.copyBound = 'true';
+    button.addEventListener('click', async () => {
+      const source = document.getElementById(button.dataset.copyCodeTarget);
+      if (!source) return;
+      const code = source.textContent.trim();
+      try {
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(code);
+        else {
+          const helper = document.createElement('textarea');
+          helper.value = code;
+          helper.setAttribute('readonly', '');
+          helper.style.position = 'fixed';
+          helper.style.opacity = '0';
+          document.body.appendChild(helper);
+          helper.select();
+          document.execCommand('copy');
+          helper.remove();
+        }
+        const label = button.querySelector('[data-copy-label]');
+        const originalLabel = label?.textContent || 'Copy code';
+        button.classList.add('is-copied');
+        button.setAttribute('aria-label', 'Code copied');
+        if (label) label.textContent = 'Copied';
+        window.setTimeout(() => {
+          button.classList.remove('is-copied');
+          button.setAttribute('aria-label', 'Copy code');
+          if (label) label.textContent = originalLabel;
+        }, 1600);
+      } catch (error) {
+        button.setAttribute('aria-label', 'Copy failed');
+      }
+    });
+  });
+}
+
 bindInteractions();
 playAboutHero();
 bindPageLoader();
 bindLandingShader();
+bindLockUiCopy();

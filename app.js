@@ -17,7 +17,7 @@ const { appendRemovedTextForReview, reviewQueuedBadWords } = require('./moderati
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || '0.0.0.0';
-const serviceWorkerVersion = 'lockin-sw-20260921-5';
+const serviceWorkerVersion = 'lockin-sw-20260924-6';
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const dbPath = path.join(dataDir, 'studyline.db');
 const contentModerator = createIffyModerator();
@@ -90,10 +90,6 @@ app.get('/service-worker-version.json', (request, response) => {
 app.get('/service-worker.js', (request, response) => {
   response.setHeader('Cache-Control', 'no-store, max-age=0');
   response.sendFile(path.join(__dirname, 'public', 'service-worker.js'));
-});
-app.get('/media/logo-shimmer.mp4', (request, response, next) => {
-  response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-  next();
 });
 app.get('/media/offline/*', (request, response, next) => {
   response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
@@ -418,6 +414,7 @@ app.get('/privacy', (request, response) => renderPublicPage(request, response, '
 app.get('/terms', (request, response) => renderPublicPage(request, response, 'terms'));
 app.get('/understand', (request, response) => renderPublicPage(request, response, 'understand'));
 app.get('/beta', (request, response) => renderPublicPage(request, response, 'beta'));
+app.get('/dev/lockui', (request, response) => renderPublicPage(request, response, 'lockui'));
 
 app.post('/signup', (request, response) => {
   const { name, username, password, age } = request.body;

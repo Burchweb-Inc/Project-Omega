@@ -198,12 +198,12 @@
   }
 </style>
 
-<section class="content-wrap dashboard-page" data-dashboard-live>
+<section class="content-wrap dashboard-page" data-dashboard-live data-user-name="<%= user.name %>">
   <div class="page-heading hero-heading">
     <div>
       <p class="time">TIME TO GET TO BUSINESS</p>
       <h1 class="hero">Make today easier to carry.</h1>
-      <p class="lead">Your classes, people, and next steps in one calm view.</p>
+      <p class="lead">Hey, <%= user.name %>, ready to get some work done?</p>
     </div>
     <a class="button primary spbtn" href="/org/new"><i data-lucide="plus"></i> New Group</a>
   </div>
