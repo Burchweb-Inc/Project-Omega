@@ -10,9 +10,9 @@ const Database = require('better-sqlite3');
 const { marked } = require('marked');
 const sanitizeHtml = require('sanitize-html');
 const { Server } = require('socket.io');
-const { createIffyModerator } = require('./moderation/iffy');
+const { scanContent } = require('./moderation/content-safety');
 const { moderationComments, registerCommentRoutes } = require('./moderation/comments');
-const { appendRemovedTextForReview, reviewQueuedBadWords } = require('./moderation/bad-word-queue');
+const { appendRemovedTextForReview, appendAppealPhrase, reviewQueuedBadWords, reviewAppealWords } = require('./moderation/bad-word-queue');
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -20,7 +20,6 @@ const host = process.env.HOST || '0.0.0.0';
 const serviceWorkerVersion = 'lockin-sw-20260924-6';
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const dbPath = path.join(dataDir, 'studyline.db');
-const contentModerator = createIffyModerator();
 
 fs.mkdirSync(dataDir, { recursive: true });
 fs.chmodSync(dataDir, 0o700);
@@ -266,8 +265,15 @@ const badWordReviewInterval = Number.isFinite(badWordReviewIntervalMs) && badWor
 const reviewQueuedBadWordsNow = () => {
   reviewQueuedBadWords().catch((error) => console.error('bad-word review failed', error));
 };
+const appealWordReviewIntervalMs = Number(process.env.APPEAL_WORD_REVIEW_INTERVAL_MS || (Number(process.env.APPEAL_WORD_REVIEW_INTERVAL_MINUTES || '20') * 60000));
+const appealWordReviewInterval = Number.isFinite(appealWordReviewIntervalMs) && appealWordReviewIntervalMs > 0 ? appealWordReviewIntervalMs : 20 * 60 * 1000;
+const reviewAppealWordsNow = () => {
+  reviewAppealWords().catch((error) => console.error('appeal-word review failed', error));
+};
 reviewQueuedBadWordsNow();
 setInterval(reviewQueuedBadWordsNow, badWordReviewInterval);
+reviewAppealWordsNow();
+setInterval(reviewAppealWordsNow, appealWordReviewInterval);
 
 function liveRequest(request) { return request.is('application/json') || request.get('X-Live-Request') === 'true'; }
 function sendMutation(request, response, payload, fallback) {
@@ -354,7 +360,7 @@ function announcementPayload(announcement) {
 function globalModerationComments() { return orgs.flatMap((org) => moderationComments(org).map((comment) => ({ ...comment, orgId: org.id, orgName: org.name }))); }
 function globalReports() { return orgs.flatMap((org) => (org.reports || []).map((report) => ({ ...report, orgId: org.id, orgName: org.name }))); }
 async function contentPolicyError(input) {
-  const result = await contentModerator.scan(input);
+  const result = scanContent(input);
   const blockingCategories = new Set(['profanity', 'heavy-profanity', 'insult', 'harassment', 'targeted-insult', 'targeted-profanity', 'targeted-abuse', 'bad-word-list', 'content-checker']);
   const hasBlockingFinding = result.findings?.some((finding) => blockingCategories.has(finding.category));
   return result.badScore >= 20 || hasBlockingFinding ? 'This content violates our content policy. Edit it, then try again.' : null;
@@ -391,7 +397,7 @@ io.on('connection', (socket) => {
   });
 });
 
-registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse, emitGroup, emitOrg, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification, appendRemovedTextForReview });
+registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse, emitGroup, emitOrg, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification, appendRemovedTextForReview, appendAppealPhrase });
 
 app.get('/', (request, response) => {
   request.user = currentUser(request);

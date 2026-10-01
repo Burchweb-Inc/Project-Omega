@@ -7,6 +7,7 @@ const { BAD_WORDS, scanContent } = require('./content-safety');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MODEL = 'nvidia/nemotron-3.5-content-safety:free';
+const DEFAULT_REMOTE_TIMEOUT_MS = 1500;
 const DEFAULT_URL_SOURCE = 'https://raw.githubusercontent.com/EBazarov/nsfw_data_source_urls/master/raw_data/age_college/reddit_sub_collegensfw/urls.txt';
 const contentChecker = new Filter({ emptyList: true });
 contentChecker.addWords(...BAD_WORDS);
@@ -55,7 +56,7 @@ function contentCheckerResult(local) {
   return { ...local, badScore: Math.max(20, local.badScore), band: local.band === 'safe' ? 'review' : local.band, findings: [...local.findings, { category: 'content-checker', points: 20, matches: 1, source: 'content-checker' }] };
 }
 
-function createIffyModerator({ apiKey = process.env.OPENROUTER_API_KEY, model = process.env.OPENROUTER_MODEL || DEFAULT_MODEL, fetchImpl = globalThis.fetch, urlListPath = process.env.NSFW_URL_LIST_PATH || path.join(__dirname, 'nsfw-urls.txt'), urlSourceUrl = process.env.NSFW_URL_SOURCE_URL || DEFAULT_URL_SOURCE } = {}) {
+function createIffyModerator({ apiKey = process.env.OPENROUTER_API_KEY, model = process.env.OPENROUTER_MODEL || DEFAULT_MODEL, fetchImpl = globalThis.fetch, urlListPath = process.env.NSFW_URL_LIST_PATH || path.join(__dirname, 'nsfw-urls.txt'), urlSourceUrl = process.env.NSFW_URL_SOURCE_URL || DEFAULT_URL_SOURCE, remoteTimeoutMs = Number(process.env.OPENROUTER_TIMEOUT_MS || DEFAULT_REMOTE_TIMEOUT_MS) } = {}) {
   const knownUrls = readUrlList(urlListPath);
   let remoteUrlsPromise;
 
@@ -82,14 +83,19 @@ function createIffyModerator({ apiKey = process.env.OPENROUTER_API_KEY, model = 
       { role: 'user', content: JSON.stringify({ type: input.type || 'text', content: String(input.text || ''), previousMessages: input.previousMessages || [] }) }
     ];
     let response;
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const timeout = controller ? setTimeout(() => controller.abort(), remoteTimeoutMs) : null;
     try {
       response = await fetchImpl(OPENROUTER_URL, {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:3000', 'X-Title': 'StudyHub Iffy moderation' },
-        body: JSON.stringify({ model, temperature: 0, messages })
+        body: JSON.stringify({ model, temperature: 0, messages }),
+        ...(controller ? { signal: controller.signal } : {})
       });
     } catch {
       return resultFromLocal(strictFallback(input), null, true);
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
     if (response.status === 429) return resultFromLocal(strictFallback(input), null, true);
     if (!response.ok) return resultFromLocal(local, null, true);

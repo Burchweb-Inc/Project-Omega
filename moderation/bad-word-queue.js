@@ -6,6 +6,7 @@ const path = require('node:path');
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MODEL = 'nvidia/nemotron-3.5-content-safety:free';
 const DEFAULT_QUEUE_PATH = path.join(__dirname, 'bad-word-queue.txt');
+const DEFAULT_APPEAL_PATH = path.join(__dirname, 'appeal-words.txt');
 const DEFAULT_CHECKPOINT_PATH = path.join(__dirname, 'bad-word-checkpoint.txt');
 const DEFAULT_PRESET_BAD_WORDS_PATH = path.join(__dirname, 'bad-words.txt');
 const DEFAULT_USER_BAD_WORDS_PATH = path.join(__dirname, 'user-bad-words.txt');
@@ -107,6 +108,13 @@ function appendBadWordCandidate(value, opts = {}) {
   const prefix = existingText && !existingText.endsWith('\n') ? '\n' : '';
   fs.appendFileSync(queuePath, `${prefix}${candidate}\n`, 'utf8');
   return true;
+}
+
+function appendAppealPhrase(value, opts = {}) {
+  const appealPath = opts.appealPath || DEFAULT_APPEAL_PATH;
+  const phrase = String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!phrase || phrase.length < 3 || phrase.length > 500) return false;
+  return appendUniqueLine(appealPath, phrase);
 }
 
 function appendRemovedTextForReview(value, opts = {}) {
@@ -300,8 +308,61 @@ async function reviewQueuedBadWords({
   };
 }
 
+async function reviewAppealWords({
+  appealPath = DEFAULT_APPEAL_PATH,
+  badWordsPath = DEFAULT_USER_BAD_WORDS_PATH,
+  apiKey = process.env.OPENROUTER_API_KEY,
+  model = process.env.OPENROUTER_MODEL || DEFAULT_MODEL,
+  fetchImpl = globalThis.fetch,
+  batchSize = Number(process.env.APPEAL_WORD_REVIEW_BATCH_SIZE || '25')
+} = {}) {
+  ensureFile(appealPath);
+  ensureFile(badWordsPath);
+  const queue = readLines(appealPath);
+  const pending = queue.slice(0, Math.max(1, Number.isFinite(batchSize) ? batchSize : 25));
+  if (!pending.length) return { checked: 0, removed: [], retained: [], total: queue.length };
+
+  const finish = (removed, retained) => {
+    writeQueueFile(appealPath, queue.slice(pending.length));
+    return { checked: pending.length, removed, retained, total: queue.length };
+  };
+  if (!apiKey || typeof fetchImpl !== 'function') return finish([], pending);
+
+  const instructions = [
+    'You review appeals for a student collaboration app\'s blocked-word list.',
+    'A user says a blocked phrase is safe in context. Decide which phrases should be removed from the blocked list.',
+    'Return ONLY phrases that are genuinely safe in ordinary student conversation, one per line, lowercase.',
+    'Do not return harmful, abusive, threatening, hateful, sexual, or dangerous phrases.',
+    'No markdown, bullets, numbering, explanations, quotes, or headers.',
+    '',
+    'Appealed phrases:',
+    pending.join('\n')
+  ].join('\n');
+
+  let response;
+  try {
+    response = await fetchImpl(OPENROUTER_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:3000', 'X-Title': 'StudyHub appeal review' },
+      body: JSON.stringify({ model, temperature: 0, messages: [{ role: 'system', content: instructions }, { role: 'user', content: 'Review the appealed phrases above.' }] })
+    });
+  } catch {
+    return finish([], pending);
+  }
+  if (!response.ok) return finish([], pending);
+
+  let decision;
+  try { decision = await response.json(); } catch { return finish([], pending); }
+  const removable = new Set(parseAiWordList(decision?.choices?.[0]?.message?.content || ''));
+  const existing = readLines(badWordsPath);
+  const removed = existing.filter((word) => removable.has(word));
+  if (removed.length) writeQueueFile(badWordsPath, existing.filter((word) => !removable.has(word)));
+  return finish(removed, pending.filter((phrase) => !removable.has(phrase)));
+}
+
 module.exports = {
   DEFAULT_BAD_WORDS_PATH: DEFAULT_USER_BAD_WORDS_PATH,
+  DEFAULT_APPEAL_PATH,
   DEFAULT_CHECKPOINT_PATH,
   DEFAULT_DISCARD_PATH,
   DEFAULT_INSTRUCTIONS_PATH,
@@ -311,6 +372,7 @@ module.exports = {
   DEFAULT_USER_BAD_WORDS_PATH,
   OPENROUTER_URL,
   appendBadWordCandidate,
+  appendAppealPhrase,
   appendRemovedTextForReview,
   defaultAiModInstructions,
   extractCandidateWords,
@@ -318,5 +380,6 @@ module.exports = {
   parseAiWordList,
   readLines,
   reviewQueuedBadWords,
+  reviewAppealWords,
   sanitizeCandidate
 };

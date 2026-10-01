@@ -10,14 +10,14 @@ function itemCard(item) {
   const typeClass = String(item.type || '').toLowerCase().replace(/[^a-z]/g, '-');
   const root = courseRoot(); const orgId = escapeHtml(root.dataset.orgId); const itemId = escapeHtml(item.id); const taskSlug = `${String(item.title || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || itemId}-${itemId.slice(-8)}`; const projectAction = item.type === 'Project' ? `<a class="text-button breakout-action" href="/org/${orgId}/course/${escapeHtml(root.dataset.courseId)}/task/${escapeHtml(taskSlug)}/breakout-groups"><i data-lucide="users-round"></i> Breakout Groups</a>` : ''; const downvoteAction = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${orgId}/items/${itemId}/downvote" method="post"><button class="text-button" type="submit"><i data-lucide="thumbs-down"></i> <span data-downvote-count>${(item.downvotedBy || []).length}</span></button></form>` : '';
   const dragHandle = root.dataset.canEdit === 'true' ? `<button class="icon-button course-drag-handle" type="button" aria-label="Move ${escapeHtml(item.title)}"><i data-lucide="grip-vertical"></i></button>` : '';
-  return `<article class="feed-card feed-item" data-item-id="${itemId}" data-position="${Number(item.position) || 0}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(item.due)}</span><h3>${escapeHtml(item.title)}</h3></div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="text-button" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="text-button" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${(item.comments || []).filter((comment) => !comment.reported).length}</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><button class="button primary" type="submit">Reply</button></form></div></details></div></article>`;
+  return `<article class="feed-card feed-item" data-item-id="${itemId}" data-position="${Number(item.position) || 0}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(item.due)}</span><h3>${escapeHtml(item.title)}</h3></div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="text-button" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="text-button" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${(item.comments || []).filter((comment) => !comment.reported).length}</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><small class="form-error" data-form-error hidden></small><button class="button primary" type="submit">Reply</button></form></div></details></div></article>`;
 }
 
 function commentMenuMarkup(comment, context) {
   const { orgId, itemId, groupId, canEdit, canDelete, canViewHistory } = context;
   const base = groupId ? `/org/${escapeHtml(orgId)}/breakout/${escapeHtml(groupId)}/comments/${escapeHtml(comment.id)}` : `/org/${escapeHtml(orgId)}/items/${escapeHtml(itemId)}/comments/${escapeHtml(comment.id)}`;
   const report = `<form data-live-form action="/org/${escapeHtml(orgId)}/content-reports" method="post"><input type="hidden" name="contentId" value="${escapeHtml(comment.id)}"><button class="menu-action" type="submit"><i data-lucide="flag"></i> Report comment</button></form>`;
-  const edit = canEdit ? `<details class="comment-edit"><summary><i data-lucide="pencil"></i> Edit comment</summary><form data-live-form action="${base}/update" method="post"><textarea name="comment" required>${escapeHtml(comment.text)}</textarea><button class="button secondary" type="submit">Save</button></form></details>` : '';
+  const edit = canEdit ? `<button class="menu-action" type="button" data-comment-edit-open><i data-lucide="pencil"></i> Edit comment</button>` : '';
   const remove = canDelete ? `<form data-live-form action="${base}/delete" method="post"><button class="menu-action danger" type="submit">Delete comment</button></form>` : '';
   const history = canViewHistory && comment.history?.length ? `<details class="comment-history"><summary><i data-lucide="history"></i> Show edited comment</summary><div>${comment.history.slice().reverse().map((version) => `<p>${escapeHtml(version.text)}<small>${escapeHtml(version.editedAt)} · ${escapeHtml(version.editorName)}</small></p>`).join('')}</div></details>` : '';
   return `<details class="comment-menu"><summary class="icon-button" aria-label="More comment actions"><i data-lucide="ellipsis"></i></summary><div class="comment-menu-popover">${edit}${report}${remove}${history}</div></details>`;
@@ -25,23 +25,35 @@ function commentMenuMarkup(comment, context) {
 
 function commentMarkup(comment, context) {
   const edited = comment.editedAt ? '<small class="comment-edited">edited</small>' : '';
-  return `<div class="comment-entry" data-comment-id="${escapeHtml(comment.id)}"><div class="comment-body"><strong>${escapeHtml(comment.author)}</strong> ${escapeHtml(comment.text)}${edited}</div>${commentMenuMarkup(comment, context)}</div>`;
+  const { orgId, itemId, groupId, canEdit } = context;
+  const base = groupId ? `/org/${escapeHtml(orgId)}/breakout/${escapeHtml(groupId)}/comments/${escapeHtml(comment.id)}` : `/org/${escapeHtml(orgId)}/items/${escapeHtml(itemId)}/comments/${escapeHtml(comment.id)}`;
+  const editor = canEdit ? `<form class="comment-edit-form" data-live-form action="${base}/update" method="post" hidden><input type="text" name="comment" value="${escapeHtml(comment.text)}" required><small class="form-error" data-form-error hidden></small><div class="comment-edit-actions"><button class="button secondary" type="submit">Save</button><button class="text-button" type="button" data-comment-edit-cancel>Cancel</button></div></form>` : '';
+  return `<div class="comment-entry" data-comment-id="${escapeHtml(comment.id)}"><div class="comment-body"><div class="comment-text"><strong>${escapeHtml(comment.author)}</strong> <span>${escapeHtml(comment.text)}</span>${edited}</div>${editor}</div>${commentMenuMarkup(comment, context)}</div>`;
 }
 
 function appendUniqueComment(itemId, comment) {
   const card = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"]`); if (!card || !comment) return;
   const list = card.querySelector('[data-comment-list]'); if (!list || list.querySelector(`[data-comment-id="${CSS.escape(comment.id || '')}"]`)) return;
   const root = courseRoot(); const canAdmin = root.dataset.isAdmin === 'true'; const canEdit = canAdmin || comment.userId === root.dataset.userId;
-  list.insertAdjacentHTML('beforeend', commentMarkup(comment, { orgId: root.dataset.orgId, itemId, canEdit, canDelete: canAdmin, canViewHistory: canAdmin }));
+  list.insertAdjacentHTML('beforeend', commentMarkup(comment, { orgId: root.dataset.orgId, itemId, canEdit, canDelete: canAdmin || comment.userId === root.dataset.userId, canViewHistory: canAdmin }));
   bindLiveForms(list.lastElementChild); lucide.createIcons();
   updateCommentCount(card);
 }
 
 function updateCommentCount(card) {
   const list = card?.querySelector('[data-comment-list]'); const count = card?.querySelector('[data-comment-count]');
-  if (list && count) count.textContent = list.querySelectorAll('.comment-entry:not([data-removing="true"])').length;
+  if (list && count) count.textContent = list.querySelectorAll('.comment-entry:not([data-removing="true"]):not(.is-removed)').length;
 }
 function finishCommentRemoval(entry) { if (!entry) return; const card = entry.closest('[data-item-id]'); entry.remove(); updateCommentCount(card); }
+function markCommentReported(entry) {
+  if (!entry) return;
+  const author = entry.querySelector('.comment-body strong')?.textContent || 'Comment author';
+  const body = entry.querySelector('.comment-body');
+  if (body) body.innerHTML = `<div class="comment-text comment-removed"><strong>${escapeHtml(author)}</strong> <em>Content removed</em></div>`;
+  entry.querySelector('.comment-menu')?.remove();
+  entry.classList.add('is-removed');
+  updateCommentCount(entry.closest('[data-item-id]'));
+}
 
 function breakoutTaskMarkup(task, root) {
   const orgId = escapeHtml(root.dataset.orgId); const groupId = escapeHtml(root.dataset.groupId); const userId = root.dataset.userId; const groupAdmin = root.dataset.groupAdmin === 'true'; const members = JSON.parse(root.dataset.members || '[]'); const claimedName = members.find((member) => member.id === task.claimedBy)?.name || 'a member';
@@ -70,9 +82,9 @@ function connectLiveCourse() {
   liveState.socket.on('item:deleted', ({ itemId }) => root.querySelector(`[data-item-id="${CSS.escape(itemId)}"]`)?.remove());
   liveState.socket.on('course:items-reordered', ({ items }) => { if (!items) return; const list = root.querySelector('[data-feed-list]'); const positions = new Map(items.map((item) => [item.id, item.position])); [...list.querySelectorAll('[data-item-id]')].sort((left, right) => (positions.get(left.dataset.itemId) ?? 0) - (positions.get(right.dataset.itemId) ?? 0)).forEach((card, index) => { card.dataset.position = positions.get(card.dataset.itemId) ?? index; list.appendChild(card); }); });
   liveState.socket.on('item:comment-added', ({ itemId, comment }) => appendUniqueComment(itemId, comment));
-  liveState.socket.on('item:comment-updated', ({ itemId, comment }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(comment?.id || '')}"]`); if (entry && comment) { entry.outerHTML = commentMarkup(comment, { orgId: root.dataset.orgId, itemId, canEdit: root.dataset.isAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.isAdmin === 'true', canViewHistory: root.dataset.isAdmin === 'true' }); bindLiveForms(root); lucide.createIcons(); } });
+  liveState.socket.on('item:comment-updated', ({ itemId, comment }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(comment?.id || '')}"]`); if (entry && comment) { entry.outerHTML = commentMarkup(comment, { orgId: root.dataset.orgId, itemId, canEdit: root.dataset.isAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.isAdmin === 'true' || comment.userId === root.dataset.userId, canViewHistory: root.dataset.isAdmin === 'true' }); bindLiveForms(root); lucide.createIcons(); } });
   liveState.socket.on('item:comment-deleted', ({ itemId, commentId }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`); finishCommentRemoval(entry); });
-  liveState.socket.on('item:comment-reported', ({ itemId, commentId }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`); finishCommentRemoval(entry); });
+  liveState.socket.on('item:comment-reported', ({ itemId, commentId }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`); markCommentReported(entry); });
   liveState.socket.on('board:card-created', ({ card }) => { if (!card) return; const list = root.querySelector('[data-board-list]'); if (!list || list.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`)) return; root.querySelector('[data-empty-board]')?.remove(); const remove = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/course/${escapeHtml(root.dataset.courseId)}/board/${escapeHtml(card.id)}/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete board task"><i data-lucide="trash-2"></i></button></form>` : '<i data-lucide="arrow-right"></i>'; list.insertAdjacentHTML('beforeend', `<div class="claim-row" data-card-id="${escapeHtml(card.id)}"><span><strong>${escapeHtml(card.title)}</strong><small>${escapeHtml(card.status)}</small></span>${remove}</div>`); bindLiveForms(list.lastElementChild); lucide.createIcons(); });
   liveState.socket.on('resource:created', ({ resource }) => { if (!resource) return; const list = root.querySelector('[data-resource-list]'); if (!list || list.querySelector(`[data-resource-id="${CSS.escape(resource.id)}"]`)) return; const remove = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/course/${escapeHtml(root.dataset.courseId)}/resources/${escapeHtml(resource.id)}/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete resource"><i data-lucide="trash-2"></i></button></form>` : ''; list.insertAdjacentHTML('beforeend', `<div class="resource-row" data-resource-id="${escapeHtml(resource.id)}"><a class="resource-link" href="${escapeHtml(resource.url)}" target="_blank" rel="noreferrer"><i data-lucide="external-link"></i><span>${escapeHtml(resource.title)}</span></a>${remove}</div>`); bindLiveForms(list.lastElementChild); lucide.createIcons(); });
   liveState.socket.on('resource:deleted', ({ resourceId }) => root.querySelector(`[data-resource-id="${CSS.escape(resourceId)}"]`)?.remove());
@@ -109,10 +121,10 @@ function connectLiveBreakout() {
   liveState.socket.on('breakout:task-updated', ({ groupId, task }) => { if (groupId !== root.dataset.groupId || !task) return; const row = root.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`); if (row) { row.outerHTML = breakoutTaskMarkup(task, root); bindLiveForms(root.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`)); lucide.createIcons(); } });
   liveState.socket.on('breakout:task-deleted', ({ groupId, taskId }) => { if (groupId === root.dataset.groupId) root.querySelector(`[data-task-id="${CSS.escape(taskId)}"]`)?.remove(); });
   liveState.socket.on('breakout:board-deleted', ({ groupId }) => { if (groupId === root.dataset.groupId) root.querySelector('[data-breakout-task-list]').innerHTML = '<div class="empty-panel" data-empty-breakout-board><h3>The board is clear</h3></div>'; });
-  liveState.socket.on('breakout:comment-created', ({ groupId, comment }) => { if (groupId !== root.dataset.groupId || !comment) return; const list = root.querySelector('[data-breakout-comment-list]'); if (list && !list.querySelector(`[data-comment-id="${CSS.escape(comment.id)}"]`)) { list.insertAdjacentHTML('beforeend', commentMarkup(comment, { orgId: root.dataset.orgId, groupId, canEdit: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.groupAdmin === 'true', canViewHistory: root.dataset.groupAdmin === 'true' })); bindLiveForms(list.lastElementChild); lucide.createIcons(); } });
-  liveState.socket.on('breakout:comment-updated', ({ groupId, comment }) => { if (groupId !== root.dataset.groupId || !comment) return; const entry = root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(comment.id)}"]`); if (entry) { entry.outerHTML = commentMarkup(comment, { orgId: root.dataset.orgId, groupId, canEdit: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.groupAdmin === 'true', canViewHistory: root.dataset.groupAdmin === 'true' }); bindLiveForms(root); lucide.createIcons(); } });
+  liveState.socket.on('breakout:comment-created', ({ groupId, comment }) => { if (groupId !== root.dataset.groupId || !comment) return; const list = root.querySelector('[data-breakout-comment-list]'); if (list && !list.querySelector(`[data-comment-id="${CSS.escape(comment.id)}"]`)) { list.insertAdjacentHTML('beforeend', commentMarkup(comment, { orgId: root.dataset.orgId, groupId, canEdit: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canViewHistory: root.dataset.groupAdmin === 'true' })); bindLiveForms(list.lastElementChild); lucide.createIcons(); } });
+  liveState.socket.on('breakout:comment-updated', ({ groupId, comment }) => { if (groupId !== root.dataset.groupId || !comment) return; const entry = root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(comment.id)}"]`); if (entry) { entry.outerHTML = commentMarkup(comment, { orgId: root.dataset.orgId, groupId, canEdit: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canViewHistory: root.dataset.groupAdmin === 'true' }); bindLiveForms(root); lucide.createIcons(); } });
   liveState.socket.on('breakout:comment-deleted', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) finishCommentRemoval(root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)); });
-  liveState.socket.on('breakout:comment-reported', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) finishCommentRemoval(root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)); });
+  liveState.socket.on('breakout:comment-reported', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) markCommentReported(root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)); });
 }
 
 function todoList() { return document.querySelector('[data-live-todo-list]'); }
@@ -187,10 +199,10 @@ function bindTodoControls() {
 }
 
 async function submitLiveForm(form, animatedEntry = null) {
-  const actionUrl = form.getAttribute('action') || ''; const key = `${actionUrl}:${Date.now()}`; const submit = form.querySelector('button[type="submit"]'); const original = submit?.innerHTML; const formData = new FormData(form); const optimisticComment = actionUrl.endsWith('/comments') ? { id: `pending-${key}`, author: 'You', text: formData.get('comment') } : null;
+  const actionUrl = form.getAttribute('action') || ''; const submit = form.querySelector('button[type="submit"]'); const original = submit?.innerHTML; const formData = new FormData(form);
   const isTaskToggle = form.classList.contains('toggle-task-form');
   const isTaskCreate = form.matches('[data-live-form][action="/tasks"]');
-  if (optimisticComment) { const itemId = actionUrl.split('/').at(-2); appendUniqueComment(itemId, optimisticComment); }
+  form.querySelector('[data-form-error]')?.setAttribute('hidden', '');
   if (submit) { submit.disabled = true; submit.dataset.original = original; }
   try {
     const response = await fetch(actionUrl, { method: 'POST', body: new URLSearchParams(formData), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } });
@@ -215,10 +227,10 @@ async function submitLiveForm(form, animatedEntry = null) {
         const itemCardElement = form.closest('[data-item-id]');
         const courseLive = form.closest('[data-course-live]');
         const breakoutLive = form.closest('[data-breakout-live]');
-        const context = itemCardElement && courseLive ? { orgId: courseLive.dataset.orgId, itemId: itemCardElement.dataset.itemId, canEdit: courseLive.dataset.isAdmin === 'true' || payload.comment.userId === courseLive.dataset.userId, canDelete: courseLive.dataset.isAdmin === 'true', canViewHistory: courseLive.dataset.isAdmin === 'true' } : { orgId: breakoutLive.dataset.orgId, groupId: breakoutLive.dataset.groupId, canEdit: breakoutLive.dataset.groupAdmin === 'true' || payload.comment.userId === breakoutLive.dataset.userId, canDelete: breakoutLive.dataset.groupAdmin === 'true', canViewHistory: breakoutLive.dataset.groupAdmin === 'true' };
-        if (entry) { entry.outerHTML = commentMarkup(payload.comment, context); bindLiveForms(form.closest('[data-comment-list], [data-breakout-comment-list]') || document); lucide.createIcons(); }
+        const context = itemCardElement && courseLive ? { orgId: courseLive.dataset.orgId, itemId: itemCardElement.dataset.itemId, canEdit: courseLive.dataset.isAdmin === 'true' || payload.comment.userId === courseLive.dataset.userId, canDelete: courseLive.dataset.isAdmin === 'true' || payload.comment.userId === courseLive.dataset.userId, canViewHistory: courseLive.dataset.isAdmin === 'true' } : breakoutLive ? { orgId: breakoutLive.dataset.orgId, groupId: breakoutLive.dataset.groupId, canEdit: breakoutLive.dataset.groupAdmin === 'true' || payload.comment.userId === breakoutLive.dataset.userId, canDelete: breakoutLive.dataset.groupAdmin === 'true' || payload.comment.userId === breakoutLive.dataset.userId, canViewHistory: breakoutLive.dataset.groupAdmin === 'true' } : null;
+        if (entry && context) { entry.outerHTML = commentMarkup(payload.comment, context); bindLiveForms(entry.parentElement || document); lucide.createIcons(); }
       } else {
-        const itemId = actionUrl.split('/').at(-2); document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-list] [data-comment-id="${CSS.escape(optimisticComment?.id || '')}"]`)?.remove(); appendUniqueComment(itemId, payload.comment);
+        const itemId = actionUrl.split('/').at(-2); appendUniqueComment(itemId, payload.comment);
       }
     }
     if (payload.task) {
@@ -257,9 +269,22 @@ async function submitLiveForm(form, animatedEntry = null) {
     syncTodoSummary();
   } catch (error) {
     if (animatedEntry) { animatedEntry.style.transform = ''; animatedEntry.classList.remove('notification-waterfall-out'); }
-    if (optimisticComment) document.querySelector(`[data-comment-id="${CSS.escape(optimisticComment.id)}"]`)?.remove();
-    window.dispatchEvent(new CustomEvent('live-error', { detail: error.message }));
+    showFormError(form, error.message, formData.get('comment'));
   } finally { if (submit) { submit.disabled = false; submit.innerHTML = submit.dataset.original; } }
+}
+
+function showFormError(form, message, phrase) {
+  let error = form.querySelector('[data-form-error]');
+  if (!error) {
+    error = document.createElement('small');
+    error.className = 'form-error';
+    error.dataset.formError = 'true';
+    form.querySelector('.comment-edit-actions')?.before(error);
+    if (!error.parentElement) form.append(error);
+  }
+  error.innerHTML = `${escapeHtml(message)}${phrase ? ` <button class="text-button appeal-word-link" type="button" data-appeal-word data-phrase="${escapeHtml(phrase)}">Report mistake</button>` : ''}`;
+  error.hidden = false;
+  bindLiveForms(error);
 }
 
 function syncTodoSummary() {
@@ -286,7 +311,10 @@ function bindNotificationGestures(scope = document) {
 }
 
 function bindLiveForms(scope = document) {
-  scope.querySelectorAll('[data-live-form]').forEach((form) => form.addEventListener('submit', (event) => { event.preventDefault(); submitLiveForm(form); }));
+  scope.querySelectorAll('[data-live-form]').forEach((form) => { if (form.dataset.liveBound === 'true') return; form.dataset.liveBound = 'true'; form.addEventListener('submit', (event) => { event.preventDefault(); submitLiveForm(form); }); });
+  scope.querySelectorAll('[data-comment-edit-open]').forEach((button) => { if (button.dataset.editBound === 'true') return; button.dataset.editBound = 'true'; button.addEventListener('click', () => { const entry = button.closest('[data-comment-id]'); const menu = button.closest('.comment-menu'); const editor = entry?.querySelector('.comment-edit-form'); menu?.removeAttribute('open'); if (editor && entry?.querySelector('.comment-text')) { entry.querySelector('.comment-text').hidden = true; editor.hidden = false; editor.querySelector('input')?.focus(); } }); });
+  scope.querySelectorAll('[data-comment-edit-cancel]').forEach((button) => { if (button.dataset.editBound === 'true') return; button.dataset.editBound = 'true'; button.addEventListener('click', () => { const entry = button.closest('[data-comment-id]'); const editor = button.closest('.comment-edit-form'); if (entry && editor) { editor.hidden = true; entry.querySelector('.comment-text').hidden = false; } }); });
+  scope.querySelectorAll('[data-appeal-word]').forEach((button) => { if (button.dataset.appealBound === 'true') return; button.dataset.appealBound = 'true'; button.addEventListener('click', async () => { button.disabled = true; const response = await fetch('/appeals', { method: 'POST', body: new URLSearchParams({ phrase: button.dataset.phrase || '' }), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); const payload = await response.json(); if (response.ok && !payload.error) { button.closest('[data-form-error]').textContent = payload.successMessage || 'Thanks. We will review that phrase.'; } else { button.disabled = false; } }); });
 }
 
 function showLiveError(message) {
