@@ -1,0 +1,29 @@
+services:
+  project-omega-main:
+    image: project-omega:latest
+    container_name: project-omega
+    ports:
+      - "8891:3000"
+    volumes:
+      - database:/home/node/app/data
+    networks:
+      - vps
+    restart: unless-stopped
+    secrets:
+      - openrouter_api_key
+    environment:
+      - NODE_ENV=production
+      - ORIGIN=https://lockedin.burchweb.com
+      - OPENROUTER_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free
+      - BAD_WORD_REVIEW_INTERVAL_MINUTES=10
+      - BAD_WORD_REVIEW_INTERVAL_MS=600000
+      - APP_MODE=beta
+secrets:
+  openrouter_api_key:
+    environment: OPENROUTER_API_KEY
+volumes:
+  database:
+
+networks:
+  vps:
+    external: true
