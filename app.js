@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const creators = require('./data/creators');
+const creators = require('./config/creators');
 const express = require('express');
 const http = require('http');
 const crypto = require('crypto');
