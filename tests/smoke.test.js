@@ -25,6 +25,9 @@ assert.match(app, /\/org\/:id\/admin\/share/, 'Sharing should have its own admin
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'moderation', 'comments.js'), 'utf8'), /admin\/comments\/:commentId\/review/, 'Admins should be able to mark comments reviewed.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /Review new comments/, 'The admin page should expose the moderation queue.');
 assert.match(app, /admin\/reports\/:reportId\/action/, 'Admins should have report action handling.');
+assert.match(app, /isSiteAdminUser/, 'Site admins should be able to review reports from every group.');
+assert.match(app, /DELETE FROM bad_word_review_logs/, 'AI moderation logs should retain only the latest entries.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Reports from every group/, 'Site admin moderation should show cross-group reports.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /Mod Action/, 'Reports should expose removal and moderation actions.');
 assert.match(app, /\['remove', 'remove-moderate', 'warn', 'ban', 'close'\]/, 'Report moderation should support warnings.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'warning-modal.ejs'), 'utf8'), /data-warning-modal/, 'Warnings should appear in a persistent modal.');
@@ -35,6 +38,12 @@ assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'ut
 assert.match(app, /notifications\/:notificationId\/read/, 'Users should be able to mark notifications read.');
 assert.match(app, /members\/:userId\/repercussion/, 'Admins should have member conduct actions.');
 assert.match(app, /members\/:userId\/access/, 'Admins should be able to change member access.');
+assert.match(app, /safeReturnTo/, 'Authentication should preserve safe internal return paths.');
+assert.match(app, /request\.originalUrl/, 'Logged-out invite links should pass their original URL to authentication.');
+assert.match(app, /site-admin\/bad-words/, 'Site admins should be able to add bad words manually.');
+assert.match(app, /bad_word_review_logs/, 'AI moderation updates should be persisted as logs.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /AI update log/, 'The moderation tab should show AI update logs.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'auth-page.ejs'), 'utf8'), /name="next"/, 'Authentication forms should carry the post-auth return path.');
 assert.match(app, /\['viewer', 'editor', 'moderator'\]/, 'Member access should support viewer, editor, and moderator.');
 assert.match(app, /'moderator', 'admin'/, 'Member access should support assigning admins.');
 assert.match(app, /member\.role === 'moderator' && !\['mod', 'report'\]/, 'Moderators should be limited to moderation and reports tabs.');
@@ -43,6 +52,7 @@ assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'pe
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'topbar.ejs'), 'utf8'), /notification-popover/, 'The topbar should expose notifications.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'course.ejs'), 'utf8'), /filter\(comment => !comment\.reported\)\.length/, 'Comment counts should exclude removed or reported comments.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), /notification-waterfall-out/, 'Notification dismissal should animate out.');
+assert.match(client, /data-report-queue/, 'Acted-on site admin reports should disappear and update the empty state live.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), /notification-item\.unread/, 'Notification reads should update the UI live.');
 assert.match(app, /app\.get\('\/privacy'/, 'The privacy policy should have a public route.');
 assert.match(app, /app\.get\('\/terms'/, 'The terms should have a public route.');

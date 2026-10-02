@@ -215,7 +215,21 @@ async function submitLiveForm(form, animatedEntry = null) {
       const unread = document.querySelectorAll('.notification-item.unread').length; const badge = document.querySelector('.notification-menu .notification-count');
       if (badge) { badge.textContent = String(unread); badge.hidden = unread === 0; }
     }
-    if (payload.action && payload.reportId) document.querySelector(`[data-report-id="${CSS.escape(payload.reportId)}"]`)?.remove();
+    if (payload.action && payload.reportId) {
+      const report = document.querySelector(`[data-report-id="${CSS.escape(payload.reportId)}"]`);
+      const queue = report?.closest('[data-report-queue]');
+      report?.remove();
+      if (queue && !queue.querySelector('[data-report-id]')) {
+        const count = queue.querySelector('.queue-count');
+        if (count) count.textContent = '0 open';
+        const empty = document.createElement('div');
+        empty.className = 'empty-panel';
+        empty.dataset.reportEmpty = 'true';
+        empty.innerHTML = '<i data-lucide="flag"></i><h3>No open reports</h3><p>Reports from every group will appear here.</p>';
+        queue.append(empty);
+        lucide.createIcons();
+      }
+    }
     if (payload.role || (payload.action && payload.userId)) { window.location.reload(); return; }
     if (payload.verifiedBy) { const itemId = actionUrl.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-verify-count]`); if (count) count.textContent = payload.verifiedBy.length; }
     if (payload.downvotedBy) { const itemId = actionUrl.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = payload.downvotedBy.length; }

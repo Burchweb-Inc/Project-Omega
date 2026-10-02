@@ -110,6 +110,15 @@ function appendBadWordCandidate(value, opts = {}) {
   return true;
 }
 
+function addUserBadWord(value, opts = {}) {
+  const badWordsPath = opts.badWordsPath || DEFAULT_USER_BAD_WORDS_PATH;
+  const word = sanitizeCandidate(value);
+  if (!word) return { added: false, word: '' };
+  if (readLines(badWordsPath).includes(word)) return { added: false, word };
+  appendUniqueLine(badWordsPath, word);
+  return { added: true, word };
+}
+
 function appendAppealPhrase(value, opts = {}) {
   const appealPath = opts.appealPath || DEFAULT_APPEAL_PATH;
   const phrase = String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -372,6 +381,7 @@ module.exports = {
   DEFAULT_USER_BAD_WORDS_PATH,
   OPENROUTER_URL,
   appendBadWordCandidate,
+  addUserBadWord,
   appendAppealPhrase,
   appendRemovedTextForReview,
   defaultAiModInstructions,

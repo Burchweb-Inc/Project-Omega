@@ -12,7 +12,7 @@ const sanitizeHtml = require('sanitize-html');
 const { Server } = require('socket.io');
 const { scanContent } = require('./moderation/content-safety');
 const { moderationComments, registerCommentRoutes } = require('./moderation/comments');
-const { appendRemovedTextForReview, appendAppealPhrase, reviewQueuedBadWords, reviewAppealWords } = require('./moderation/bad-word-queue');
+const { appendRemovedTextForReview, appendAppealPhrase, reviewQueuedBadWords, reviewAppealWords, addUserBadWord } = require('./moderation/bad-word-queue');
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -71,6 +71,16 @@ db.prepare(`CREATE TABLE IF NOT EXISTS site_announcements (
   created_by TEXT NOT NULL,
   created_at TEXT NOT NULL
 )`).run();
+db.prepare(`CREATE TABLE IF NOT EXISTS bad_word_review_logs (
+  id TEXT PRIMARY KEY,
+  trigger TEXT NOT NULL,
+  checked INTEGER NOT NULL,
+  kept_words TEXT NOT NULL DEFAULT '[]',
+  removed_words TEXT NOT NULL DEFAULT '[]',
+  fallback TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+)`).run();
+db.prepare('DELETE FROM bad_word_review_logs WHERE id NOT IN (SELECT id FROM bad_word_review_logs ORDER BY created_at DESC LIMIT 10)').run();
 
 app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
@@ -262,8 +272,23 @@ const server = http.createServer(app);
 const io = new Server(server);
 const badWordReviewIntervalMs = Number(process.env.BAD_WORD_REVIEW_INTERVAL_MS || (Number(process.env.BAD_WORD_REVIEW_INTERVAL_MINUTES || '10') * 60000));
 const badWordReviewInterval = Number.isFinite(badWordReviewIntervalMs) && badWordReviewIntervalMs > 0 ? badWordReviewIntervalMs : 10 * 60 * 1000;
-const reviewQueuedBadWordsNow = () => {
-  reviewQueuedBadWords().catch((error) => console.error('bad-word review failed', error));
+const recordBadWordReview = (trigger, result) => {
+  if (trigger !== 'manual' && !result?.checked && !result?.fallback) return;
+  db.prepare('INSERT INTO bad_word_review_logs (id, trigger, checked, kept_words, removed_words, fallback, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+    id(), trigger, result.checked || 0, JSON.stringify(result.kept || []), JSON.stringify(result.removed || []), result.fallback || '', new Date().toISOString()
+  );
+  db.prepare('DELETE FROM bad_word_review_logs WHERE id NOT IN (SELECT id FROM bad_word_review_logs ORDER BY created_at DESC LIMIT 10)').run();
+};
+const reviewQueuedBadWordsNow = async (trigger = 'scheduled') => {
+  try {
+    const result = await reviewQueuedBadWords();
+    recordBadWordReview(trigger, result);
+    return result;
+  } catch (error) {
+    console.error('bad-word review failed', error);
+    recordBadWordReview(trigger, { checked: 0, fallback: error.message || 'review-failed' });
+    return { checked: 0, kept: [], removed: [], fallback: 'review-failed' };
+  }
 };
 const appealWordReviewIntervalMs = Number(process.env.APPEAL_WORD_REVIEW_INTERVAL_MS || (Number(process.env.APPEAL_WORD_REVIEW_INTERVAL_MINUTES || '20') * 60000));
 const appealWordReviewInterval = Number.isFinite(appealWordReviewIntervalMs) && appealWordReviewIntervalMs > 0 ? appealWordReviewIntervalMs : 20 * 60 * 1000;
@@ -315,9 +340,19 @@ function refreshModerationStatus(user) {
   }
   return user?.moderationStatus || 'active';
 }
+function safeReturnTo(value) {
+  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') ? value : '/dashboard';
+}
+function authRedirect(path, error, next) {
+  const params = new URLSearchParams();
+  if (error) params.set('error', error);
+  if (next) params.set('next', next);
+  const query = params.toString();
+  return `${path}${query ? `?${query}` : ''}`;
+}
 function requireUser(request, response, next) {
   request.user = currentUser(request);
-  if (!request.user) return response.redirect('/');
+  if (!request.user) return response.redirect(authRedirect('/login', null, request.originalUrl));
   if (refreshModerationStatus(request.user) !== 'active') return response.status(403).render('index', { page: 'restricted', view: 'restricted', user: request.user, users, orgs, canEdit, selectedOrg: null, error: null });
   next();
 }
@@ -411,7 +446,7 @@ app.get(['/signup', '/login'], (request, response) => {
   request.user = currentUser(request);
   if (request.user) return response.redirect('/dashboard');
   const page = request.path.slice(1) === 'login' ? 'login' : 'signup';
-  response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: request.query.error });
+  response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: request.query.error, next: safeReturnTo(request.query.next) });
 });
 
 app.get('/about', (request, response) => renderPublicPage(request, response, 'about', { creators }));
@@ -424,19 +459,21 @@ app.get('/dev/lockui', (request, response) => renderPublicPage(request, response
 
 app.post('/signup', (request, response) => {
   const { name, username, password, age } = request.body;
-  if (!name || !username || !password || password.length < 8 || !age || Number(age) < 13 || users.some((user) => user.username === username.trim().toLowerCase())) return response.redirect('/signup?error=signup');
+  const next = safeReturnTo(request.body.next);
+  if (!name || !username || !password || password.length < 8 || !age || Number(age) < 13 || users.some((user) => user.username === username.trim().toLowerCase())) return response.redirect(authRedirect('/signup', 'signup', next));
   const normalizedUsername = username.trim().toLowerCase();
   const user = { id: id(), name: name.trim(), username: normalizedUsername, age: Number(age), passwordHash: passwordHash(password), isSiteAdmin: normalizedUsername === 'admin', tasks: [] };
-  users.push(user); persistState(); setSession(response, user.id); response.redirect('/dashboard');
+  users.push(user); persistState(); setSession(response, user.id); response.redirect(next);
 });
 
 app.post('/login', (request, response) => {
-  if (!loginAllowed(request)) return response.redirect('/login?error=locked');
+  const next = safeReturnTo(request.body.next);
+  if (!loginAllowed(request)) return response.redirect(authRedirect('/login', 'locked', next));
   const username = String(request.body.username || '').trim().toLowerCase();
   const user = users.find((candidate) => candidate.username === username);
-  if (!user || !passwordMatches(request.body.password || '', user.passwordHash)) { recordLoginFailure(request); return response.redirect('/login?error=login'); }
+  if (!user || !passwordMatches(request.body.password || '', user.passwordHash)) { recordLoginFailure(request); return response.redirect(authRedirect('/login', 'login', next)); }
   loginAttempts.delete(request.ip || 'local');
-  setSession(response, user.id); response.redirect('/dashboard');
+  setSession(response, user.id); response.redirect(next);
 });
 
 app.post('/logout', (request, response) => {
@@ -481,7 +518,12 @@ app.get('/site-admin', requireUser, requireSiteAdmin, (request, response) => ren
   siteAdminReports: globalReports().filter((report) => report.status === 'open'),
   feedback: siteFeedback(),
   siteAdminUsers: users.filter((user) => user.isSiteAdmin),
-  announcements: siteAnnouncements()
+  announcements: siteAnnouncements(),
+  badWordReviewLogs: db.prepare('SELECT * FROM bad_word_review_logs ORDER BY created_at DESC LIMIT 20').all().map((entry) => ({
+    ...entry,
+    keptWords: JSON.parse(entry.kept_words || '[]'),
+    removedWords: JSON.parse(entry.removed_words || '[]')
+  }))
 }));
 app.get('/api/users/search', requireUser, (request, response) => {
   const query = String(request.query.q || '').trim().toLowerCase();
@@ -512,8 +554,16 @@ app.post('/site-admin/feedback/:id/status', requireUser, requireSiteAdmin, (requ
   return sendMutation(request, response, { successMessage: 'Feedback updated.' }, '/site-admin?tab=feedback');
 });
 app.post('/site-admin/force-ai-update', requireUser, requireSiteAdmin, (request, response) => {
-  reviewQueuedBadWordsNow();
-  return sendMutation(request, response, { successMessage: 'The AI update queue review has started.' }, '/site-admin?tab=moderation');
+  return reviewQueuedBadWordsNow('manual').then((result) => sendMutation(request, response, {
+    successMessage: result.checked ? `AI review complete: checked ${result.checked}, kept ${result.kept?.length || 0}, discarded ${result.removed?.length || 0}.` : 'The AI update queue is empty.'
+  }, '/site-admin?tab=moderation'));
+});
+app.post('/site-admin/bad-words', requireUser, requireSiteAdmin, (request, response) => {
+  const result = addUserBadWord(request.body.word);
+  const payload = result.added
+    ? { successMessage: `Added "${result.word}" to the active bad-word list.` }
+    : { error: result.word ? `"${result.word}" is already on the active list.` : 'Enter a valid word or phrase.' };
+  return sendMutation(request, response, payload, '/site-admin?tab=moderation');
 });
 app.post('/site-admin/announcements', requireUser, requireSiteAdmin, (request, response) => {
   const title = String(request.body.title || '').trim().slice(0, 160);
@@ -948,7 +998,9 @@ app.post('/org/:id/reports/:reportId/close', requireUser, (request, response) =>
 app.post('/org/:id/admin/reports/:reportId/action', requireUser, async (request, response) => {
   const org = getOrg(request); const actor = membership(org, request.user); const report = org?.reports?.find((entry) => entry.id === request.params.reportId);
   const action = ['remove', 'remove-moderate', 'warn', 'ban', 'close'].includes(request.body.action) ? request.body.action : null;
-  if (!org || !['admin', 'moderator'].includes(actor?.role) || !report || !action) return sendMutation(request, response, { error: 'Only admins and moderators can act on this report.' }, `/org/${request.params.id}/admin/report`);
+  const isSiteAdminUser = isSiteAdmin(request.user);
+  const reportFallback = isSiteAdminUser ? '/site-admin?tab=moderation' : `/org/${request.params.id}/admin/report`;
+  if (!org || (!isSiteAdminUser && !['admin', 'moderator'].includes(actor?.role)) || !report || !action) return sendMutation(request, response, { error: 'Only admins and moderators can act on this report.' }, reportFallback);
   const message = String(request.body.message || '').trim().slice(0, 500);
   if (action === 'warn' && !message) return sendMutation(request, response, { error: 'A warning message is required.' }, `/org/${request.params.id}/admin/report`);
   if (message && await contentPolicyError({ type: 'text', text: message })) return sendMutation(request, response, { error: 'That moderation message could not be sent.' }, `/org/${request.params.id}/admin/report`);
@@ -977,7 +1029,7 @@ app.post('/org/:id/admin/reports/:reportId/action', requireUser, async (request,
 app.get('/share/:code', (request, response) => {
   const org = orgs.find((entry) => entry.shareCode === request.params.code);
   if (!org || org.shareUses < 1) return response.status(404).send('This share link is no longer active.');
-  const user = currentUser(request); if (!user) return response.redirect('/');
+  const user = currentUser(request); if (!user) return response.redirect(authRedirect('/login', null, request.originalUrl));
   if (!membership(org, user)) org.members.push({ userId: user.id, role: org.sharePermission }); org.shareUses -= 1; persistState(); response.redirect(`/org/${org.id}`);
 });
 

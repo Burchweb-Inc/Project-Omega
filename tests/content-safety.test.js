@@ -12,6 +12,7 @@ const {
 } = require('../moderation/content-safety');
 const { createIffyModerator } = require('../moderation/iffy');
 const {
+  addUserBadWord,
   appendBadWordCandidate,
   getPendingBadWordCandidates,
   reviewQueuedBadWords
@@ -781,6 +782,15 @@ test('recognizes phrase-level user-generated moderation entries', () => {
   const result = scanContent({ type: 'comment', text: 'i will kill you' }, { badWordFilePath: userWordsFile });
   assertValidResult(result);
   assert.ok(result.badScore > 0, 'expected a phrase-level bad word to be recognized');
+});
+
+test('adds normalized manual bad words without duplicating them', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'studyhub-manual-badword-'));
+  const badWordsPath = path.join(dir, 'user-bad-words.txt');
+
+  assert.deepEqual(addUserBadWord('  Threat Phrase  ', { badWordsPath }), { added: true, word: 'threat phrase' });
+  assert.deepEqual(addUserBadWord('threat phrase', { badWordsPath }), { added: false, word: 'threat phrase' });
+  assert.equal(fs.readFileSync(badWordsPath, 'utf8'), 'threat phrase\n');
 });
 
 test('parses only plain word-or-phrase entries from AI output and drops explanatory text', () => {

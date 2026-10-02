@@ -45,7 +45,7 @@
     <div class="admin-section-heading"><div><h2>Sharing and access</h2><p class="muted">Control who can find this group and how invitations work.</p></div></div>
     <form action="/org/<%= adminOrg.id || '' %>/admin/share" method="post" class="admin-panel page-form admin-form">
       <label>Visibility<select name="visibility"><option value="private" <%= adminOrg.visibility === 'private' ? 'selected' : '' %>>Private · members only</option><option value="share" <%= adminOrg.visibility === 'share' ? 'selected' : '' %>>Share · anyone with a link</option><option value="public" <%= adminOrg.visibility === 'public' ? 'selected' : '' %>>Public · discoverable by everyone</option></select></label>
-      <div class="share-link-note"><i data-lucide="link-2"></i><div><strong>Active share link</strong><a href="/share/<%= adminOrg.shareCode || '' %>">studyline.local/share/<%= adminOrg.shareCode || '' %></a></div></div>
+      <div class="share-link-note"><i data-lucide="link-2"></i><div><strong>Active share link</strong><a href="/share/<%= adminOrg.shareCode || '' %>">lockedin.burchweb.com/share/<%= adminOrg.shareCode || '' %></a></div></div>
       <label>Default permission<select name="sharePermission"><option value="viewer" <%= adminOrg.sharePermission === 'viewer' ? 'selected' : '' %>>Viewer</option><option value="editor" <%= adminOrg.sharePermission === 'editor' ? 'selected' : '' %>>Editor</option></select></label>
       <label>Uses before deactivation<input name="shareUses" type="number" min="1" value="<%= adminOrg.shareUses || 1 %>"></label>
       <button class="button primary" type="submit">Update share settings</button>
