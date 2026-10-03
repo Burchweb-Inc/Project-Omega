@@ -184,7 +184,7 @@ function loadOrgsFromDatabase() {
     org.courses = (org.courses || []).map((course) => { normalizeCourseItems(course); return { ...course, items: course.items.map((item) => ({ ...item, comments: item.comments || [], verifiedBy: item.verifiedBy || [], downvotedBy: item.downvotedBy || [] })), board: course.board || [], resources: course.resources || [] }; });
     org.groups = (org.groups || []).map((group) => { const task = group.itemId ? org.courses.flatMap((course) => course.items).find((item) => item.id === group.itemId) : null; return { ...group, members: group.members || [], roles: group.roles || {}, itemId: group.itemId || null, taskSlug: group.taskSlug || (task ? breakoutTaskSlug(task) : null), shareCode: group.shareCode || crypto.randomBytes(12).toString('base64url'), createdBy: group.createdBy || group.members?.[0] || null, tasks: group.tasks || [], resources: group.resources || [], polls: group.polls || [], comments: (group.comments || []).map((comment) => ({ ...comment, parentId: comment.parentId || null })) }; });
       org.members = (org.members || []).map((member) => ({ ...member, role: member.role === 'writer' ? 'editor' : member.role || 'viewer' }));
-      return { ...org, slug: org.slug || secureSlug(org.name), reports: org.reports || [], groups: org.groups || [], shareCode: org.shareCode || crypto.randomBytes(32).toString('base64url') };
+      return { ...org, slug: org.slug || secureSlug(org.name), reports: org.reports || [], groups: org.groups || [], pendingInvites: org.pendingInvites || [], shareCode: org.shareCode || crypto.randomBytes(32).toString('base64url') };
   }));
 }
 
@@ -357,6 +357,7 @@ function requireUser(request, response, next) {
   next();
 }
 function membership(org, user) { return org && user ? org.members.find((member) => member.userId === user.id) : null; }
+function pendingInvite(org, user) { return org && user ? (org.pendingInvites || []).find((invite) => invite.userId === user.id) : null; }
 function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs, canEdit, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, ...extra }); }
 function renderPublicPage(request, response, page, extra = {}) { response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: null, ...extra }); }
 function getOrg(request) { return orgs.find((entry) => entry.id === request.params.id || entry.slug === request.params.slug); }
@@ -590,7 +591,7 @@ app.post('/beta/feedback', requireUser, async (request, response) => {
 });
 app.get('/todo', requireUser, (request, response) => render(request, response, 'todo'));
 app.get('/calendar', requireUser, (request, response) => render(request, response, 'calendar', { calendarItems: allItems().filter((entry) => entry.due && entry.due !== 'No date') }));
-app.get('/groups', requireUser, (request, response) => render(request, response, 'groups', { groups: orgs.filter((org) => membership(org, request.user)) }));
+app.get('/groups', requireUser, (request, response) => render(request, response, 'groups', { groups: orgs.filter((org) => membership(org, request.user) || pendingInvite(org, request.user)).map((org) => ({ ...org, pendingInvite: pendingInvite(org, request.user) })) }));
 app.get(['/org/new', '/group/new'], requireUser, (request, response) => render(request, response, 'new-org'));
 
 app.post(['/orgs', '/groups/new'], requireUser, async (request, response) => {
@@ -598,7 +599,7 @@ app.post(['/orgs', '/groups/new'], requireUser, async (request, response) => {
   if (!name) return response.redirect('/group/new');
   const description = String(request.body.description || '').trim();
   if (await contentPolicyError({ type: 'text', text: `${name} ${description}` })) return response.redirect('/group/new?error=policy');
-  const org = { id: id(), slug: secureSlug(name), name, description, theme: 'coral', visibility: 'private', shareCode: crypto.randomBytes(32).toString('base64url'), shareUses: 1, sharePermission: 'viewer', courses: [], groups: [], members: [{ userId: request.user.id, role: 'admin' }], reports: [] };
+  const org = { id: id(), slug: secureSlug(name), name, description, theme: 'coral', visibility: 'private', shareCode: crypto.randomBytes(32).toString('base64url'), shareUses: 1, sharePermission: 'viewer', courses: [], groups: [], members: [{ userId: request.user.id, role: 'admin' }], pendingInvites: [], reports: [] };
   orgs.push(org); persistState(); response.redirect(`/group/${org.slug}`);
 });
 
@@ -942,9 +943,40 @@ app.post('/org/:id/admin/share', requireUser, (request, response) => {
 app.post('/org/:id/settings', requireUser, (request, response) => response.redirect(`/org/${request.params.id}/admin/share`));
 
 app.post('/org/:id/members', requireUser, (request, response) => {
-  const org = orgs.find((entry) => entry.id === request.params.id); const member = membership(org, request.user); const target = users.find((user) => user.username === request.body.username.trim().toLowerCase());
+  const org = orgs.find((entry) => entry.id === request.params.id); const member = membership(org, request.user); const target = users.find((user) => user.username === String(request.body.username || '').trim().toLowerCase());
   const role = ['viewer', 'editor', 'moderator'].includes(request.body.role) ? request.body.role : 'viewer';
-  if (org && member?.role === 'admin' && target && !membership(org, target)) org.members.push({ userId: target.id, role }); persistState(); response.redirect(`/org/${org.id}/people`);
+  if (org && member?.role === 'admin' && target && target.id !== request.user.id && !membership(org, target)) {
+    org.pendingInvites ||= [];
+    if (!pendingInvite(org, target)) {
+      org.pendingInvites.push({ id: id(), userId: target.id, role, invitedBy: request.user.id, createdAt: new Date().toISOString() });
+      addNotification(target, { type: 'group-invite', title: `Invitation to ${org.name}`, message: `${request.user.name} invited you to join ${org.name}.`, href: '/groups', actionLabel: 'Review invitation' });
+      persistState();
+    }
+  }
+  response.redirect(`/org/${org?.id || request.params.id}/people`);
+});
+
+app.post('/org/:id/leave', requireUser, (request, response) => {
+  const org = getOrg(request); const member = membership(org, request.user);
+  const adminCount = org?.members.filter((entry) => entry.role === 'admin').length || 0;
+  if (!org || !member) return sendMutation(request, response, { error: 'You are not a member of this group.' }, '/groups');
+  if (member.role === 'admin' && adminCount <= 1) return sendMutation(request, response, { error: 'Transfer group administration to another member before leaving.' }, `/org/${org.id}`);
+  org.members = org.members.filter((entry) => entry.userId !== request.user.id);
+  persistState();
+  return sendMutation(request, response, { leftGroup: true, successMessage: `You left ${org.name}.` }, '/groups');
+});
+
+app.post('/groups/:id/invitation/:action', requireUser, (request, response) => {
+  const org = getOrg({ params: { id: request.params.id } }); const invite = pendingInvite(org, request.user);
+  if (!org || !invite || !['accept', 'deny'].includes(request.params.action)) return sendMutation(request, response, { error: 'That group invitation is no longer available.' }, '/groups');
+  org.pendingInvites = (org.pendingInvites || []).filter((entry) => entry.id !== invite.id);
+  if (request.params.action === 'accept') {
+    if (!membership(org, request.user)) org.members.push({ userId: request.user.id, role: invite.role });
+    persistState();
+    return sendMutation(request, response, { invitationAction: 'accepted', successMessage: `You joined ${org.name}.` }, `/group/${org.slug || org.id}`);
+  }
+  persistState();
+  return sendMutation(request, response, { invitationAction: 'denied', successMessage: `Invitation to ${org.name} declined.` }, '/groups');
 });
 
 app.post('/org/:id/members/:userId/access', requireUser, (request, response) => {

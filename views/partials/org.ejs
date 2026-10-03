@@ -16,9 +16,12 @@
                 </div>
             </div>
         </div>
-        <% if (member?.role==='admin' ) { %><a class="button secondary" href="/org/<%= selectedOrg.id %>/settings"><i
-                    data-lucide="settings-2"></i> Manage group</a>
-            <% } %>
+        <div class="group-home-actions">
+            <% if (member?.role==='admin' ) { %><a class="button secondary" href="/org/<%= selectedOrg.id %>/settings"><i
+                        data-lucide="settings-2"></i> Manage group</a>
+                <% } %>
+            <% if (member) { %><details class="group-menu"><summary class="icon-button" aria-label="More group actions" title="More group actions"><i data-lucide="more-horizontal"></i></summary><div class="group-menu-popover"><form action="/org/<%= selectedOrg.id %>/leave" method="post" data-leave-group-form><button class="menu-action danger" type="button" data-leave-group-trigger><i data-lucide="log-out"></i> Leave Group</button></form></div></details><% } %>
+        </div>
     </div>
     <div class="space-nav"><a class="active" href="/org/<%= selectedOrg.id %>">Courses <span>
                 <%= selectedOrg.courses.length %>

@@ -38,6 +38,13 @@ assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'ut
 assert.match(app, /notifications\/:notificationId\/read/, 'Users should be able to mark notifications read.');
 assert.match(app, /members\/:userId\/repercussion/, 'Admins should have member conduct actions.');
 assert.match(app, /members\/:userId\/access/, 'Admins should be able to change member access.');
+assert.match(app, /pendingInvites/, 'Group invitations should remain pending until accepted.');
+assert.match(app, /groups\/:id\/invitation\/:action/, 'Group invitations should support accept and deny actions.');
+assert.match(app, /group-invite/, 'Group invitations should notify the invited user.');
+assert.match(app, /org\/:id\/leave/, 'Group members should be able to leave a group.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'org.ejs'), 'utf8'), /data-leave-group-trigger/, 'Group home should expose a leave action.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), /showLeaveGroupModal/, 'Leaving a group should require a warning confirmation.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'groups.ejs'), 'utf8'), /JOIN REQUESTED/, 'Pending invitations should appear in All groups.');
 assert.match(app, /safeReturnTo/, 'Authentication should preserve safe internal return paths.');
 assert.match(app, /request\.originalUrl/, 'Logged-out invite links should pass their original URL to authentication.');
 assert.match(app, /site-admin\/bad-words/, 'Site admins should be able to add bad words manually.');

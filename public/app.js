@@ -209,6 +209,7 @@ async function submitLiveForm(form, animatedEntry = null) {
     const payload = await response.json(); if (!response.ok || payload.error) throw new Error(payload.error || 'Action failed');
     if (payload.groupUrl) { window.location.assign(payload.groupUrl); return; }
     if (payload.successMessage) showLiveSuccess(payload.successMessage);
+    if (payload.invitationAction || payload.leftGroup) { window.location.reload(); return; }
     if (payload.read || payload.readAll) {
       if (payload.readAll) document.querySelectorAll('.notification-item.unread').forEach((item) => item.classList.replace('unread', 'is-read'));
       else form.closest('.notification-item')?.classList.replace('unread', 'is-read');
@@ -325,10 +326,36 @@ function bindNotificationGestures(scope = document) {
 }
 
 function bindLiveForms(scope = document) {
-  scope.querySelectorAll('[data-live-form]').forEach((form) => { if (form.dataset.liveBound === 'true') return; form.dataset.liveBound = 'true'; form.addEventListener('submit', (event) => { event.preventDefault(); submitLiveForm(form); }); });
+  scope.querySelectorAll('[data-live-form]').forEach((form) => { if (form.dataset.liveBound === 'true') return; form.dataset.liveBound = 'true'; form.addEventListener('submit', (event) => { event.preventDefault(); submitLiveForm(form); }); }); bindLeaveGroupActions(scope);
   scope.querySelectorAll('[data-comment-edit-open]').forEach((button) => { if (button.dataset.editBound === 'true') return; button.dataset.editBound = 'true'; button.addEventListener('click', () => { const entry = button.closest('[data-comment-id]'); const menu = button.closest('.comment-menu'); const editor = entry?.querySelector('.comment-edit-form'); menu?.removeAttribute('open'); if (editor && entry?.querySelector('.comment-text')) { entry.querySelector('.comment-text').hidden = true; editor.hidden = false; editor.querySelector('input')?.focus(); } }); });
   scope.querySelectorAll('[data-comment-edit-cancel]').forEach((button) => { if (button.dataset.editBound === 'true') return; button.dataset.editBound = 'true'; button.addEventListener('click', () => { const entry = button.closest('[data-comment-id]'); const editor = button.closest('.comment-edit-form'); if (entry && editor) { editor.hidden = true; entry.querySelector('.comment-text').hidden = false; } }); });
   scope.querySelectorAll('[data-appeal-word]').forEach((button) => { if (button.dataset.appealBound === 'true') return; button.dataset.appealBound = 'true'; button.addEventListener('click', async () => { button.disabled = true; const response = await fetch('/appeals', { method: 'POST', body: new URLSearchParams({ phrase: button.dataset.phrase || '' }), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); const payload = await response.json(); if (response.ok && !payload.error) { button.closest('[data-form-error]').textContent = payload.successMessage || 'Thanks. We will review that phrase.'; } else { button.disabled = false; } }); });
+}
+
+function showLeaveGroupModal(form) {
+  document.querySelector('[data-leave-group-modal]')?.remove();
+  const modal = document.createElement('div');
+  modal.className = 'warning-modal-backdrop open';
+  modal.dataset.leaveGroupModal = 'true';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-labelledby', 'leave-group-modal-title');
+  modal.innerHTML = `<article class="warning-modal"><i data-lucide="log-out"></i><p class="kicker">LEAVE GROUP</p><h2 id="leave-group-modal-title">Leave this group?</h2><p>You will lose access to this group and its courses. You can only return if someone invites you or you join again.</p><div class="form-actions"><button class="button secondary" type="button" data-leave-group-cancel>Cancel</button><button class="button danger" type="button" data-leave-group-confirm>Leave Group</button></div></article>`;
+  const close = () => modal.remove();
+  modal.querySelector('[data-leave-group-cancel]').addEventListener('click', close);
+  modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+  modal.querySelector('[data-leave-group-confirm]').addEventListener('click', () => { close(); submitLiveForm(form); });
+  document.body.appendChild(modal);
+  lucide.createIcons();
+  modal.querySelector('[data-leave-group-cancel]').focus();
+}
+
+function bindLeaveGroupActions(scope = document) {
+  scope.querySelectorAll('[data-leave-group-trigger]').forEach((button) => {
+    if (button.dataset.leaveBound === 'true') return;
+    button.dataset.leaveBound = 'true';
+    button.addEventListener('click', () => { button.closest('details')?.removeAttribute('open'); showLeaveGroupModal(button.closest('[data-leave-group-form]')); });
+  });
 }
 
 function showLiveError(message) {
