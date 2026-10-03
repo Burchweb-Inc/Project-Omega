@@ -27,6 +27,9 @@ assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'ad
 assert.match(app, /admin\/reports\/:reportId\/action/, 'Admins should have report action handling.');
 assert.match(app, /isSiteAdminUser/, 'Site admins should be able to review reports from every group.');
 assert.match(app, /DELETE FROM bad_word_review_logs/, 'AI moderation logs should retain only the latest entries.');
+assert.match(app, /renderSuspendedGroup/, 'Suspended groups should render a locked explanation instead of silently redirecting.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'suspended-group.ejs'), 'utf8'), /GROUP LOCKED|lock-keyhole/, 'Suspended groups should show a lock state.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Lock group|Unlock group/, 'Site admins should have explicit group lock controls.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Reports from every group/, 'Site admin moderation should show cross-group reports.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /Mod Action/, 'Reports should expose removal and moderation actions.');
 assert.match(app, /\['remove', 'remove-moderate', 'warn', 'ban', 'close'\]/, 'Report moderation should support warnings.');
@@ -47,7 +50,7 @@ assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'ut
 assert.match(app, /site-admin\/groups\/:id\/suspension/, 'Site admins should be able to suspend and unsuspend groups.');
 assert.match(app, /site-admin\/groups\/:id\/delete/, 'Site admins should be able to delete suspended groups.');
 assert.match(app, /suspendedAt/, 'Group suspension should persist indefinitely.');
-assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Suspend this group indefinitely/, 'Site admin groups should expose indefinite suspension.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Lock this group indefinitely/, 'Site admin groups should expose indefinite locking.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'org.ejs'), 'utf8'), /Delete group/, 'Group admins should be able to delete their group.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'groups.ejs'), 'utf8'), /JOIN REQUESTED/, 'Pending invitations should appear in All groups.');
 assert.match(app, /safeReturnTo/, 'Authentication should preserve safe internal return paths.');

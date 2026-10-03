@@ -88,7 +88,7 @@ function createIffyModerator({ apiKey = process.env.OPENROUTER_API_KEY, model = 
     try {
       response = await fetchImpl(OPENROUTER_URL, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:3000', 'X-Title': 'StudyHub Iffy moderation' },
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:3000', 'X-Title': 'LockIn Iffy moderation' },
         body: JSON.stringify({ model, temperature: 0, messages }),
         ...(controller ? { signal: controller.signal } : {})
       });

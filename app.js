@@ -409,6 +409,9 @@ function renderOrgPage(request, response, page, extra = {}) {
   if (!canAccess(org, request.user)) return response.redirect('/dashboard');
   render(request, response, page, { selectedOrg: org, member, ...extra });
 }
+function renderSuspendedGroup(request, response, org) {
+  return response.status(423).render('index', { page: 'suspended-group', view: 'suspended-group', user: request.user, users, orgs, canEdit, selectedOrg: org, notifications: request.user?.notifications || [], error: null });
+}
 
 io.use((socket, next) => {
   const user = currentUser({ headers: { cookie: socket.handshake.headers.cookie || '' } });
@@ -540,6 +543,12 @@ app.post('/site-admin/groups/:id/delete', requireUser, requireSiteAdmin, (reques
   if (orgIndex === -1 || !org.suspendedAt) return sendMutation(request, response, { error: 'Only suspended groups can be deleted from site administration.' }, '/site-admin?tab=groups');
   orgs.splice(orgIndex, 1); persistState();
   return sendMutation(request, response, { deletedGroup: request.params.id, successMessage: `${org.name} was deleted.` }, '/site-admin?tab=groups');
+});
+app.use(['/org/:id', '/group/:slug'], (request, response, next) => {
+  request.user = currentUser(request);
+  const org = getOrg(request);
+  if (request.user && org?.suspendedAt && !isSiteAdmin(request.user)) return renderSuspendedGroup(request, response, org);
+  next();
 });
 app.get('/api/users/search', requireUser, (request, response) => {
   const query = String(request.query.q || '').trim().toLowerCase();

@@ -1,0 +1,23 @@
+<style>
+  .suspended-group-page { min-height: 70vh; display: grid; place-items: center; position: relative; overflow: hidden; }
+  .suspended-group-preview { position: absolute; inset: 8% 4%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; opacity: .5; filter: blur(13px); transform: scale(1.04); pointer-events: none; }
+  .suspended-group-preview span { min-height: 150px; border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(135deg, var(--white), #e8eef3); }
+  .suspended-group-preview span:nth-child(2) { grid-column: span 2; min-height: 220px; }
+  .suspended-group-preview span:nth-child(4) { min-height: 220px; }
+  .suspended-group-lock { position: relative; z-index: 1; width: min(560px, 100%); padding: 42px 36px; text-align: center; border: 1px solid var(--line); border-radius: var(--radius); background: color-mix(in srgb, var(--white) 92%, transparent); box-shadow: 0 18px 50px rgba(22, 43, 73, .12); }
+  .suspended-group-lock-icon { width: 64px; height: 64px; display: grid; place-items: center; margin: 0 auto 20px; border-radius: 50%; color: var(--white); background: var(--navy); }
+  .suspended-group-lock-icon svg { width: 30px; height: 30px; }
+  .suspended-group-lock h1 { margin: 0 0 10px; }
+  .suspended-group-lock p { max-width: 440px; margin: 0 auto 22px; }
+  @media (max-width: 700px) { .suspended-group-preview { grid-template-columns: 1fr 1fr; inset: 5% -20%; } .suspended-group-lock { padding: 32px 22px; } }
+</style>
+<section class="content-wrap suspended-group-page" aria-labelledby="suspended-group-title">
+  <div class="suspended-group-preview" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+  <div class="suspended-group-lock">
+    <div class="suspended-group-lock-icon"><i data-lucide="lock-keyhole"></i></div>
+    <p class="kicker">GROUP LOCKED</p>
+    <h1 id="suspended-group-title"><%= selectedOrg.name %> is suspended.</h1>
+    <p>This group is temporarily unavailable while a site administrator reviews a moderation issue. Its courses, people, and shared work are locked until the suspension is lifted.</p>
+    <a class="button secondary" href="/groups"><i data-lucide="arrow-left"></i> Back to groups</a>
+  </div>
+</section>
