@@ -44,6 +44,11 @@ assert.match(app, /group-invite/, 'Group invitations should notify the invited u
 assert.match(app, /org\/:id\/leave/, 'Group members should be able to leave a group.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'org.ejs'), 'utf8'), /data-leave-group-trigger/, 'Group home should expose a leave action.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), /showLeaveGroupModal/, 'Leaving a group should require a warning confirmation.');
+assert.match(app, /site-admin\/groups\/:id\/suspension/, 'Site admins should be able to suspend and unsuspend groups.');
+assert.match(app, /site-admin\/groups\/:id\/delete/, 'Site admins should be able to delete suspended groups.');
+assert.match(app, /suspendedAt/, 'Group suspension should persist indefinitely.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Suspend this group indefinitely/, 'Site admin groups should expose indefinite suspension.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'org.ejs'), 'utf8'), /Delete group/, 'Group admins should be able to delete their group.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'groups.ejs'), 'utf8'), /JOIN REQUESTED/, 'Pending invitations should appear in All groups.');
 assert.match(app, /safeReturnTo/, 'Authentication should preserve safe internal return paths.');
 assert.match(app, /request\.originalUrl/, 'Logged-out invite links should pass their original URL to authentication.');

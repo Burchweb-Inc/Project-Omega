@@ -20,7 +20,7 @@
             <% if (member?.role==='admin' ) { %><a class="button secondary" href="/org/<%= selectedOrg.id %>/settings"><i
                         data-lucide="settings-2"></i> Manage group</a>
                 <% } %>
-            <% if (member) { %><details class="group-menu"><summary class="icon-button" aria-label="More group actions" title="More group actions"><i data-lucide="more-horizontal"></i></summary><div class="group-menu-popover"><form action="/org/<%= selectedOrg.id %>/leave" method="post" data-leave-group-form><button class="menu-action danger" type="button" data-leave-group-trigger><i data-lucide="log-out"></i> Leave Group</button></form></div></details><% } %>
+            <% if (member) { %><details class="group-menu"><summary class="icon-button" aria-label="More group actions" title="More group actions"><i data-lucide="more-horizontal"></i></summary><div class="group-menu-popover"><form action="/org/<%= selectedOrg.id %>/leave" method="post" data-leave-group-form><button class="menu-action danger" type="button" data-leave-group-trigger><i data-lucide="log-out"></i> Leave Group</button></form><% if (member.role === 'admin') { %><form action="/org/<%= selectedOrg.id %>/delete" method="post" data-live-form data-confirm-message="Delete this group permanently? This cannot be undone."><button class="menu-action danger" type="submit"><i data-lucide="trash-2"></i> Delete group</button></form><% } %></div></details><% } %>
         </div>
     </div>
     <div class="space-nav"><a class="active" href="/org/<%= selectedOrg.id %>">Courses <span>

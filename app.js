@@ -184,7 +184,7 @@ function loadOrgsFromDatabase() {
     org.courses = (org.courses || []).map((course) => { normalizeCourseItems(course); return { ...course, items: course.items.map((item) => ({ ...item, comments: item.comments || [], verifiedBy: item.verifiedBy || [], downvotedBy: item.downvotedBy || [] })), board: course.board || [], resources: course.resources || [] }; });
     org.groups = (org.groups || []).map((group) => { const task = group.itemId ? org.courses.flatMap((course) => course.items).find((item) => item.id === group.itemId) : null; return { ...group, members: group.members || [], roles: group.roles || {}, itemId: group.itemId || null, taskSlug: group.taskSlug || (task ? breakoutTaskSlug(task) : null), shareCode: group.shareCode || crypto.randomBytes(12).toString('base64url'), createdBy: group.createdBy || group.members?.[0] || null, tasks: group.tasks || [], resources: group.resources || [], polls: group.polls || [], comments: (group.comments || []).map((comment) => ({ ...comment, parentId: comment.parentId || null })) }; });
       org.members = (org.members || []).map((member) => ({ ...member, role: member.role === 'writer' ? 'editor' : member.role || 'viewer' }));
-      return { ...org, slug: org.slug || secureSlug(org.name), reports: org.reports || [], groups: org.groups || [], pendingInvites: org.pendingInvites || [], shareCode: org.shareCode || crypto.randomBytes(32).toString('base64url') };
+      return { ...org, slug: org.slug || secureSlug(org.name), reports: org.reports || [], groups: org.groups || [], pendingInvites: org.pendingInvites || [], suspendedAt: org.suspendedAt || '', shareCode: org.shareCode || crypto.randomBytes(32).toString('base64url') };
   }));
 }
 
@@ -376,7 +376,7 @@ function breakoutGroupsForTask(org, itemId) { return (org?.groups || []).filter(
 function breakoutGroupsUrl(org, course, item) { return `/org/${org.id}/course/${course.id}/task/${breakoutTaskSlug(item)}/breakout-groups`; }
 function canManageBreakoutGroup(org, group, user) { return Boolean(group && user && (isOrgModerator(org, user) || group.createdBy === user.id || group.roles?.[user.id] === 'Organizer' || group.roles?.[user.id] === 'Admin')); }
 function canManageItem(org, item, user) { const group = org?.groups?.find((entry) => entry.itemId === item?.id); return Boolean(item && user && (item.createdBy === user.id || isOrgAdmin(org, user) || canManageBreakoutGroup(org, group, user))); }
-function canAccess(org, user) { return Boolean(org && user && (isSiteAdmin(user) || org.visibility === 'public' || membership(org, user))); }
+function canAccess(org, user) { return Boolean(org && user && (isSiteAdmin(user) || (!org.suspendedAt && (org.visibility === 'public' || membership(org, user))))); }
 function requireSiteAdmin(request, response, next) { if (!isSiteAdmin(request.user)) return response.status(403).send('Site admin access required.'); next(); }
 function siteFeedback() { return db.prepare('SELECT * FROM site_feedback ORDER BY created_at DESC').all(); }
 function siteAnnouncements() { return db.prepare('SELECT * FROM site_announcements ORDER BY created_at DESC').all(); }
@@ -526,6 +526,21 @@ app.get('/site-admin', requireUser, requireSiteAdmin, (request, response) => ren
     removedWords: JSON.parse(entry.removed_words || '[]')
   }))
 }));
+
+app.post('/site-admin/groups/:id/suspension', requireUser, requireSiteAdmin, (request, response) => {
+  const org = getOrg(request); const action = request.body.action;
+  if (!org || !['suspend', 'unsuspend'].includes(action)) return sendMutation(request, response, { error: 'That group action is not available.' }, '/site-admin?tab=groups');
+  org.suspendedAt = action === 'suspend' ? (org.suspendedAt || new Date().toISOString()) : '';
+  persistState();
+  return sendMutation(request, response, { successMessage: action === 'suspend' ? `${org.name} is suspended indefinitely.` : `${org.name} is active again.` }, '/site-admin?tab=groups');
+});
+
+app.post('/site-admin/groups/:id/delete', requireUser, requireSiteAdmin, (request, response) => {
+  const orgIndex = orgs.findIndex((entry) => entry.id === request.params.id); const org = orgs[orgIndex];
+  if (orgIndex === -1 || !org.suspendedAt) return sendMutation(request, response, { error: 'Only suspended groups can be deleted from site administration.' }, '/site-admin?tab=groups');
+  orgs.splice(orgIndex, 1); persistState();
+  return sendMutation(request, response, { deletedGroup: request.params.id, successMessage: `${org.name} was deleted.` }, '/site-admin?tab=groups');
+});
 app.get('/api/users/search', requireUser, (request, response) => {
   const query = String(request.query.q || '').trim().toLowerCase();
   if (query.length < 1) return response.json([]);
@@ -938,6 +953,13 @@ app.post('/org/:id/admin/share', requireUser, (request, response) => {
   if (!org || member?.role !== 'admin') return response.redirect(`/org/${request.params.id}`);
   if (request.body.visibility === 'public' && request.user.age <= 13) return response.redirect(`/org/${org.id}?error=age`);
   org.visibility = request.body.visibility; org.sharePermission = request.body.sharePermission || org.sharePermission; org.shareUses = Math.max(1, Number(request.body.shareUses) || 1); persistState(); response.redirect(`/org/${org.id}/admin/share?saved=settings`);
+});
+
+app.post('/org/:id/delete', requireUser, (request, response) => {
+  const orgIndex = orgs.findIndex((entry) => entry.id === request.params.id); const org = orgs[orgIndex];
+  if (orgIndex === -1 || !isOrgAdmin(org, request.user)) return sendMutation(request, response, { error: 'Only group admins can delete this group.' }, '/groups');
+  orgs.splice(orgIndex, 1); persistState();
+  return sendMutation(request, response, { deletedGroup: request.params.id, successMessage: `${org.name} was deleted.` }, '/groups');
 });
 
 app.post('/org/:id/settings', requireUser, (request, response) => response.redirect(`/org/${request.params.id}/admin/share`));

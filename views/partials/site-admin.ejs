@@ -38,9 +38,9 @@
     </section>
   <% } else if (siteAdminTab === 'groups') { %>
     <section class="admin-panel">
-      <div class="admin-section-heading"><div><h2>Group list</h2><p class="muted">Search all active groups and jump straight in.</p></div></div>
+      <div class="admin-section-heading"><div><h2>Group list</h2><p class="muted">Suspend groups indefinitely when they violate guidelines. Suspended groups can be unsuspended or deleted here.</p></div></div>
       <label class="search-field"><i data-lucide="search"></i><input type="search" data-group-search placeholder="Search groups by name" aria-label="Search groups"></label>
-      <div class="site-admin-group-list"><% orgs.forEach(org => { %><div class="site-admin-row" data-group-row data-group-name="<%= org.name %>"><div><strong><%= org.name %></strong><small><%= org.members.length %> members</small></div><a class="text-button" href="/org/<%= org.id %>">Visit group</a></div><% }) %></div>
+      <div class="site-admin-group-list"><% orgs.forEach(org => { %><div class="site-admin-row" data-group-row data-group-name="<%= org.name %>"><div><strong><%= org.name %></strong><small><%= org.members.length %> members · <%= org.suspendedAt ? `Suspended since ${new Date(org.suspendedAt).toLocaleDateString()}` : 'Active' %></small></div><div class="site-admin-group-actions"><a class="text-button" href="/org/<%= org.id %>">Visit group</a><form data-live-form action="/site-admin/groups/<%= org.id %>/suspension" method="post" data-confirm-message="<%= org.suspendedAt ? 'Unsuspend this group?' : 'Suspend this group indefinitely for guideline violations?' %>"><input type="hidden" name="action" value="<%= org.suspendedAt ? 'unsuspend' : 'suspend' %>"><button class="text-button <%= org.suspendedAt ? '' : 'danger' %>" type="submit"><i data-lucide="<%= org.suspendedAt ? 'play-circle' : 'pause-circle' %>"></i> <%= org.suspendedAt ? 'Unsuspend' : 'Suspend' %></button></form><% if (org.suspendedAt) { %><form data-live-form action="/site-admin/groups/<%= org.id %>/delete" method="post" data-confirm-message="Delete this suspended group permanently? This cannot be undone."><button class="text-button danger" type="submit"><i data-lucide="trash-2"></i> Delete</button></form><% } %></div></div><% }) %></div>
     </section>
   <% } else if (siteAdminTab === 'moderation') { %>
     <section class="admin-panel">

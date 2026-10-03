@@ -209,7 +209,7 @@ async function submitLiveForm(form, animatedEntry = null) {
     const payload = await response.json(); if (!response.ok || payload.error) throw new Error(payload.error || 'Action failed');
     if (payload.groupUrl) { window.location.assign(payload.groupUrl); return; }
     if (payload.successMessage) showLiveSuccess(payload.successMessage);
-    if (payload.invitationAction || payload.leftGroup) { window.location.reload(); return; }
+    if (payload.invitationAction || payload.leftGroup || payload.deletedGroup) { window.location.reload(); return; }
     if (payload.read || payload.readAll) {
       if (payload.readAll) document.querySelectorAll('.notification-item.unread').forEach((item) => item.classList.replace('unread', 'is-read'));
       else form.closest('.notification-item')?.classList.replace('unread', 'is-read');
@@ -326,7 +326,7 @@ function bindNotificationGestures(scope = document) {
 }
 
 function bindLiveForms(scope = document) {
-  scope.querySelectorAll('[data-live-form]').forEach((form) => { if (form.dataset.liveBound === 'true') return; form.dataset.liveBound = 'true'; form.addEventListener('submit', (event) => { event.preventDefault(); submitLiveForm(form); }); }); bindLeaveGroupActions(scope);
+  scope.querySelectorAll('[data-live-form]').forEach((form) => { if (form.dataset.liveBound === 'true') return; form.dataset.liveBound = 'true'; form.addEventListener('submit', (event) => { event.preventDefault(); const message = form.dataset.confirmMessage; if (message && !window.confirm(message)) return; submitLiveForm(form); }); }); bindLeaveGroupActions(scope);
   scope.querySelectorAll('[data-comment-edit-open]').forEach((button) => { if (button.dataset.editBound === 'true') return; button.dataset.editBound = 'true'; button.addEventListener('click', () => { const entry = button.closest('[data-comment-id]'); const menu = button.closest('.comment-menu'); const editor = entry?.querySelector('.comment-edit-form'); menu?.removeAttribute('open'); if (editor && entry?.querySelector('.comment-text')) { entry.querySelector('.comment-text').hidden = true; editor.hidden = false; editor.querySelector('input')?.focus(); } }); });
   scope.querySelectorAll('[data-comment-edit-cancel]').forEach((button) => { if (button.dataset.editBound === 'true') return; button.dataset.editBound = 'true'; button.addEventListener('click', () => { const entry = button.closest('[data-comment-id]'); const editor = button.closest('.comment-edit-form'); if (entry && editor) { editor.hidden = true; entry.querySelector('.comment-text').hidden = false; } }); });
   scope.querySelectorAll('[data-appeal-word]').forEach((button) => { if (button.dataset.appealBound === 'true') return; button.dataset.appealBound = 'true'; button.addEventListener('click', async () => { button.disabled = true; const response = await fetch('/appeals', { method: 'POST', body: new URLSearchParams({ phrase: button.dataset.phrase || '' }), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); const payload = await response.json(); if (response.ok && !payload.error) { button.closest('[data-form-error]').textContent = payload.successMessage || 'Thanks. We will review that phrase.'; } else { button.disabled = false; } }); });

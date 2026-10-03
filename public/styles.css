@@ -144,8 +144,12 @@ select {
 }
 
 .nav-groups {
+    min-height: 0;
+    flex: 1;
     display: grid;
-    gap: 5px
+    align-content: start;
+    gap: 5px;
+    overflow-y: auto
 }
 
 .nav-label {

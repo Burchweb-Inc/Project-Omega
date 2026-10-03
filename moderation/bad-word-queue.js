@@ -263,7 +263,7 @@ async function reviewQueuedBadWords({
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:3000',
-        'X-Title': 'StudyHub moderation queue'
+        'X-Title': 'LockIn moderation queue'
       },
       body: JSON.stringify({ model, temperature: 0, messages })
     });
@@ -352,7 +352,7 @@ async function reviewAppealWords({
   try {
     response = await fetchImpl(OPENROUTER_URL, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:3000', 'X-Title': 'StudyHub appeal review' },
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:3000', 'X-Title': 'LockIn appeal review' },
       body: JSON.stringify({ model, temperature: 0, messages: [{ role: 'system', content: instructions }, { role: 'user', content: 'Review the appealed phrases above.' }] })
     });
   } catch {
