@@ -57,7 +57,7 @@
 <% } else if (['about', 'support', 'privacy', 'terms', 'understand', 'beta'].includes(page)) { %>
   <%- include('partials/public-shell', { view }) %>
 <% } else if (page === 'suspended-group') { %>
-  <%- include('partials/suspended-group') %>
+  <%- include('partials/app-layout', { view: 'suspended-group' }) %>
 <% } else if (page === 'lockui') { %>
   <%- include('partials/lockui') %>
 <% } else { %>

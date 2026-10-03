@@ -29,6 +29,7 @@ assert.match(app, /isSiteAdminUser/, 'Site admins should be able to review repor
 assert.match(app, /DELETE FROM bad_word_review_logs/, 'AI moderation logs should retain only the latest entries.');
 assert.match(app, /renderSuspendedGroup/, 'Suspended groups should render a locked explanation instead of silently redirecting.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'suspended-group.ejs'), 'utf8'), /GROUP LOCKED|lock-keyhole/, 'Suspended groups should show a lock state.');
+assert.match(index, /page === 'suspended-group'[\s\S]*partials\/app-layout/, 'Suspended groups should retain the application sidebar shell.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Lock group|Unlock group/, 'Site admins should have explicit group lock controls.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Reports from every group/, 'Site admin moderation should show cross-group reports.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /Mod Action/, 'Reports should expose removal and moderation actions.');
