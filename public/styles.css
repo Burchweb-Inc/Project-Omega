@@ -776,6 +776,36 @@ select {
     padding: 23px
 }
 
+.tutorial-backdrop {
+    position: fixed;
+    z-index: 40;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 22px;
+    background: rgba(23, 43, 77, .52)
+}
+
+.tutorial-backdrop[hidden] { display: none }
+.tutorial-card { width: min(430px, 100%); padding: 25px; background: white; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 70px rgba(23, 43, 77, .28) }
+.tutorial-progress { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase }
+.tutorial-skip { padding: 0; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 10px; cursor: pointer }
+.tutorial-icon { display: grid; place-items: center; width: 42px; height: 42px; margin: 25px 0 14px; border-radius: 10px; background: #eef5f7; color: var(--blue) }
+.tutorial-icon svg { width: 20px }
+.tutorial-card h2 { font-size: 25px }
+.tutorial-card p { margin-top: 9px; color: var(--ink-soft); font-size: 13px; line-height: 1.6 }
+.tutorial-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px }
+.tutorial-actions .button:disabled { opacity: .4; cursor: not-allowed }
+.tutorial-target { position: relative; z-index: 41; border-radius: 8px; box-shadow: 0 0 0 5px rgba(237, 184, 77, .75), 0 0 0 999px rgba(23, 43, 77, .05) }
+
+.course-page .feed-panel {
+    grid-column: 1 / -1;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none
+}
+
 .panel-heading {
     display: flex;
     align-items: flex-start;
@@ -791,6 +821,92 @@ select {
 .feed-list {
     display: grid;
     gap: 9px
+}
+
+.course-feed-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 18px
+}
+
+.course-feed-search {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex: 1;
+    min-width: 220px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    background: white
+}
+
+.course-feed-search svg {
+    width: 14px;
+    color: var(--muted)
+}
+
+.course-feed-search input {
+    width: 100%;
+    border: 0;
+    outline: 0;
+    color: var(--ink);
+    background: transparent
+}
+
+.course-feed-tools select {
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    background: white
+}
+
+.course-feed-folders {
+    display: grid;
+    gap: 30px
+}
+
+.course-feed-folder-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--ink)
+}
+
+.course-feed-folder-heading h3 {
+    font-size: 18px
+}
+
+.course-feed-folder-heading span {
+    color: var(--muted);
+    font-size: 11px
+}
+
+.course-feed-folders .feed-list {
+    gap: 0
+}
+
+.course-feed-folders .feed-card {
+    width: 100%;
+    padding: 18px 20px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: white;
+    box-shadow: var(--shadow)
+}
+
+.course-feed-folders .feed-card:hover {
+    border-color: #a9c6d9
+}
+
+.course-feed-folders .feed-source {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 700
 }
 
 .feed-card {
@@ -2702,6 +2818,26 @@ textarea {
     width: 14px
 }
 
+.settings-layout { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 28px; align-items: start }
+.settings-nav { position: sticky; top: 24px; display: grid; gap: 4px }
+.settings-nav a { padding: 10px 12px; border-left: 2px solid transparent; color: var(--muted); font-size: 11px; font-weight: 700; text-decoration: none }
+.settings-nav a:hover, .settings-nav a.active { border-color: var(--coral); color: var(--ink) }
+.settings-sections { display: grid; gap: 14px; max-width: 760px }
+.settings-section { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(260px, 1fr); gap: 24px; padding: 23px; background: white; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow) }
+.settings-section h2 { font-size: 19px }
+.settings-section > div > .muted { display: block; margin-top: 7px; line-height: 1.5 }
+.settings-section .page-form { max-width: none; padding: 0; border: 0; box-shadow: none }
+.settings-section.danger-zone { border-color: #efc8bc }
+.settings-section.danger-zone h2 { color: #a34c40 }
+.button.danger { background: #b95647; color: white }
+.breakout-groups-page > .page-heading { position: relative; z-index: 60 }
+
+@media(max-width:700px) {
+    .settings-layout, .settings-section { grid-template-columns: 1fr }
+    .settings-nav { position: static; display: flex; overflow-x: auto; border-bottom: 1px solid var(--line) }
+    .settings-nav a { white-space: nowrap }
+}
+
 .modal-backdrop {
     display: none;
     position: fixed;
@@ -2715,6 +2851,9 @@ textarea {
 .modal-backdrop.open {
     display: grid
 }
+
+.modal-backdrop.open, .warning-modal-backdrop.open, .announcement-modal-backdrop.open { animation: modal-backdrop-in .2s ease both }
+.modal-card, .warning-modal, .announcement-modal, .tutorial-card { animation: modal-card-in .32s cubic-bezier(.22, .8, .32, 1) both }
 
 .modal-card {
     position: relative;
@@ -2738,6 +2877,9 @@ textarea {
 .modal-close svg {
     width: 17px
 }
+
+@keyframes modal-backdrop-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes modal-card-in { from { opacity: 0; transform: translateY(14px) scale(.97) } to { opacity: 1; transform: translateY(0) scale(1) } }
 
 .debug-modal-backdrop {
     display: grid;

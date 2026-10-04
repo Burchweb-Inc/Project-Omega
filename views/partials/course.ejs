@@ -1,4 +1,4 @@
-<section class="content-wrap course-page" data-course-live data-org-id="<%= selectedOrg.id %>" data-course-id="<%= course.id %>" data-user-id="<%= user.id %>" data-is-admin="<%= member?.role === 'admin' || member?.role === 'moderator' %>" data-can-edit="<%= canEdit(member) %>">
+<section class="content-wrap course-page" data-course-live data-org-id="<%= selectedOrg.id %>" data-course-id="<%= course.id %>" data-user-id="<%= user.id %>" data-is-admin="<%= user.isSiteAdmin || member?.role === 'admin' || member?.role === 'moderator' %>" data-date-timezone="<%= courseTimezone || 'UTC' %>" data-date-locale="<%= courseDateLocale || 'en-US' %>" data-can-edit="<%= canEdit(member) %>">
 <a class="back-link" href="/org/<%= selectedOrg.id %>">
 <i data-lucide="arrow-left">
 </i> <%= selectedOrg.name %>
@@ -57,15 +57,17 @@
 </a>
 </form>
 <% } %>
-<div class="feed-list" data-feed-list>
-<% course.items.forEach(item => { %>
-<article class="feed-card feed-item" data-item-id="<%= item.id %>" data-position="<%= item.position || 0 %>">
+<div class="course-feed-tools"><label class="course-feed-search"><i data-lucide="search"></i><input type="search" data-course-search placeholder="Search the class feed" aria-label="Search the class feed"></label><select data-course-filter aria-label="Filter the class feed"><option value="all">All items</option><option value="active">Active</option><option value="past">Past</option><option value="homework">Homework</option><option value="tests">Tests</option><option value="projects">Projects</option></select></div>
+<div class="course-feed-folders" data-feed-list>
+<% ['current', 'past'].forEach(folder => { %><section class="course-feed-folder" data-course-folder="<%= folder %>"><div class="course-feed-folder-heading"><h3><%= folder === 'past' ? 'Past' : 'Current' %></h3><span data-course-folder-count="<%= folder %>"></span></div><div class="feed-list">
+<% course.items.filter(item => folder === 'past' ? item.past : !item.past).forEach(item => { %>
+<article class="feed-card feed-item" data-item-id="<%= item.id %>" data-position="<%= item.position || 0 %>" data-past="<%= item.past ? 'true' : 'false' %>" data-type="<%= item.type %>">
 <div class="feed-card-head">
 <span class="category-dot category-<%= item.type.toLowerCase().replace(/[^a-z]/g, '-') %>">
 </span>
 <div>
 <span class="feed-source">
-<%= item.type %> · <%= item.due %>
+<%= item.type %> · <%= formatCourseDate(item.due, courseTimezone, courseDateLocale) %>
 </span>
 <h3>
 <%= item.title %>
@@ -77,7 +79,7 @@
 <%= (item.verifiedBy || []).length %>
 </span>
 </span>
-<% if (canEdit(member)) { %><button class="icon-button course-drag-handle" type="button" aria-label="Move <%= item.title %>"><i data-lucide="grip-vertical"></i></button><% } %>
+<button class="icon-button course-drag-handle" type="button" aria-label="Move <%= item.title %>"><i data-lucide="grip-vertical"></i></button>
 </div>
 <div class="feed-card-foot">
 <div class="feed-card-actions">
@@ -102,14 +104,12 @@
 </i> Breakout Groups
 </a>
 <% } %>
-<% if (member?.role === 'admin' || member?.role === 'moderator') { %>
 <form data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/downvote" method="post">
 <button class="text-button" type="submit">
 <i data-lucide="thumbs-down">
-</i> <span data-downvote-count><%= (item.downvotedBy || []).length %></span>
+</i><% if (user.isSiteAdmin || member?.role === 'admin' || member?.role === 'moderator') { %> <span data-downvote-count><%= (item.downvotedBy || []).length %></span><% } %>
 </button>
 </form>
-<% } %>
 <% if (item.createdBy === user.id || member?.role === 'admin' || member?.role === 'moderator' || (selectedOrg.groups || []).some(group => group.itemId === item.id && (group.createdBy === user.id || group.roles?.[user.id] === 'Organizer'))) { %>
 <details class="item-edit-details">
 <summary class="text-button"><i data-lucide="pencil"></i> Edit</summary>
@@ -146,8 +146,8 @@
 </div>
 </article>
 <% }) %>
-<% if (!course.items.length) { %>
-<div class="empty-panel" data-empty-feed>
+</div></section><% }) %>
+<% if (!course.items.length) { %><div class="empty-panel" data-empty-feed>
 <i data-lucide="message-square-plus">
 </i>
 <h3>The feed is waiting</h3>

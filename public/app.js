@@ -6,11 +6,23 @@ const liveState = { socket: null, notificationSocket: null, pending: new Map(), 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
 
 function courseRoot() { return document.querySelector('[data-course-live]'); }
+function courseItemPast(item) {
+  if (typeof item?.past === 'boolean') return item.past;
+  if (!item?.due || item.due === 'No date') return false;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return new Date(`${item.due}T00:00:00`) < today;
+}
+function courseFolderList(root, past) { return root.querySelector(`[data-course-folder="${past ? 'past' : 'current'}"] .feed-list`); }
+function formatCourseDate(due, root) {
+  if (!due || due === 'No date') return 'No date';
+  const date = new Date(`${due}T12:00:00Z`); if (Number.isNaN(date.getTime())) return due;
+  try { return new Intl.DateTimeFormat(root?.dataset.dateLocale || 'en-US', { timeZone: root?.dataset.dateTimezone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date); } catch (error) { return due; }
+}
 function itemCard(item) {
   const typeClass = String(item.type || '').toLowerCase().replace(/[^a-z]/g, '-');
-  const root = courseRoot(); const orgId = escapeHtml(root.dataset.orgId); const itemId = escapeHtml(item.id); const taskSlug = `${String(item.title || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || itemId}-${itemId.slice(-8)}`; const projectAction = item.type === 'Project' ? `<a class="text-button breakout-action" href="/org/${orgId}/course/${escapeHtml(root.dataset.courseId)}/task/${escapeHtml(taskSlug)}/breakout-groups"><i data-lucide="users-round"></i> Breakout Groups</a>` : ''; const downvoteAction = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${orgId}/items/${itemId}/downvote" method="post"><button class="text-button" type="submit"><i data-lucide="thumbs-down"></i> <span data-downvote-count>${(item.downvotedBy || []).length}</span></button></form>` : '';
-  const dragHandle = root.dataset.canEdit === 'true' ? `<button class="icon-button course-drag-handle" type="button" aria-label="Move ${escapeHtml(item.title)}"><i data-lucide="grip-vertical"></i></button>` : '';
-  return `<article class="feed-card feed-item" data-item-id="${itemId}" data-position="${Number(item.position) || 0}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(item.due)}</span><h3>${escapeHtml(item.title)}</h3></div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="text-button" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="text-button" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${(item.comments || []).filter((comment) => !comment.reported).length}</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><small class="form-error" data-form-error hidden></small><button class="button primary" type="submit">Reply</button></form></div></details></div></article>`;
+  const root = courseRoot(); const orgId = escapeHtml(root.dataset.orgId); const itemId = escapeHtml(item.id); const taskSlug = `${String(item.title || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || itemId}-${itemId.slice(-8)}`; const projectAction = item.type === 'Project' ? `<a class="text-button breakout-action" href="/org/${orgId}/course/${escapeHtml(root.dataset.courseId)}/task/${escapeHtml(taskSlug)}/breakout-groups"><i data-lucide="users-round"></i> Breakout Groups</a>` : ''; const canModerate = root.dataset.isAdmin === 'true'; const downvoteAction = `<form data-live-form action="/org/${orgId}/items/${itemId}/downvote" method="post"><button class="text-button" type="submit"><i data-lucide="thumbs-down"></i>${canModerate ? ` <span data-downvote-count>${(item.downvotedBy || []).length}</span>` : ''}</button></form>`;
+  const dragHandle = `<button class="icon-button course-drag-handle" type="button" aria-label="Move ${escapeHtml(item.title)}"><i data-lucide="grip-vertical"></i></button>`;
+  return `<article class="feed-card feed-item" data-item-id="${itemId}" data-position="${Number(item.position) || 0}" data-past="${courseItemPast(item)}" data-type="${escapeHtml(item.type)}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(formatCourseDate(item.due, root))}</span><h3>${escapeHtml(item.title)}</h3></div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="text-button" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="text-button" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${(item.comments || []).filter((comment) => !comment.reported).length}</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><small class="form-error" data-form-error hidden></small><button class="button primary" type="submit">Reply</button></form></div></details></div></article>`;
 }
 
 function commentMenuMarkup(comment, context) {
@@ -61,7 +73,47 @@ function breakoutTaskMarkup(task, root) {
   const unclaimAction = task.claimedBy && (groupAdmin || task.claimedBy === userId) ? `<form data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/unclaim" method="post"><button class="menu-action" type="submit">Unclaim task</button></form>` : '';
   const adminActions = groupAdmin ? `<details class="inline-edit"><summary><i data-lucide="pencil"></i> Edit task</summary><form class="inline-tool-form" data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/update" method="post"><input name="title" value="${escapeHtml(task.title)}" required><button class="button secondary" type="submit">Save</button></form></details><details class="inline-edit"><summary><i data-lucide="user-plus"></i> Delegate task</summary><form class="inline-tool-form" data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/delegate" method="post"><select name="userId">${members.map((member) => `<option value="${escapeHtml(member.id)}" ${task.claimedBy === member.id ? 'selected' : ''}>${escapeHtml(member.name)}</option>`).join('')}</select><button class="button secondary" type="submit">Delegate</button></form></details><form data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/delete" method="post"><button class="menu-action danger" type="submit"><i data-lucide="trash-2"></i> Delete task</button></form>` : '';
   const menu = groupAdmin || task.claimedBy === userId ? `<details class="task-menu"><summary class="icon-button" aria-label="More actions for ${escapeHtml(task.title)}"><i data-lucide="ellipsis"></i></summary><div class="task-menu-popover">${unclaimAction}${adminActions}</div></details>` : '';
-  return `<article class="claim-row breakout-task ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}"><span><strong>${escapeHtml(task.title)}</strong><small>${task.claimedBy ? `Claimed by ${escapeHtml(claimedName)}` : 'Open'}</small></span><span class="task-actions">${claimAction}${menu}</span></article>`;
+  const toggleAction = `<form data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/toggle" method="post"><button class="task-check" type="submit" aria-label="${task.done ? 'Mark incomplete' : 'Mark complete'}"><i data-lucide="${task.done ? 'check-circle-2' : 'circle'}"></i></button></form>`;
+  return `<article class="claim-row breakout-task ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}">${toggleAction}<span class="breakout-task-copy"><strong>${escapeHtml(task.title)}</strong><small>${task.claimedBy ? `Claimed by ${escapeHtml(claimedName)}` : 'Open'}${task.done ? ' · Complete' : ''}</small></span><span class="task-actions">${claimAction}${menu}</span></article>`;
+}
+
+function breakoutCommentMarkup(comment, root) {
+  const context = { orgId: root.dataset.orgId, groupId: root.dataset.groupId, canEdit: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canViewHistory: root.dataset.groupAdmin === 'true' };
+  if (comment.parentId) return commentMarkup(comment, context);
+  return `<div class="comment-thread" data-comment-id="${escapeHtml(comment.id)}">${commentMarkup(comment, context)}<details class="reply-details"><summary class="reply-trigger"><i data-lucide="corner-down-right"></i> Reply</summary><form class="reply-form" data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/breakout/${escapeHtml(root.dataset.groupId)}/comments" method="post"><input type="hidden" name="parentId" value="${escapeHtml(comment.id)}"><textarea name="comment" placeholder="Reply to this thread..." rows="1" required></textarea><button class="button secondary" type="submit">Send reply</button></form></details><div class="comment-replies"></div></div>`;
+}
+
+function appendBreakoutComment(comment, root) {
+  if (!comment || !root) return;
+  const existing = root.querySelector(`[data-comment-id="${CSS.escape(comment.id || '')}"]`); if (existing) return;
+  if (comment.parentId) {
+    const thread = root.querySelector(`[data-comment-id="${CSS.escape(comment.parentId)}"]`); const replies = thread?.querySelector('.comment-replies');
+    if (replies) replies.insertAdjacentHTML('beforeend', breakoutCommentMarkup(comment, root));
+  } else {
+    root.querySelector('[data-breakout-comment-list]')?.insertAdjacentHTML('beforeend', breakoutCommentMarkup(comment, root));
+  }
+  bindLiveForms(root); lucide.createIcons();
+}
+
+function renderBreakoutPresence(root, members) {
+  const list = root.querySelector('[data-presence-list]'); const summary = root.querySelector('[data-presence-summary]');
+  const records = JSON.parse(root.dataset.members || '[]'); if (!list) return;
+  const statusLabel = { 'same-page': 'Here now', inactive: 'On another page' };
+  const visible = records.map((member) => ({ ...member, ...(members.find((presence) => presence.userId === member.id) || {}) })).filter((member) => member.status);
+  list.innerHTML = visible.map((member) => `<div class="presence-person ${member.status}" data-presence-user="${escapeHtml(member.id)}" data-presence-tooltip="${escapeHtml(`${member.name}${member.id === root.dataset.userId ? ' (you)' : ''} · ${statusLabel[member.status]} · @${member.username || 'member'}`)}"><button class="presence-avatar" type="button" data-presence-details="${escapeHtml(member.id)}" aria-label="View ${escapeHtml(member.name)}">${escapeHtml(member.name.slice(0, 1).toUpperCase())}</button>${member.id !== root.dataset.userId ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/breakout/${escapeHtml(root.dataset.groupId)}/ping/${escapeHtml(member.id)}" method="post"><button class="presence-ping" type="submit" aria-label="Ping ${escapeHtml(member.name)}" title="Ping ${escapeHtml(member.name)}"><i data-lucide="bell-ring"></i></button></form>` : ''}</div>`).join('');
+  const active = visible.filter((member) => member.status === 'same-page').length; if (summary) summary.textContent = `${active} here now`;
+  bindLiveForms(list); list.querySelectorAll('[data-presence-details]').forEach((button) => button.addEventListener('click', () => { const member = visible.find((entry) => entry.id === button.dataset.presenceDetails); if (!member) return; document.querySelector('[data-presence-details-modal]')?.remove(); const modal = document.createElement('div'); modal.className = 'presence-details'; modal.dataset.presenceDetailsModal = 'true'; modal.innerHTML = `<article class="presence-details-card"><button class="icon-button" type="button" data-presence-close aria-label="Close details"><i data-lucide="x"></i></button><h2>${escapeHtml(member.name)}</h2><p>@${escapeHtml(member.username || 'member')} · ${escapeHtml(member.role || 'Member')}</p><p>${escapeHtml(statusLabel[member.status])}</p><button class="button secondary" type="button" data-presence-close>Close</button></article>`; modal.addEventListener('click', (event) => { if (event.target === modal || event.target.closest('[data-presence-close]')) modal.remove(); }); document.body.appendChild(modal); lucide.createIcons(); }));
+  list.querySelectorAll('.presence-person').forEach((row) => row.addEventListener('click', (event) => { if (!event.target.closest('form, button')) row.querySelector('[data-presence-details]')?.click(); }));
+}
+
+function enhanceBreakoutTasks(root) {
+  root.querySelectorAll('[data-breakout-task-list] .breakout-task').forEach((row) => {
+    if (row.querySelector('.task-check')) return;
+    const taskId = row.dataset.taskId; const done = row.classList.contains('is-done');
+    row.insertAdjacentHTML('afterbegin', `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/breakout/${escapeHtml(root.dataset.groupId)}/tasks/${escapeHtml(taskId)}/toggle" method="post"><button class="task-check" type="submit" aria-label="${done ? 'Mark incomplete' : 'Mark complete'}"><i data-lucide="${done ? 'check-circle-2' : 'circle'}"></i></button></form>`);
+    row.querySelector(':scope > span:first-of-type')?.classList.add('breakout-task-copy');
+  });
+  bindLiveForms(root); lucide.createIcons();
 }
 
 function setCourseTab(tabName, updateHash = true) {
@@ -70,17 +122,26 @@ function setCourseTab(tabName, updateHash = true) {
   document.querySelectorAll('[data-course-view]').forEach((view) => view.classList.toggle('active', view.dataset.courseView === tabName));
   if (updateHash) history.replaceState({}, '', `${window.location.pathname}#${tabName}`);
 }
+function applyCourseFeedControls(root) {
+  const filter = root.querySelector('[data-course-filter]')?.value || 'all'; const query = (root.querySelector('[data-course-search]')?.value || '').trim().toLowerCase();
+  root.querySelectorAll('[data-item-id]').forEach((card) => { const type = (card.dataset.type || '').toLowerCase(); const matchesQuery = !query || card.textContent.toLowerCase().includes(query); const matchesFilter = filter === 'active' ? card.dataset.past !== 'true' : filter === 'past' ? card.dataset.past === 'true' : filter === 'homework' ? type === 'homework' : filter === 'tests' ? type.includes('test') : filter === 'projects' ? type === 'project' : true; card.hidden = !matchesQuery || !matchesFilter; });
+  root.querySelectorAll('[data-course-folder-count]').forEach((count) => { const past = count.dataset.courseFolderCount === 'past'; count.textContent = String(root.querySelectorAll(`[data-item-id][data-past="${past}"]:not([hidden])`).length); });
+}
+function bindCourseFeedControls(root) {
+  if (!root || root.dataset.feedControlsBound === 'true') return;
+  root.dataset.feedControlsBound = 'true'; root.querySelector('[data-course-filter]')?.addEventListener('change', () => applyCourseFeedControls(root)); root.querySelector('[data-course-search]')?.addEventListener('input', () => applyCourseFeedControls(root)); applyCourseFeedControls(root);
+}
 
 function connectLiveCourse() {
   const root = courseRoot(); if (!root || typeof io !== 'function') return;
   liveState.socket?.disconnect(); liveState.socket = io();
   liveState.socket.on('connect', () => { liveState.socket.emit('course:join', { orgId: root.dataset.orgId, courseId: root.dataset.courseId }); liveState.socket.emit('group:join', { orgId: root.dataset.orgId }); });
-  liveState.socket.on('course:item-created', ({ item }) => { const list = root.querySelector('[data-feed-list]'); if (!list || !item || list.querySelector(`[data-item-id="${CSS.escape(item.id)}"]`)) return; root.querySelector('[data-empty-feed]')?.remove(); list.insertAdjacentHTML('afterbegin', itemCard(item)); bindLiveForms(list.querySelector(`[data-item-id="${CSS.escape(item.id)}"]`)); bindCourseReorder(root); lucide.createIcons(); });
+  liveState.socket.on('course:item-created', ({ item }) => { const list = root.querySelector('[data-feed-list]'); if (!list || !item || list.querySelector(`[data-item-id="${CSS.escape(item.id)}"]`)) return; root.querySelector('[data-empty-feed]')?.remove(); const targetList = courseFolderList(root, courseItemPast(item)); targetList?.insertAdjacentHTML('afterbegin', itemCard(item)); const card = list.querySelector(`[data-item-id="${CSS.escape(item.id)}"]`); bindLiveForms(card); bindCourseReorder(root); lucide.createIcons(); applyCourseFeedControls(root); });
   liveState.socket.on('item:verification-changed', ({ itemId, verifiedBy }) => { const count = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-verify-count]`); if (count) count.textContent = verifiedBy.length; });
   liveState.socket.on('item:downvote-changed', ({ itemId, downvoteCount }) => { const count = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count && downvoteCount !== undefined) count.textContent = downvoteCount; });
-  liveState.socket.on('item:updated', ({ item }) => { const card = root.querySelector(`[data-item-id="${CSS.escape(item?.id || '')}"]`); if (card && item) { card.querySelector('h3').textContent = item.title; card.querySelector('.feed-source').textContent = `${item.type} · ${item.due}`; } });
+  liveState.socket.on('item:updated', ({ item }) => { const card = root.querySelector(`[data-item-id="${CSS.escape(item?.id || '')}"]`); if (card && item) { card.querySelector('h3').textContent = item.title; card.querySelector('.feed-source').textContent = `${item.type} · ${item.due}`; card.dataset.type = item.type; const past = courseItemPast(item); card.dataset.past = String(past); const targetList = courseFolderList(root, past); if (targetList && card.parentElement !== targetList) targetList.appendChild(card); applyCourseFeedControls(root); } });
   liveState.socket.on('item:deleted', ({ itemId }) => root.querySelector(`[data-item-id="${CSS.escape(itemId)}"]`)?.remove());
-  liveState.socket.on('course:items-reordered', ({ items }) => { if (!items) return; const list = root.querySelector('[data-feed-list]'); const positions = new Map(items.map((item) => [item.id, item.position])); [...list.querySelectorAll('[data-item-id]')].sort((left, right) => (positions.get(left.dataset.itemId) ?? 0) - (positions.get(right.dataset.itemId) ?? 0)).forEach((card, index) => { card.dataset.position = positions.get(card.dataset.itemId) ?? index; list.appendChild(card); }); });
+  liveState.socket.on('course:items-reordered', ({ items }) => { if (!items) return; const positions = new Map(items.map((item) => [item.id, item])); const list = root.querySelector('[data-feed-list]'); [...list.querySelectorAll('[data-item-id]')].forEach((card) => { const item = positions.get(card.dataset.itemId); if (item) card.dataset.past = String(courseItemPast(item)); }); ['current', 'past'].forEach((folder) => { const targetList = courseFolderList(root, folder === 'past'); [...list.querySelectorAll(`[data-item-id][data-past="${folder === 'past'}"]`)].sort((left, right) => (positions.get(left.dataset.itemId)?.position ?? 0) - (positions.get(right.dataset.itemId)?.position ?? 0)).forEach((card) => targetList?.appendChild(card)); }); applyCourseFeedControls(root); });
   liveState.socket.on('item:comment-added', ({ itemId, comment }) => appendUniqueComment(itemId, comment));
   liveState.socket.on('item:comment-updated', ({ itemId, comment }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(comment?.id || '')}"]`); if (entry && comment) { entry.outerHTML = commentMarkup(comment, { orgId: root.dataset.orgId, itemId, canEdit: root.dataset.isAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.isAdmin === 'true' || comment.userId === root.dataset.userId, canViewHistory: root.dataset.isAdmin === 'true' }); bindLiveForms(root); lucide.createIcons(); } });
   liveState.socket.on('item:comment-deleted', ({ itemId, commentId }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`); finishCommentRemoval(entry); });
@@ -92,22 +153,29 @@ function connectLiveCourse() {
 
 function persistCourseOrder(root) {
   const list = root.querySelector('[data-feed-list]'); if (!list) return;
-  const order = [...list.querySelectorAll('[data-item-id]')].map((card, index) => { card.dataset.position = index; return card.dataset.itemId; });
-  fetch(`/org/${root.dataset.orgId}/course/${root.dataset.courseId}/items/reorder`, { method: 'POST', body: new URLSearchParams({ order: order.join(',') }), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }).then(async (response) => { const payload = await response.json(); if (!response.ok || payload.error) { window.dispatchEvent(new CustomEvent('live-error', { detail: payload.error || 'Could not reorder course tasks.' })); } });
+  const cards = [...list.querySelectorAll('[data-item-id]')]; const order = cards.map((card, index) => { card.dataset.position = index; return card.dataset.itemId; }); const past = cards.filter((card) => card.dataset.past === 'true').map((card) => card.dataset.itemId);
+  return fetch(`/org/${root.dataset.orgId}/course/${root.dataset.courseId}/items/reorder`, { method: 'POST', body: new URLSearchParams({ order: order.join(','), past: past.join(',') }), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }).then(async (response) => { const payload = await response.json(); if (!response.ok || payload.error) { setCourseReorderCooldown(root, payload.retryAfter || 5000); } });
+}
+
+function setCourseReorderCooldown(root, duration = 5000) {
+  const until = Date.now() + duration;
+  root.dataset.reorderLockedUntil = String(until);
+  root.querySelectorAll('.course-drag-handle').forEach((handle) => { handle.disabled = true; handle.classList.add('is-cooldown'); });
+  window.setTimeout(() => { if (Number(root.dataset.reorderLockedUntil) > Date.now()) return; root.querySelectorAll('.course-drag-handle').forEach((handle) => { handle.disabled = false; handle.classList.remove('is-cooldown'); }); }, duration);
 }
 
 function bindCourseReorder(root) {
-  if (!root || root.dataset.canEdit !== 'true') return;
+  if (!root) return;
   const list = root.querySelector('[data-feed-list]'); if (!list) return;
   list.querySelectorAll('[data-item-id]').forEach((card) => {
     if (card.dataset.reorderBound === 'true') return;
     card.dataset.reorderBound = 'true';
     const grip = card.querySelector('.course-drag-handle'); if (!grip) return;
     grip.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0) return;
+      if (event.button !== 0 || Number(root.dataset.reorderLockedUntil) > Date.now()) return;
       event.preventDefault(); liveState.courseDragged = card; card.classList.add('is-dragging'); grip.setPointerCapture?.(event.pointerId);
-      const move = (moveEvent) => { const dragged = liveState.courseDragged; if (!dragged) return; const target = [...list.querySelectorAll('[data-item-id]')].filter((candidate) => candidate !== dragged).find((candidate) => moveEvent.clientY < candidate.getBoundingClientRect().top + candidate.offsetHeight / 2); if (target) list.insertBefore(dragged, target); else list.appendChild(dragged); };
-      const finish = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', finish); document.removeEventListener('pointercancel', finish); card.classList.remove('is-dragging'); liveState.courseDragged = null; persistCourseOrder(root); };
+      const move = (moveEvent) => { const dragged = liveState.courseDragged; if (!dragged) return; const folder = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY)?.closest('[data-course-folder]'); const targetList = folder?.querySelector('.feed-list'); if (!targetList) return; dragged.dataset.past = String(folder.dataset.courseFolder === 'past'); const target = [...targetList.querySelectorAll('[data-item-id]')].filter((candidate) => candidate !== dragged).find((candidate) => moveEvent.clientY < candidate.getBoundingClientRect().top + candidate.offsetHeight / 2); if (target) targetList.insertBefore(dragged, target); else targetList.appendChild(dragged); };
+      const finish = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', finish); document.removeEventListener('pointercancel', finish); card.classList.remove('is-dragging'); liveState.courseDragged = null; if (root.dataset.isAdmin !== 'true') setCourseReorderCooldown(root); persistCourseOrder(root); };
       document.addEventListener('pointermove', move); document.addEventListener('pointerup', finish, { once: true }); document.addEventListener('pointercancel', finish, { once: true });
     });
   });
@@ -115,16 +183,19 @@ function bindCourseReorder(root) {
 
 function connectLiveBreakout() {
   const root = document.querySelector('[data-breakout-live]'); if (!root || typeof io !== 'function') return;
+  window.clearInterval(liveState.presenceHeartbeat);
   liveState.socket?.disconnect(); liveState.socket = io();
-  liveState.socket.on('connect', () => liveState.socket.emit('group:join', { orgId: root.dataset.orgId }));
+  liveState.socket.on('connect', () => { liveState.socket.emit('group:join', { orgId: root.dataset.orgId }); liveState.socket.emit('breakout:presence', { orgId: root.dataset.orgId, groupId: root.dataset.groupId }); liveState.presenceHeartbeat = window.setInterval(() => liveState.socket?.emit('breakout:presence-heartbeat'), 20000); });
+  liveState.socket.on('breakout:presence', ({ groupId, members }) => { if (groupId === root.dataset.groupId) renderBreakoutPresence(root, members || []); });
   liveState.socket.on('breakout:task-created', ({ groupId, task }) => { if (groupId !== root.dataset.groupId || !task) return; const list = root.querySelector('[data-breakout-task-list]'); if (!list || list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`)) return; root.querySelector('[data-empty-breakout-board]')?.remove(); list.insertAdjacentHTML('beforeend', breakoutTaskMarkup(task, root)); bindLiveForms(list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`)); lucide.createIcons(); });
   liveState.socket.on('breakout:task-updated', ({ groupId, task }) => { if (groupId !== root.dataset.groupId || !task) return; const row = root.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`); if (row) { row.outerHTML = breakoutTaskMarkup(task, root); bindLiveForms(root.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`)); lucide.createIcons(); } });
   liveState.socket.on('breakout:task-deleted', ({ groupId, taskId }) => { if (groupId === root.dataset.groupId) root.querySelector(`[data-task-id="${CSS.escape(taskId)}"]`)?.remove(); });
   liveState.socket.on('breakout:board-deleted', ({ groupId }) => { if (groupId === root.dataset.groupId) root.querySelector('[data-breakout-task-list]').innerHTML = '<div class="empty-panel" data-empty-breakout-board><h3>The board is clear</h3></div>'; });
-  liveState.socket.on('breakout:comment-created', ({ groupId, comment }) => { if (groupId !== root.dataset.groupId || !comment) return; const list = root.querySelector('[data-breakout-comment-list]'); if (list && !list.querySelector(`[data-comment-id="${CSS.escape(comment.id)}"]`)) { list.insertAdjacentHTML('beforeend', commentMarkup(comment, { orgId: root.dataset.orgId, groupId, canEdit: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canViewHistory: root.dataset.groupAdmin === 'true' })); bindLiveForms(list.lastElementChild); lucide.createIcons(); } });
+  liveState.socket.on('breakout:comment-created', ({ groupId, comment }) => { if (groupId === root.dataset.groupId) appendBreakoutComment(comment, root); });
   liveState.socket.on('breakout:comment-updated', ({ groupId, comment }) => { if (groupId !== root.dataset.groupId || !comment) return; const entry = root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(comment.id)}"]`); if (entry) { entry.outerHTML = commentMarkup(comment, { orgId: root.dataset.orgId, groupId, canEdit: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canViewHistory: root.dataset.groupAdmin === 'true' }); bindLiveForms(root); lucide.createIcons(); } });
   liveState.socket.on('breakout:comment-deleted', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) finishCommentRemoval(root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)); });
   liveState.socket.on('breakout:comment-reported', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) markCommentReported(root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)); });
+  enhanceBreakoutTasks(root);
 }
 
 function todoList() { return document.querySelector('[data-live-todo-list]'); }
@@ -208,7 +279,10 @@ async function submitLiveForm(form, animatedEntry = null) {
     const response = await fetch(actionUrl, { method: 'POST', body: new URLSearchParams(formData), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } });
     const payload = await response.json(); if (!response.ok || payload.error) throw new Error(payload.error || 'Action failed');
     if (payload.groupUrl) { window.location.assign(payload.groupUrl); return; }
+    if (payload.deletedAccount) { window.location.assign('/'); return; }
     if (payload.successMessage) showLiveSuccess(payload.successMessage);
+    form.querySelectorAll('input:not([type="hidden"]), textarea').forEach((field) => { field.value = ''; });
+    form.closest('details')?.removeAttribute('open');
     if (payload.invitationAction || payload.leftGroup || payload.deletedGroup) { window.location.reload(); return; }
     if (payload.read || payload.readAll) {
       if (payload.readAll) document.querySelectorAll('.notification-item.unread').forEach((item) => item.classList.replace('unread', 'is-read'));
@@ -245,8 +319,15 @@ async function submitLiveForm(form, animatedEntry = null) {
         const context = itemCardElement && courseLive ? { orgId: courseLive.dataset.orgId, itemId: itemCardElement.dataset.itemId, canEdit: courseLive.dataset.isAdmin === 'true' || payload.comment.userId === courseLive.dataset.userId, canDelete: courseLive.dataset.isAdmin === 'true' || payload.comment.userId === courseLive.dataset.userId, canViewHistory: courseLive.dataset.isAdmin === 'true' } : breakoutLive ? { orgId: breakoutLive.dataset.orgId, groupId: breakoutLive.dataset.groupId, canEdit: breakoutLive.dataset.groupAdmin === 'true' || payload.comment.userId === breakoutLive.dataset.userId, canDelete: breakoutLive.dataset.groupAdmin === 'true' || payload.comment.userId === breakoutLive.dataset.userId, canViewHistory: breakoutLive.dataset.groupAdmin === 'true' } : null;
         if (entry && context) { entry.outerHTML = commentMarkup(payload.comment, context); bindLiveForms(entry.parentElement || document); lucide.createIcons(); }
       } else {
-        const itemId = actionUrl.split('/').at(-2); appendUniqueComment(itemId, payload.comment);
+        const breakoutLive = form.closest('[data-breakout-live]');
+        if (breakoutLive) appendBreakoutComment(payload.comment, breakoutLive);
+        else { const itemId = actionUrl.split('/').at(-2); appendUniqueComment(itemId, payload.comment); }
       }
+    }
+    if (payload.task) {
+      const breakoutLive = form.closest('[data-breakout-live]');
+      const row = breakoutLive?.querySelector(`[data-task-id="${CSS.escape(payload.task.id)}"]`);
+      if (breakoutLive && row) { row.outerHTML = breakoutTaskMarkup(payload.task, breakoutLive); bindLiveForms(breakoutLive.querySelector(`[data-task-id="${CSS.escape(payload.task.id)}"]`)); lucide.createIcons(); }
     }
     if (payload.task) {
       const list = document.querySelector('[data-live-todo-list]'); if (list) {
@@ -572,7 +653,27 @@ function bindInteractions() {
   });
   const hash = window.location.hash.slice(1); if (courseRoot() && ['feed', 'board', 'resources'].includes(hash)) setCourseTab(hash, false);
   syncTodoSummary();
-  lucide.createIcons(); bindTodoControls(); bindDashboardInteractions(); connectLiveCourse(); connectLiveBreakout(); connectLiveTodo(); connectLiveNotifications(); connectLiveDashboard();
+  lucide.createIcons(); bindTodoControls(); bindDashboardInteractions(); bindCourseFeedControls(courseRoot()); bindCourseReorder(courseRoot()); bindTutorial(); connectLiveCourse(); connectLiveBreakout(); connectLiveTodo(); connectLiveNotifications(); connectLiveDashboard();
+}
+
+function bindTutorial() {
+  const tutorial = document.querySelector('[data-tutorial]');
+  if (!tutorial || localStorage.getItem('lockin-tutorial-v1') === 'done') return;
+  const steps = [
+    { selector: '[href="/dashboard"]', title: 'Your overview', copy: 'Start here to see what is happening across your groups and courses.' },
+    { selector: '[href="/todo"]', title: 'Your personal Todo', copy: 'Keep private study tasks here. Course events can be added to this list without changing the class feed.' },
+    { selector: '[href="/groups"]', title: 'Find your groups', copy: 'Open All groups to join spaces, see your courses, and manage group work.' },
+    { selector: '.new-space', title: 'Create a group', copy: 'Make a new study space when you need a shared home for a class or project.' },
+    { selector: '.topbar', title: 'You are ready', copy: 'Use the navigation to move around LockIn. You can reopen this tour from the account menu later.' }
+  ];
+  let index = 0;
+  const stepLabel = tutorial.querySelector('[data-tutorial-step]'); const title = tutorial.querySelector('[data-tutorial-title]'); const copy = tutorial.querySelector('[data-tutorial-copy]'); const back = tutorial.querySelector('[data-tutorial-back]'); const next = tutorial.querySelector('[data-tutorial-next]');
+  const finish = () => { localStorage.setItem('lockin-tutorial-v1', 'done'); tutorial.hidden = true; document.querySelectorAll('.tutorial-target').forEach((element) => element.classList.remove('tutorial-target')); };
+  const render = () => { const step = steps[index]; document.querySelectorAll('.tutorial-target').forEach((element) => element.classList.remove('tutorial-target')); const target = document.querySelector(step.selector); target?.classList.add('tutorial-target'); stepLabel.textContent = `${index + 1} / ${steps.length}`; title.textContent = step.title; copy.textContent = step.copy; back.disabled = index === 0; next.textContent = index === steps.length - 1 ? 'Finish' : 'Next'; };
+  back.addEventListener('click', () => { if (index > 0) { index -= 1; render(); } });
+  next.addEventListener('click', () => { if (index === steps.length - 1) finish(); else { index += 1; render(); } });
+  tutorial.querySelector('[data-tutorial-skip]')?.addEventListener('click', finish);
+  tutorial.hidden = false; render(); lucide.createIcons();
 }
 
 window.addEventListener('live-error', (event) => showLiveError(event.detail || 'Action failed. Please try again.'));

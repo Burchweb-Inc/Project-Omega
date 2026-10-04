@@ -40,6 +40,7 @@ try { db.prepare("ALTER TABLE users ADD COLUMN tasks TEXT NOT NULL DEFAULT '[]'"
 for (const column of [
   "is_site_admin INTEGER NOT NULL DEFAULT 0",
   "notifications TEXT NOT NULL DEFAULT '[]'",
+  "settings TEXT NOT NULL DEFAULT '{}'",
   "moderation_status TEXT NOT NULL DEFAULT 'active'",
   "moderation_message TEXT NOT NULL DEFAULT ''",
   "moderation_until TEXT NOT NULL DEFAULT ''"
@@ -126,6 +127,9 @@ const orgs = [];
 const sessions = new Map();
 const loginAttempts = new Map();
 const courseReorderWindows = new Map();
+const ipLocationCache = new Map();
+const breakoutPresence = new Map();
+const breakoutPingWindows = new Map();
 let taskEncryptionMigrationNeeded = false;
 
 function loadTaskEncryptionKey() {
@@ -170,6 +174,7 @@ function loadUsersFromDatabase() {
     passwordHash: row.password_hash,
     isSiteAdmin: Boolean(row.is_site_admin) || row.username === 'admin',
     tasks: decryptTasks(row.tasks).map(normalizeTask),
+    settings: JSON.parse(row.settings || '{}'),
     notifications: JSON.parse(row.notifications || '[]'),
     moderationStatus: row.moderation_status || 'active',
     moderationMessage: row.moderation_message || '',
@@ -189,8 +194,8 @@ function loadOrgsFromDatabase() {
 }
 
 function persistState() {
-  const userWrite = db.prepare(`INSERT INTO users (id, name, username, age, password_hash, is_site_admin, tasks, notifications, moderation_status, moderation_message, moderation_until)
-    VALUES (@id, @name, @username, @age, @passwordHash, @isSiteAdmin, @tasks, @notifications, @moderationStatus, @moderationMessage, @moderationUntil)
+  const userWrite = db.prepare(`INSERT INTO users (id, name, username, age, password_hash, is_site_admin, tasks, notifications, settings, moderation_status, moderation_message, moderation_until)
+    VALUES (@id, @name, @username, @age, @passwordHash, @isSiteAdmin, @tasks, @notifications, @settings, @moderationStatus, @moderationMessage, @moderationUntil)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       username = excluded.username,
@@ -199,6 +204,7 @@ function persistState() {
       is_site_admin = excluded.is_site_admin,
       tasks = excluded.tasks,
       notifications = excluded.notifications,
+      settings = excluded.settings,
       moderation_status = excluded.moderation_status,
       moderation_message = excluded.moderation_message,
       moderation_until = excluded.moderation_until`);
@@ -218,6 +224,7 @@ function persistState() {
     isSiteAdmin: user.isSiteAdmin ? 1 : 0,
     tasks: encryptTasks(user.tasks),
     notifications: JSON.stringify(user.notifications || []),
+    settings: JSON.stringify(user.settings || {}),
     moderationStatus: user.moderationStatus || 'active',
     moderationMessage: user.moderationMessage || '',
     moderationUntil: user.moderationUntil || ''
@@ -316,6 +323,17 @@ function emitOrg(org, event, payload) { io.to(orgRoom(org.id)).emit(event, paylo
 function emitGroup(org, event, payload) { io.to(groupRoom(org.id)).emit(event, payload); }
 function emitTodo(userId, event, payload) { io.to(todoRoom(userId)).emit(event, payload); }
 function emitNotification(userId, notification) { io.to(notificationRoom(userId)).emit('notification:added', notification); }
+function groupPresencePayload(org, groupId) {
+  const group = getBreakoutGroup(org, groupId);
+  if (!group) return [];
+  return group.members.map((userId) => {
+    const records = [...breakoutPresence.values()].filter((record) => record.userId === userId && record.orgId === org.id && Date.now() - record.lastSeen <= 60000);
+    const active = records.sort((left, right) => right.lastSeen - left.lastSeen)[0];
+    return active ? { userId, status: active.groupId === groupId ? 'same-page' : 'inactive', lastSeen: active.lastSeen } : null;
+  }).filter(Boolean);
+}
+function emitGroupPresence(org, groupId) { if (groupId) io.to(groupRoom(org.id)).emit('breakout:presence', { groupId, members: groupPresencePayload(org, groupId) }); }
+function emitOrgPresence(org) { (org.groups || []).forEach((group) => emitGroupPresence(org, group.id)); }
 function emitCourseAdmins(org, course, event, payload) { io.to(courseAdminRoom(org.id, course.id)).emit(event, payload); }
 function dueImportance(due) {
   if (!due || due === 'No date') return 'Unscheduled';
@@ -323,9 +341,40 @@ function dueImportance(due) {
   const dueDate = new Date(`${due}T00:00:00`); const days = Math.round((dueDate - today) / 86400000);
   if (days < 0) return 'Overdue'; if (days === 0) return 'Today'; if (days <= 3) return 'Soon'; return 'Later';
 }
+function fallbackIpLocation() { return { timezone: 'UTC', locale: 'en-US' }; }
+function courseDateLocale(countryCode) { return countryCode === 'US' ? 'en-US' : 'en-GB'; }
+async function ipLocation(ip) {
+  const normalizedIp = String(ip || '').replace(/^::ffff:/, '');
+  if (!normalizedIp || normalizedIp === '::1' || normalizedIp === '127.0.0.1' || normalizedIp.startsWith('10.') || normalizedIp.startsWith('192.168.') || normalizedIp.startsWith('172.16.')) return fallbackIpLocation();
+  if (ipLocationCache.has(normalizedIp)) return ipLocationCache.get(normalizedIp);
+  try {
+    const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 1200);
+    const result = await fetch(`https://ipapi.co/${encodeURIComponent(normalizedIp)}/json/`, { signal: controller.signal, headers: { Accept: 'application/json' } }); clearTimeout(timeout);
+    const data = await result.json(); const location = data.timezone ? { timezone: data.timezone, locale: courseDateLocale(data.country_code) } : fallbackIpLocation();
+    ipLocationCache.set(normalizedIp, location); return location;
+  } catch (error) { return fallbackIpLocation(); }
+}
+function formatCourseDate(due, timezone = 'UTC', locale = 'en-US') {
+  if (!due || due === 'No date') return 'No date';
+  const date = new Date(`${due}T12:00:00Z`); if (Number.isNaN(date.getTime())) return due;
+  return new Intl.DateTimeFormat(locale, { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+}
+async function userDateLocation(user, request) {
+  const settings = user?.settings || {};
+  if (settings.timezone && settings.dateFormat && settings.dateFormat !== 'auto') return { timezone: settings.timezone, locale: settings.dateFormat === 'mdy' ? 'en-US' : settings.dateFormat === 'ymd' ? 'sv-SE' : 'en-GB' };
+  const location = await ipLocation(request.ip);
+  if (settings.timezone) location.timezone = settings.timezone;
+  if (settings.dateFormat && settings.dateFormat !== 'auto') location.locale = settings.dateFormat === 'mdy' ? 'en-US' : settings.dateFormat === 'ymd' ? 'sv-SE' : 'en-GB';
+  return location;
+}
 function normalizeTask(task, index = 0) { return { ...task, position: Number.isFinite(Number(task.position)) ? Number(task.position) : index, linked: task.sourceId ? task.linked !== false : false, importance: dueImportance(task.due) }; }
 function normalizeUserTasks(user) { if (!user) return; user.tasks = (user.tasks || []).map(normalizeTask); }
-function normalizeCourseItems(course) { course.items = (course.items || []).map((item, index) => ({ ...item, position: Number.isFinite(Number(item.position)) ? Number(item.position) : index })); }
+function normalizeCourseItems(course) {
+  course.items = (course.items || []).map((item, index) => {
+    const past = typeof item.pastOverride === 'boolean' ? item.pastOverride : dueImportance(item.due) === 'Overdue';
+    return { ...item, position: Number.isFinite(Number(item.position)) ? Number(item.position) : index, past };
+  });
+}
 function addNotification(user, notification) {
   if (!user) return;
   user.notifications ||= [];
@@ -432,7 +481,23 @@ io.on('connection', (socket) => {
   });
   socket.on('group:join', ({ orgId } = {}) => {
     const org = orgs.find((entry) => entry.id === orgId);
-    if (canAccess(org, socket.user)) socket.join(groupRoom(org.id));
+    if (canAccess(org, socket.user)) { socket.join(groupRoom(org.id)); breakoutPresence.set(socket.id, { userId: socket.user.id, orgId, groupId: null, lastSeen: Date.now() }); emitOrgPresence(org); }
+  });
+  socket.on('breakout:presence', ({ orgId, groupId } = {}) => {
+    const org = orgs.find((entry) => entry.id === orgId); const group = getBreakoutGroup(org, groupId);
+    if (!org || !group || !canAccess(org, socket.user) || !group.members.includes(socket.user.id)) return;
+    breakoutPresence.set(socket.id, { userId: socket.user.id, orgId, groupId, lastSeen: Date.now() });
+    socket.emit('breakout:presence', { groupId, members: groupPresencePayload(org, groupId) });
+    emitGroupPresence(org, groupId);
+  });
+  socket.on('breakout:presence-heartbeat', () => {
+    const record = breakoutPresence.get(socket.id); if (!record) return;
+    record.lastSeen = Date.now();
+    const org = orgs.find((entry) => entry.id === record.orgId); if (org) record.groupId ? emitGroupPresence(org, record.groupId) : emitOrgPresence(org);
+  });
+  socket.on('disconnect', () => {
+    const record = breakoutPresence.get(socket.id); breakoutPresence.delete(socket.id);
+    const org = record && orgs.find((entry) => entry.id === record.orgId); if (org) record.groupId ? emitGroupPresence(org, record.groupId) : emitOrgPresence(org);
   });
 });
 
@@ -466,7 +531,7 @@ app.post('/signup', (request, response) => {
   const next = safeReturnTo(request.body.next);
   if (!name || !username || !password || password.length < 8 || !age || Number(age) < 13 || users.some((user) => user.username === username.trim().toLowerCase())) return response.redirect(authRedirect('/signup', 'signup', next));
   const normalizedUsername = username.trim().toLowerCase();
-  const user = { id: id(), name: name.trim(), username: normalizedUsername, age: Number(age), passwordHash: passwordHash(password), isSiteAdmin: normalizedUsername === 'admin', tasks: [] };
+  const user = { id: id(), name: name.trim(), username: normalizedUsername, age: Number(age), passwordHash: passwordHash(password), isSiteAdmin: normalizedUsername === 'admin', tasks: [], settings: {} };
   users.push(user); persistState(); setSession(response, user.id); response.redirect(next);
 });
 
@@ -613,6 +678,24 @@ app.post('/beta/feedback', requireUser, async (request, response) => {
   db.prepare('INSERT INTO site_feedback (id, user_id, username, kind, message, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(id(), request.user.id, request.user.username, String(request.body.kind || 'general').slice(0, 40), message, new Date().toISOString());
   return sendMutation(request, response, { successMessage: 'Thanks. Your beta feedback is in.' }, '/beta');
 });
+app.get('/settings', requireUser, (request, response) => render(request, response, 'account-settings', { accountSettings: request.user.settings || {} }));
+app.post('/settings', requireUser, (request, response) => {
+  const name = String(request.body.name || '').trim(); const username = String(request.body.username || '').trim().toLowerCase();
+  if (!name || !/^[a-z0-9_]{3,24}$/.test(username) || users.some((user) => user.id !== request.user.id && user.username === username)) return sendMutation(request, response, { error: 'Use a valid, available username and a name.' }, '/settings');
+  request.user.name = name; request.user.username = username; request.user.settings = { ...(request.user.settings || {}), timezone: request.body.timezone || '', dateFormat: ['auto', 'mdy', 'dmy', 'ymd'].includes(request.body.dateFormat) ? request.body.dateFormat : 'auto' }; persistState();
+  return sendMutation(request, response, { successMessage: 'Account settings saved.' }, '/settings');
+});
+app.post('/settings/password', requireUser, (request, response) => {
+  if (!passwordMatches(request.body.currentPassword || '', request.user.passwordHash) || String(request.body.newPassword || '').length < 8) return sendMutation(request, response, { error: 'Enter your current password and a new password with at least 8 characters.' }, '/settings');
+  request.user.passwordHash = passwordHash(request.body.newPassword); persistState(); return sendMutation(request, response, { successMessage: 'Password updated.' }, '/settings');
+});
+app.post('/settings/delete', requireUser, (request, response) => {
+  if (String(request.body.confirmation || '') !== 'DELETE' || !passwordMatches(request.body.password || '', request.user.passwordHash)) return sendMutation(request, response, { error: 'Type DELETE and enter your password to close your account.' }, '/settings');
+  const deletedUserId = request.user.id;
+  orgs.forEach((org) => { org.members = (org.members || []).filter((member) => member.userId !== deletedUserId); org.pendingInvites = (org.pendingInvites || []).filter((invite) => invite.userId !== deletedUserId); org.groups = (org.groups || []).filter((group) => group.createdBy !== deletedUserId).map((group) => ({ ...group, members: (group.members || []).filter((memberId) => memberId !== deletedUserId) })); });
+  for (const [token, userId] of sessions) if (userId === deletedUserId) sessions.delete(token);
+  users.splice(users.findIndex((user) => user.id === deletedUserId), 1); persistState(); response.setHeader('Set-Cookie', 'session=; HttpOnly; Max-Age=0; Path=/'); return sendMutation(request, response, { deletedAccount: true, successMessage: 'Your account has been deleted.' }, '/');
+});
 app.get('/todo', requireUser, (request, response) => render(request, response, 'todo'));
 app.get('/calendar', requireUser, (request, response) => render(request, response, 'calendar', { calendarItems: allItems().filter((entry) => entry.due && entry.due !== 'No date') }));
 app.get('/groups', requireUser, (request, response) => render(request, response, 'groups', { groups: orgs.filter((org) => membership(org, request.user) || pendingInvite(org, request.user)).map((org) => ({ ...org, pendingInvite: pendingInvite(org, request.user) })) }));
@@ -662,10 +745,10 @@ app.get('/b/:code', requireUser, (request, response) => {
   response.redirect(`/org/${org.id}/breakout/${group.id}`);
 });
 
-app.get('/org/:id/course/:courseId', requireUser, (request, response) => {
+app.get('/org/:id/course/:courseId', requireUser, async (request, response) => {
   const org = getOrg(request); const course = getCourse(org, request.params.courseId);
   if (!course || !canAccess(org, request.user)) return response.redirect(`/org/${request.params.id}`);
-  normalizeCourseItems(course); renderOrgPage(request, response, 'course', { course: { ...course, items: [...course.items].sort((left, right) => left.position - right.position) } });
+  normalizeCourseItems(course); const location = await userDateLocation(request.user, request); renderOrgPage(request, response, 'course', { course: { ...course, items: [...course.items].sort((left, right) => left.position - right.position) }, courseTimezone: location.timezone, courseDateLocale: location.locale, formatCourseDate });
 });
 
 app.get('/org/:id/course/:courseId/items/new', requireUser, (request, response) => {
@@ -721,7 +804,7 @@ app.post('/org/:id/courses/:courseId/items', requireUser, async (request, respon
   if (!course || !canEdit(membership(org, request.user))) return sendMutation(request, response, { error: 'You cannot edit this course.' }, `/org/${request.params.id}/course/${request.params.courseId}`);
   const policyError = await contentPolicyError({ type: 'course-item', text: request.body.title });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${request.params.id}/course/${request.params.courseId}`);
-  const item = { id: id(), title: String(request.body.title || '').trim(), type: request.body.type, due: request.body.due || 'No date', done: request.body.type !== 'Event' ? false : null, comments: [], verifiedBy: [], downvotedBy: [], createdBy: request.user.id, position: course.items.length };
+  const item = { id: id(), title: String(request.body.title || '').trim(), type: request.body.type, due: request.body.due || 'No date', done: request.body.type !== 'Event' ? false : null, comments: [], verifiedBy: [], downvotedBy: [], createdBy: request.user.id, position: course.items.length, past: dueImportance(request.body.due || 'No date') === 'Overdue' };
   if (!item.title) return sendMutation(request, response, { error: 'A title is required.' }, `/org/${org.id}/course/${course.id}`);
   course.items.push(item); persistState(); emitCourse(org, course, 'course:item-created', { item });
   return sendMutation(request, response, { item }, `/org/${org.id}/course/${course.id}`);
@@ -729,13 +812,14 @@ app.post('/org/:id/courses/:courseId/items', requireUser, async (request, respon
 
 app.post('/org/:id/course/:courseId/items/reorder', requireUser, (request, response) => {
   const org = getOrg(request); const course = getCourse(org, request.params.courseId); const member = membership(org, request.user);
-  if (!course || !canEdit(member)) return sendMutation(request, response, { error: 'Only course editors and admins can reorder tasks.' }, `/org/${request.params.id}/course/${request.params.courseId}`);
-  const now = Date.now(); const key = `${request.user.id}:${course.id}`; const windowState = courseReorderWindows.get(key) || { startedAt: now, count: 0 };
-  if (now - windowState.startedAt >= 5000) { windowState.startedAt = now; windowState.count = 0; }
-  if (member.role !== 'admin' && windowState.count >= 2) return sendMutation(request, response, { error: 'Please wait 5 seconds before reordering again.', retryAfter: Math.max(0, 5000 - (now - windowState.startedAt)) }, `/org/${org.id}/course/${course.id}`);
+  if (!course || !canAccess(org, request.user)) return sendMutation(request, response, { error: 'You cannot reorder tasks in this course.' }, `/org/${request.params.id}/course/${request.params.courseId}`);
+  const now = Date.now(); const key = `${request.user.id}:${course.id}`; const lastReorderedAt = courseReorderWindows.get(key) || 0;
+  if (!isOrgModerator(org, request.user) && now - lastReorderedAt < 5000) return sendMutation(request, response, { error: 'Please wait 5 seconds before reordering again.', retryAfter: 5000 - (now - lastReorderedAt) }, `/org/${org.id}/course/${course.id}`);
+  const pastIds = new Set(Array.isArray(request.body.past) ? request.body.past : String(request.body.past || '').split(','));
   const order = Array.isArray(request.body.order) ? request.body.order : String(request.body.order || '').split(','); const itemsById = new Map(course.items.map((item) => [item.id, item]));
   order.forEach((itemId, index) => { const item = itemsById.get(itemId); if (item) item.position = index; });
-  course.items.sort((left, right) => left.position - right.position); windowState.count += 1; courseReorderWindows.set(key, windowState); persistState(); emitCourse(org, course, 'course:items-reordered', { items: course.items });
+  course.items.forEach((item) => { if (order.includes(item.id)) { item.pastOverride = pastIds.has(item.id); item.past = item.pastOverride; } });
+  course.items.sort((left, right) => left.position - right.position); courseReorderWindows.set(key, now); persistState(); emitCourse(org, course, 'course:items-reordered', { items: course.items });
   return sendMutation(request, response, { items: course.items }, `/org/${org.id}/course/${course.id}`);
 });
 
@@ -780,10 +864,10 @@ app.post('/org/:id/items/:itemId/verify', requireUser, (request, response) => {
 });
 
 app.post('/org/:id/items/:itemId/downvote', requireUser, (request, response) => {
-  const org = getOrg(request); const member = membership(org, request.user); const item = canAccess(org, request.user) ? org.courses.flatMap((course) => course.items).find((entry) => entry.id === request.params.itemId) : null;
-  if (!item || member?.role !== 'admin') return sendMutation(request, response, { error: 'Only organization admins can downvote feed items.' }, `/org/${org?.id || ''}`);
+  const org = getOrg(request); const item = canAccess(org, request.user) ? org.courses.flatMap((course) => course.items).find((entry) => entry.id === request.params.itemId) : null;
+  if (!item) return sendMutation(request, response, { error: 'You cannot dislike this feed item.' }, `/org/${org?.id || ''}`);
   item.downvotedBy ||= []; const index = item.downvotedBy.indexOf(request.user.id); if (index === -1) item.downvotedBy.push(request.user.id); else item.downvotedBy.splice(index, 1);
-  persistState(); const course = org.courses.find((entry) => entry.items.includes(item)); emitCourseAdmins(org, course, 'item:downvote-changed', { itemId: item.id, downvoteCount: item.downvotedBy.length });
+  persistState(); const course = org.courses.find((entry) => entry.items.includes(item)); emitCourse(org, course, 'item:downvote-changed', { itemId: item.id, downvoteCount: item.downvotedBy.length });
   return sendMutation(request, response, { itemId: item.id, downvoteCount: item.downvotedBy.length }, `/org/${org.id}/course/${course.id}`);
 });
 
@@ -793,7 +877,7 @@ app.post('/org/:id/items/:itemId/update', requireUser, async (request, response)
   const title = String(request.body.title || '').trim(); const course = org.courses.find((entry) => entry.items.includes(item)); if (!title) return sendMutation(request, response, { error: 'A title is required.' }, `/org/${org.id}`);
   const nextType = request.body.type || item.type; const policyError = nextType === 'Event' ? null : await contentPolicyError({ type: 'course-item', text: title });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/course/${course.id}`);
-  item.title = title; item.type = nextType; item.due = request.body.due || 'No date';
+  item.title = title; item.type = nextType; item.due = request.body.due || 'No date'; item.past = typeof item.pastOverride === 'boolean' ? item.pastOverride : dueImportance(item.due) === 'Overdue';
   users.forEach((user) => { const task = (user.tasks || []).find((entry) => entry.sourceId === item.id && entry.linked !== false); if (task) { task.title = item.title; task.due = item.due; task.source = `${course.name} · ${org.name}`; task.importance = dueImportance(task.due); emitTodo(user.id, 'todo:task-updated', { task: normalizeTask(task) }); } });
   persistState(); emitCourse(org, course, 'item:updated', { item });
   return sendMutation(request, response, { item }, `/org/${org.id}/course/${course.id}`);
@@ -888,6 +972,24 @@ app.post('/org/:id/breakout/:groupId/tasks/:taskId/unclaim', requireUser, (reque
   if (!group || !task || (task.claimedBy !== request.user.id && !canManageBreakoutGroup(org, group, request.user))) return sendMutation(request, response, { error: 'You cannot unclaim this task.' }, `/org/${request.params.id}`);
   task.claimedBy = null; persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
   return sendMutation(request, response, { task }, `/org/${org.id}/breakout/${group.id}`);
+});
+
+app.post('/org/:id/breakout/:groupId/tasks/:taskId/toggle', requireUser, (request, response) => {
+  const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId); const task = group?.tasks?.find((entry) => entry.id === request.params.taskId);
+  if (!group || !task || !group.members.includes(request.user.id)) return sendMutation(request, response, { error: 'You must be in this breakout group to update a task.' }, `/org/${request.params.id}`);
+  task.done = !task.done; persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
+  return sendMutation(request, response, { task }, `/org/${org.id}/breakout/${group.id}`);
+});
+
+app.post('/org/:id/breakout/:groupId/ping/:userId', requireUser, (request, response) => {
+  const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId); const target = users.find((user) => user.id === request.params.userId);
+  const key = `${request.user.id}:${request.params.userId}`; const remaining = 10000 - (Date.now() - (breakoutPingWindows.get(key) || 0));
+  if (!org || !group || !target || target.id === request.user.id || !group.members.includes(request.user.id) || !group.members.includes(target.id)) return sendMutation(request, response, { error: 'You can only ping another person in your breakout group.' }, `/org/${request.params.id}/breakout/${request.params.groupId}`);
+  if (remaining > 0) return sendMutation(request, response, { error: `Please wait ${Math.ceil(remaining / 1000)} seconds before pinging ${target.name}.` }, `/org/${request.params.id}/breakout/${request.params.groupId}`);
+  breakoutPingWindows.set(key, Date.now());
+  addNotification(target, { type: 'breakout-ping', title: `${request.user.name} is looking for you`, message: `Come back to ${group.name} for a quick check-in.`, href: `/org/${org.id}/breakout/${group.id}`, actionLabel: 'Open group' });
+  persistState();
+  return sendMutation(request, response, { pinged: true, successMessage: `Ping sent to ${target.name}.` }, `/org/${org.id}/breakout/${group.id}`);
 });
 
 app.post('/org/:id/breakout/:groupId/tasks/:taskId/delegate', requireUser, (request, response) => {

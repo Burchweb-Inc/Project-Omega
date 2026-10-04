@@ -106,7 +106,7 @@ function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse,
   });
 
   app.post('/org/:id/breakout/:groupId/comments/:commentId/delete', requireUser, (request, response) => {
-    const org = getOrg(request); const group = org?.groups?.find((entry) => entry.id === request.params.groupId);
+    const org = getOrg(request); const group = org?.groups?.find((entry) => entry.id === request.params.groupId); const comment = group?.comments?.find((entry) => entry.id === request.params.commentId);
     if (!group || !comment || (!canEditComment(comment, org, request.user, group) && !canManageBreakoutGroup(org, group, request.user))) return sendMutation(request, response, { error: 'You cannot delete this comment.' }, `/org/${request.params.id}`);
     group.comments = (group.comments || []).filter((comment) => comment.id !== request.params.commentId); persistState(); emitGroup(org, 'breakout:comment-deleted', { groupId: group.id, commentId: request.params.commentId });
     return sendMutation(request, response, { commentId: request.params.commentId }, `/org/${org.id}/breakout/${group.id}`);
