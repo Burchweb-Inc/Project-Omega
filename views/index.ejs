@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= page === 'landing' ? 'LockIn' : `LockIn | ${locals.selectedOrg?.name || 'Study space'}` %></title>
+  <% const pageTitle = page === 'landing' ? 'LockIn' : `LockIn | ${locals.selectedOrg?.name || 'Study space'}`; const pageDescription = locals.selectedOrg?.description || 'LockIn keeps study groups, courses, tasks, and conversations in one focused place.'; const previewUrl = locals.canonicalUrl || 'https://lockedin.burchweb.com/'; %>
+  <title><%= pageTitle %></title><meta name="description" content="<%= pageDescription %>"><link rel="canonical" href="<%= previewUrl %>"><meta property="og:type" content="website"><meta property="og:site_name" content="LockIn"><meta property="og:title" content="<%= pageTitle %>"><meta property="og:description" content="<%= pageDescription %>"><meta property="og:url" content="<%= previewUrl %>"><meta property="og:image" content="https://lockedin.burchweb.com/media/logo.png"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="<%= pageTitle %>"><meta name="twitter:description" content="<%= pageDescription %>"><meta name="twitter:image" content="https://lockedin.burchweb.com/media/logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'"><noscript><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"></noscript>
   <link rel="preload" href="/media/logo.png" as="image">
@@ -44,7 +45,7 @@
     }
   </script>
 </head>
-<body class="<%= page %> <%= ['about', 'support', 'privacy', 'terms', 'understand', 'beta'].includes(page) ? 'page-loading' : '' %>">
+<body class="<%= page %> <%= ['about', 'support', 'privacy', 'terms', 'understand', 'beta'].includes(page) ? 'page-loading' : '' %>" data-push-enabled="<%= user?.settings?.pushNotifications?.enabled ? 'true' : 'false' %>" data-push-breakout-comments="<%= user?.settings?.pushNotifications?.breakoutComments !== false ? 'true' : 'false' %>" data-push-breakout-tasks="<%= user?.settings?.pushNotifications?.breakoutTasks !== false ? 'true' : 'false' %>" data-push-mentions="<%= user?.settings?.pushNotifications?.mentions !== false ? 'true' : 'false' %>" data-push-announcements="<%= user?.settings?.pushNotifications?.announcements !== false ? 'true' : 'false' %>">
 <% if (['about', 'support', 'privacy', 'terms', 'understand', 'beta'].includes(page)) { %>
   <div class="page-loader" data-page-loader aria-label="Loading LockIn" role="status">
     <img class="page-loader-image" src="/media/logo.png" alt="LockIn">

@@ -37,6 +37,21 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(cacheOfflineMedia().catch(() => {}));
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'show-notification') return;
+  const options = { body: event.data.body || '', icon: '/media/logo.png', badge: '/media/logo.png', data: { href: event.data.href || '/' }, tag: event.data.tag || 'lockin-notification' };
+  event.waitUntil(self.registration.showNotification(event.data.title || 'LockIn', options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const href = new URL(event.notification.data?.href || '/', self.location.origin).href;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+    const client = clients.find((entry) => 'focus' in entry);
+    return client ? client.focus().then(() => client.navigate(href)) : self.clients.openWindow(href);
+  }));
+});
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);

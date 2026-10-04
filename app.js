@@ -17,7 +17,7 @@ const { appendRemovedTextForReview, appendAppealPhrase, reviewQueuedBadWords, re
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || '0.0.0.0';
-const serviceWorkerVersion = 'lockin-sw-20260924-6';
+const serviceWorkerVersion = 'lockin-sw-20261004-1';
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const dbPath = path.join(dataDir, 'studyline.db');
 
@@ -375,6 +375,9 @@ function normalizeCourseItems(course) {
     return { ...item, position: Number.isFinite(Number(item.position)) ? Number(item.position) : index, past };
   });
 }
+function pushNotificationSettings(user) {
+  return { enabled: false, breakoutComments: true, breakoutTasks: true, mentions: true, announcements: true, ...(user?.settings?.pushNotifications || {}) };
+}
 function addNotification(user, notification) {
   if (!user) return;
   user.notifications ||= [];
@@ -407,8 +410,9 @@ function requireUser(request, response, next) {
 }
 function membership(org, user) { return org && user ? org.members.find((member) => member.userId === user.id) : null; }
 function pendingInvite(org, user) { return org && user ? (org.pendingInvites || []).find((invite) => invite.userId === user.id) : null; }
-function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs, canEdit, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, ...extra }); }
-function renderPublicPage(request, response, page, extra = {}) { response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: null, ...extra }); }
+function canonicalUrl(request) { return `${process.env.PUBLIC_URL || 'https://lockedin.burchweb.com'}${request.path}`; }
+function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs, canEdit, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), ...extra }); }
+function renderPublicPage(request, response, page, extra = {}) { response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: null, canonicalUrl: canonicalUrl(request), ...extra }); }
 function getOrg(request) { return orgs.find((entry) => entry.id === request.params.id || entry.slug === request.params.slug); }
 function getCourse(org, courseId) { return org?.courses.find((course) => course.id === courseId); }
 function isSiteAdmin(user) { return Boolean(user?.isSiteAdmin); }
@@ -678,12 +682,18 @@ app.post('/beta/feedback', requireUser, async (request, response) => {
   db.prepare('INSERT INTO site_feedback (id, user_id, username, kind, message, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(id(), request.user.id, request.user.username, String(request.body.kind || 'general').slice(0, 40), message, new Date().toISOString());
   return sendMutation(request, response, { successMessage: 'Thanks. Your beta feedback is in.' }, '/beta');
 });
-app.get('/settings', requireUser, (request, response) => render(request, response, 'account-settings', { accountSettings: request.user.settings || {} }));
+app.get('/settings', requireUser, (request, response) => render(request, response, 'account-settings', { accountSettings: request.user.settings || {}, pushSettings: pushNotificationSettings(request.user) }));
 app.post('/settings', requireUser, (request, response) => {
   const name = String(request.body.name || '').trim(); const username = String(request.body.username || '').trim().toLowerCase();
   if (!name || !/^[a-z0-9_]{3,24}$/.test(username) || users.some((user) => user.id !== request.user.id && user.username === username)) return sendMutation(request, response, { error: 'Use a valid, available username and a name.' }, '/settings');
-  request.user.name = name; request.user.username = username; request.user.settings = { ...(request.user.settings || {}), timezone: request.body.timezone || '', dateFormat: ['auto', 'mdy', 'dmy', 'ymd'].includes(request.body.dateFormat) ? request.body.dateFormat : 'auto' }; persistState();
+  const currentPush = pushNotificationSettings(request.user); const pushNotifications = { enabled: request.body.pushEnabled === 'on', breakoutComments: request.body.pushBreakoutComments === 'on', breakoutTasks: request.body.pushBreakoutTasks === 'on', mentions: request.body.pushMentions === 'on', announcements: request.body.pushAnnouncements === 'on' };
+  request.user.name = name; request.user.username = username; request.user.settings = { ...(request.user.settings || {}), timezone: request.body.timezone || '', dateFormat: ['auto', 'mdy', 'dmy', 'ymd'].includes(request.body.dateFormat) ? request.body.dateFormat : 'auto', pushNotifications: request.body.pushEnabled !== undefined ? pushNotifications : currentPush }; persistState();
   return sendMutation(request, response, { successMessage: 'Account settings saved.' }, '/settings');
+});
+app.post('/settings/push', requireUser, (request, response) => {
+  request.user.settings = { ...(request.user.settings || {}), pushNotifications: { enabled: request.body.pushEnabled === 'on', breakoutComments: request.body.pushBreakoutComments === 'on', breakoutTasks: request.body.pushBreakoutTasks === 'on', mentions: request.body.pushMentions === 'on', announcements: request.body.pushAnnouncements === 'on' } };
+  persistState();
+  return sendMutation(request, response, { successMessage: 'Push notification preferences saved.' }, '/settings#push-notifications');
 });
 app.post('/settings/password', requireUser, (request, response) => {
   if (!passwordMatches(request.body.currentPassword || '', request.user.passwordHash) || String(request.body.newPassword || '').length < 8) return sendMutation(request, response, { error: 'Enter your current password and a new password with at least 8 characters.' }, '/settings');
@@ -995,7 +1005,7 @@ app.post('/org/:id/breakout/:groupId/ping/:userId', requireUser, (request, respo
 app.post('/org/:id/breakout/:groupId/tasks/:taskId/delegate', requireUser, (request, response) => {
   const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId); const task = group?.tasks?.find((entry) => entry.id === request.params.taskId); const targetId = String(request.body.userId || '');
   if (!group || !task || !canManageBreakoutGroup(org, group, request.user) || !group.members.includes(targetId)) return sendMutation(request, response, { error: 'Only group admins can delegate tasks to group members.' }, `/org/${request.params.id}`);
-  task.claimedBy = targetId; persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
+  task.claimedBy = targetId; const target = users.find((user) => user.id === targetId); if (target && target.id !== request.user.id) addNotification(target, { type: 'breakout-task', title: `A task was assigned to you in ${group.name}`, message: task.title, href: `/org/${org.id}/breakout/${group.id}`, actionLabel: 'Open group' }); persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
   return sendMutation(request, response, { task }, `/org/${org.id}/breakout/${group.id}`);
 });
 

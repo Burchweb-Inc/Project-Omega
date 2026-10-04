@@ -281,6 +281,13 @@ async function submitLiveForm(form, animatedEntry = null) {
     if (payload.groupUrl) { window.location.assign(payload.groupUrl); return; }
     if (payload.deletedAccount) { window.location.assign('/'); return; }
     if (payload.successMessage) showLiveSuccess(payload.successMessage);
+    if (actionUrl === '/settings/push') {
+      document.body.dataset.pushEnabled = formData.get('pushEnabled') === 'on' ? 'true' : 'false';
+      document.body.dataset.pushBreakoutComments = formData.get('pushBreakoutComments') === 'on' ? 'true' : 'false';
+      document.body.dataset.pushBreakoutTasks = formData.get('pushBreakoutTasks') === 'on' ? 'true' : 'false';
+      document.body.dataset.pushMentions = formData.get('pushMentions') === 'on' ? 'true' : 'false';
+      document.body.dataset.pushAnnouncements = formData.get('pushAnnouncements') === 'on' ? 'true' : 'false';
+    }
     form.querySelectorAll('input:not([type="hidden"]), textarea').forEach((field) => { field.value = ''; });
     form.closest('details')?.removeAttribute('open');
     if (payload.invitationAction || payload.leftGroup || payload.deletedGroup) { window.location.reload(); return; }
@@ -394,6 +401,46 @@ function syncTodoSummary() {
 function notificationMarkup(notification) {
   const action = notification.href && notification.actionLabel ? `<a class="text-button" href="${escapeHtml(notification.href)}">${escapeHtml(notification.actionLabel)}</a>` : '';
   return `<div class="notification-item unread" data-notification-id="${escapeHtml(notification.id)}"><div><strong>${escapeHtml(notification.title)}</strong><p>${escapeHtml(notification.message)}</p>${action}<small>${escapeHtml(new Date(notification.createdAt).toLocaleString())}</small></div><div class="notification-actions"><form data-live-form action="/notifications/${escapeHtml(notification.id)}/read" method="post"><button class="icon-button" type="submit" aria-label="Mark notification read"><i data-lucide="check"></i></button></form><form data-live-form action="/notifications/${escapeHtml(notification.id)}/delete" method="post"><button class="icon-button notification-delete-button" type="submit" aria-label="Delete notification"><i data-lucide="trash-2"></i></button></form></div></div>`;
+}
+function pushCategoryEnabled(notification) {
+  const settings = document.body?.dataset || {};
+  if (settings.pushEnabled !== 'true') return false;
+  if (notification.type === 'breakout-comment') return settings.pushBreakoutComments !== 'false';
+  if (notification.type === 'breakout-task') return settings.pushBreakoutTasks !== 'false';
+  if (notification.type === 'breakout-ping') return settings.pushMentions !== 'false';
+  if (notification.type === 'announcement') return settings.pushAnnouncements !== 'false';
+  return false;
+}
+async function showBrowserNotification(notification) {
+  if (!pushCategoryEnabled(notification) || !('Notification' in window) || Notification.permission !== 'granted') return;
+  const options = { body: notification.message, icon: '/media/logo.png', tag: notification.type };
+  if (document.visibilityState === 'visible') new Notification(notification.title, options);
+  else {
+    const registration = await navigator.serviceWorker?.ready;
+    if (registration?.active) registration.active.postMessage({ type: 'show-notification', ...options, title: notification.title, href: notification.href });
+  }
+}
+async function testPushNotifications(button) {
+  const status = document.querySelector('[data-push-status]');
+  if (!('Notification' in window)) { if (status) status.textContent = 'This browser does not support notifications.'; return; }
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') { if (status) status.textContent = 'Notifications are blocked. Allow them in your browser settings, then try again.'; return; }
+    new Notification('LockIn notifications are on', { body: 'This is a test alert. You are ready for breakout updates.', icon: '/media/logo.png', tag: 'lockin-test' });
+    button.textContent = 'Test sent'; if (status) status.textContent = 'Test notification sent.';
+    window.setTimeout(() => { button.innerHTML = '<i data-lucide="bell-ring"></i> Test'; lucide.createIcons(); }, 2200);
+  } catch (error) {
+    if (status) status.textContent = `Could not send a notification: ${error.message || 'check browser permissions'}.`;
+  }
+}
+function bindPushNotifications() {
+  document.querySelector('[data-push-test]')?.addEventListener('click', (event) => testPushNotifications(event.currentTarget));
+  const tip = document.querySelector('[data-push-tip]');
+  const course = courseRoot();
+  if (tip && document.body.dataset.pushEnabled !== 'true' && window.Notification?.permission !== 'granted') {
+    const key = `lockin-push-tip-${course?.dataset.courseId || 'course'}`;
+    if (!sessionStorage.getItem(key)) { sessionStorage.setItem(key, 'true'); window.setTimeout(() => showLiveSuccess('Tip: Push Notifications can alert you about breakout activity. Choose what you hear in Settings.'), 700); }
+  }
 }
 function bindNotificationGestures(scope = document) {
   scope.querySelectorAll('.notification-item').forEach((item) => {
@@ -517,6 +564,7 @@ function connectLiveNotifications() {
     const popover = document.querySelector('.notification-popover');
     if (popover && notification.id && !popover.querySelector(`[data-notification-id="${CSS.escape(notification.id)}"]`)) { popover.querySelector('.notification-empty')?.remove(); popover.insertAdjacentHTML('beforeend', notificationMarkup(notification)); bindLiveForms(popover.lastElementChild); bindNotificationGestures(popover.lastElementChild); lucide.createIcons(); }
     showLiveSuccess(notification.actionLabel ? `${notification.title} · ${notification.actionLabel}` : notification.title);
+    showBrowserNotification(notification).catch(() => {});
     const summary = document.querySelector('.notification-menu>summary');
     if (summary) {
       const count = summary.querySelector('.notification-count');
@@ -652,7 +700,7 @@ function bindInteractions() {
     });
   });
   const hash = window.location.hash.slice(1); if (courseRoot() && ['feed', 'board', 'resources'].includes(hash)) setCourseTab(hash, false);
-  syncTodoSummary();
+  syncTodoSummary(); bindPushNotifications();
   lucide.createIcons(); bindTodoControls(); bindDashboardInteractions(); bindCourseFeedControls(courseRoot()); bindCourseReorder(courseRoot()); bindTutorial(); connectLiveCourse(); connectLiveBreakout(); connectLiveTodo(); connectLiveNotifications(); connectLiveDashboard();
 }
 

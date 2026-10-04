@@ -92,7 +92,7 @@ function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse,
     if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/breakout/${group.id}`);
     group.comments ||= [];
     const comment = { id: id(), author: request.user.name, userId: request.user.id, text, parentId, createdAt: new Date().toISOString(), history: [] };
-    group.comments.push(comment); persistState(); emitGroup(org, 'breakout:comment-created', { groupId: group.id, comment });
+    group.comments.push(comment); for (const memberId of group.members) if (memberId !== request.user.id) addNotification?.(users.find((user) => user.id === memberId), { type: 'breakout-comment', title: `${request.user.name} commented in ${group.name}`, message: text, href: `/org/${org.id}/breakout/${group.id}`, actionLabel: 'Open group' }); persistState(); emitGroup(org, 'breakout:comment-created', { groupId: group.id, comment });
     return sendMutation(request, response, { comment }, `/org/${org.id}/breakout/${group.id}`);
   });
 
