@@ -26,7 +26,7 @@
 <a href="#board" data-course-tab="board">Project board</a>
 <a href="#resources" data-course-tab="resources">Resources</a>
 </div>
-<% if (!user.settings?.pushNotifications?.enabled) { %><aside class="settings-tip" data-push-tip><i data-lucide="bell-ring"></i><div><strong>A useful little alert</strong><p>Turn on Push Notifications to hear about breakout comments and tasks without keeping this tab in front.</p><a class="text-button" href="/settings#push-notifications">Choose what you hear</a></div></aside><% } %>
+<% if (!user.settings?.pushNotifications?.enabled) { %><aside class="settings-tip" data-push-tip><i data-lucide="bell-ring"></i><div><strong>A useful little alert</strong><p>Turn on Push Notifications to hear about breakout comments and tasks without keeping this tab in front.</p><a class="text-button" href="/settings#push-notifications">Choose what you hear</a></div><button class="icon-button settings-tip-dismiss" type="button" data-push-tip-dismiss aria-label="Dismiss push notification tip" title="Dismiss"><i data-lucide="x"></i></button></aside><% } %>
 <div class="course-layout">
 <section id="feed" class="feed-panel course-view active" data-course-view="feed">
 <div class="panel-heading">

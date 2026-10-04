@@ -437,6 +437,10 @@ function bindPushNotifications() {
   document.querySelector('[data-push-test]')?.addEventListener('click', (event) => testPushNotifications(event.currentTarget));
   const tip = document.querySelector('[data-push-tip]');
   const course = courseRoot();
+  const dismissalKey = `lockin-push-tip-dismissed-${course?.dataset.userId || 'visitor'}`;
+  if (tip && localStorage.getItem(dismissalKey) === 'true') tip.remove();
+  tip?.querySelector('[data-push-tip-dismiss]')?.addEventListener('click', () => { localStorage.setItem(dismissalKey, 'true'); tip.remove(); });
+  if (!document.querySelector('[data-push-tip]')) return;
   if (tip && document.body.dataset.pushEnabled !== 'true' && window.Notification?.permission !== 'granted') {
     const key = `lockin-push-tip-${course?.dataset.courseId || 'course'}`;
     if (!sessionStorage.getItem(key)) { sessionStorage.setItem(key, 'true'); window.setTimeout(() => showLiveSuccess('Tip: Push Notifications can alert you about breakout activity. Choose what you hear in Settings.'), 700); }
