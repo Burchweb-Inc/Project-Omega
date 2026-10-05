@@ -334,6 +334,9 @@ function groupPresencePayload(org, groupId) {
 }
 function emitGroupPresence(org, groupId) { if (groupId) io.to(groupRoom(org.id)).emit('breakout:presence', { groupId, members: groupPresencePayload(org, groupId) }); }
 function emitOrgPresence(org) { (org.groups || []).forEach((group) => emitGroupPresence(org, group.id)); }
+function isUserOnBreakoutPage(orgId, groupId, userId) {
+  return [...breakoutPresence.values()].some((record) => record.orgId === orgId && record.groupId === groupId && record.userId === userId && Date.now() - record.lastSeen <= 60000);
+}
 function emitCourseAdmins(org, course, event, payload) { io.to(courseAdminRoom(org.id, course.id)).emit(event, payload); }
 function dueImportance(due) {
   if (!due || due === 'No date') return 'Unscheduled';
@@ -1006,6 +1009,8 @@ app.post('/org/:id/breakout/:groupId/tasks/:taskId/delegate', requireUser, (requ
   const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId); const task = group?.tasks?.find((entry) => entry.id === request.params.taskId); const targetId = String(request.body.userId || '');
   if (!group || !task || !canManageBreakoutGroup(org, group, request.user) || !group.members.includes(targetId)) return sendMutation(request, response, { error: 'Only group admins can delegate tasks to group members.' }, `/org/${request.params.id}`);
   task.claimedBy = targetId; const target = users.find((user) => user.id === targetId); if (target && target.id !== request.user.id) addNotification(target, { type: 'breakout-task', title: `A task was assigned to you in ${group.name}`, message: task.title, href: `/org/${org.id}/breakout/${group.id}`, actionLabel: 'Open group' }); persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
+    task.claimedBy = targetId; const target = users.find((user) => user.id === targetId); if (target && target.id !== request.user.id && !isUserOnBreakoutPage(org.id, group.id, target.id)) addNotification(target, { type: 'breakout-task', title: `A task was assigned to you in ${group.name}`, message: task.title, href: `/org/${org.id}/breakout/${group.id}`, actionLabel: 'Open group' }); persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
+  registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse, emitGroup, emitOrg, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification, isUserOnBreakoutPage, appendRemovedTextForReview, appendAppealPhrase });
   return sendMutation(request, response, { task }, `/org/${org.id}/breakout/${group.id}`);
 });
 

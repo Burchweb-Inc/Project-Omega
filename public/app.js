@@ -85,6 +85,8 @@ function breakoutCommentMarkup(comment, root) {
 
 function appendBreakoutComment(comment, root) {
   if (!comment || !root) return;
+  const list = root.querySelector('[data-breakout-comment-list]');
+  const wasAtBottom = list ? list.scrollHeight - list.scrollTop - list.clientHeight < 24 : true;
   const existing = root.querySelector(`[data-comment-id="${CSS.escape(comment.id || '')}"]`); if (existing) return;
   if (comment.parentId) {
     const thread = root.querySelector(`[data-comment-id="${CSS.escape(comment.parentId)}"]`); const replies = thread?.querySelector('.comment-replies');
@@ -93,6 +95,12 @@ function appendBreakoutComment(comment, root) {
     root.querySelector('[data-breakout-comment-list]')?.insertAdjacentHTML('beforeend', breakoutCommentMarkup(comment, root));
   }
   bindLiveForms(root); lucide.createIcons();
+  if (wasAtBottom) list?.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
+}
+
+function scrollBreakoutComments(root) {
+  const list = root?.querySelector('[data-breakout-comment-list]');
+  if (list) list.scrollTop = list.scrollHeight;
 }
 
 function renderBreakoutPresence(root, members) {
@@ -196,6 +204,8 @@ function connectLiveBreakout() {
   liveState.socket.on('breakout:comment-deleted', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) finishCommentRemoval(root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)); });
   liveState.socket.on('breakout:comment-reported', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) markCommentReported(root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)); });
   enhanceBreakoutTasks(root);
+  scrollBreakoutComments(root);
+  if (!form.closest('.notification-menu')) form.closest('details')?.removeAttribute('open');
 }
 
 function todoList() { return document.querySelector('[data-live-todo-list]'); }
