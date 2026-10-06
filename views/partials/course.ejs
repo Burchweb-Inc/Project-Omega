@@ -70,7 +70,7 @@
 <span class="feed-source">
 <%= item.type %> · <%= formatCourseDate(item.due, courseTimezone, courseDateLocale) %>
 </span>
-<h3>
+<h3 data-item-title>
 <%- renderLinkedText(item.title, item.links) %>
 </h3>
 <% if (item.details) { %><p class="task-details"><%- renderLinkedText(item.details, item.links) %></p><% } %>
@@ -115,12 +115,12 @@
 <% if (item.createdBy === user.id || member?.role === 'admin' || member?.role === 'moderator' || (selectedOrg.groups || []).some(group => group.itemId === item.id && (group.createdBy === user.id || group.roles?.[user.id] === 'Organizer'))) { %>
 <details class="item-edit-details">
 <summary class="text-button"><i data-lucide="pencil"></i> Edit</summary>
-<form class="inline-tool-form" data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/update" method="post">
-<input name="title" value="<%= item.title %>" required>
-<textarea name="details" rows="3" placeholder="Details"><%= item.details || '' %></textarea>
+<form class="inline-tool-form item-edit-form" data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/update" method="post">
+<label class="item-title-field">Title<input name="title" value="<%= item.title %>" required></label>
+<label>Details<textarea name="details" rows="5" placeholder="Details"><%= item.details || '' %></textarea></label>
 <div class="link-draft-previews" data-link-draft-previews hidden></div>
-<select name="type"><option <%= item.type === 'Homework' ? 'selected' : '' %>>Homework</option><option <%= item.type === 'Upcoming test' ? 'selected' : '' %>>Upcoming test</option><option <%= item.type === 'Event' ? 'selected' : '' %>>Event</option><option <%= item.type === 'Project' ? 'selected' : '' %>>Project</option></select>
-<input name="due" type="date" value="<%= item.due !== 'No date' ? item.due : '' %>">
+<label>Type<select name="type"><option <%= item.type === 'Homework' ? 'selected' : '' %>>Homework</option><option <%= item.type === 'Upcoming test' ? 'selected' : '' %>>Upcoming test</option><option <%= item.type === 'Event' ? 'selected' : '' %>>Event</option><option <%= item.type === 'Project' ? 'selected' : '' %>>Project</option></select></label>
+<label>Date<input name="due" type="date" value="<%= item.due !== 'No date' ? item.due : '' %>"></label>
 <button class="button secondary" type="submit">Save</button>
 </form>
 <form data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/delete" method="post"><button class="text-button" type="submit"><i data-lucide="trash-2"></i> Delete</button></form>
