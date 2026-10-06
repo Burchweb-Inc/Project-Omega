@@ -403,6 +403,139 @@
     opacity: .5
 }
 
+.task-details {
+    margin: 2px 0 3px;
+    color: var(--ink-soft);
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap
+}
+
+.task-links {
+    display: grid;
+    gap: 7px;
+    margin: 5px 0 4px
+}
+
+.task-link-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    width: max-content;
+    color: var(--blue);
+    font-size: 10px;
+    font-weight: 700
+}
+
+.task-link-count svg {
+    width: 12px
+}
+
+.link-preview {
+    position: relative;
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    color: var(--blue);
+    text-decoration: underline;
+    text-underline-offset: 2px
+}
+
+.link-visible-url {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px
+}
+
+.link-hover-card {
+    position: absolute;
+    z-index: 12;
+    left: 0;
+    top: calc(100% + 8px);
+    display: grid;
+    grid-template-columns: 120px minmax(180px, 1fr);
+    width: min(420px, calc(100vw - 44px));
+    min-height: 92px;
+    overflow: hidden;
+    border: 1px solid #cbdde4;
+    border-radius: 9px;
+    background: white;
+    box-shadow: 0 16px 34px rgba(29, 48, 61, .2);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-5px) scale(.98);
+    transform-origin: top left;
+    transition: opacity .18s ease, transform .18s ease
+}
+
+.link-preview:hover .link-hover-card,
+.link-preview:focus-visible .link-hover-card {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1)
+}
+
+.inline-link-preview {
+    position: relative;
+    display: inline-block;
+    color: var(--blue);
+    text-decoration: underline;
+    text-underline-offset: 2px
+}
+
+.inline-link-preview .link-hover-card {
+    text-align: left;
+    text-decoration: none
+}
+
+.inline-link-preview:hover .link-hover-card,
+.inline-link-preview:focus-visible .link-hover-card {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1)
+}
+
+.link-hover-card img,
+.link-snapshot-placeholder {
+    width: 120px;
+    height: 100%;
+    min-height: 92px;
+    object-fit: cover;
+    background: linear-gradient(135deg, #dcecf0, #eef5f6)
+}
+
+.link-hover-copy {
+    display: grid;
+    gap: 2px;
+    align-content: center;
+    min-width: 0;
+    padding: 7px 9px
+}
+
+.link-hover-copy strong,
+.link-hover-copy small,
+.link-hover-copy em {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.link-hover-copy strong { color: var(--ink); font-size: 11px }
+.link-hover-copy small { color: var(--ink-soft); font-size: 10px }
+.link-hover-copy em { color: var(--muted); font-size: 9px; font-style: normal }
+.task-edit-details { position: relative; flex: none }
+.task-edit-details > summary { list-style: none; cursor: pointer }
+.task-edit-details > summary::-webkit-details-marker { display: none }
+.task-edit-form { position: absolute; z-index: 8; right: 0; top: calc(100% + 7px); display: grid; gap: 10px; width: min(360px, calc(100vw - 42px)); padding: 15px; background: white; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 14px 32px rgba(29, 48, 61, .18) }
+.task-edit-form label { display: grid; gap: 4px; color: var(--muted); font-size: 10px }
+.task-edit-form input,
+.task-edit-form textarea,
+.task-edit-form select { width: 100%; min-width: 0; padding: 8px 9px; border: 1px solid var(--line); border-radius: 5px; font: inherit; font-size: 11px }
+.task-edit-form textarea { resize: vertical }
+
 .calendar-actions {
     display: flex;
     align-items: center;

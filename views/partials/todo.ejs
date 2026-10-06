@@ -21,11 +21,11 @@
                             data-lucide="check"></i></button></form>
                 <div class="private-task-copy">
                     <h3>
-                        <%= task.title %>
-                    </h3><span><i data-lucide="link-2"></i>
+                        <%- renderLinkedText(task.title, task.links) %>
+                    </h3><% if (task.details) { %><p class="task-details"><%- renderLinkedText(task.details, task.links) %></p><% } %><span><i data-lucide="link-2"></i>
                         <%= task.source %>
                     </span><small>Due <%= task.due %></small>
-                </div><span class="priority-flag"><i data-lucide="flag"></i>
+                </div><details class="task-edit-details"><summary class="icon-button" aria-label="Edit task"><i data-lucide="pencil"></i></summary><form class="task-edit-form link-composer" action="/tasks/<%= task.id %>/update" method="post" data-live-form><label>Title<input name="title" value="<%= task.title %>" required></label><label>Details<textarea name="details" rows="3"><%= task.details || '' %></textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Due date<input name="due" type="date" value="<%= task.due !== 'No date' ? task.due : '' %>"></label><label>Priority<select name="priority"><% ['Low', 'Normal', 'Medium', 'High'].forEach(priority => { %><option <%= task.priority === priority ? 'selected' : '' %>><%= priority %></option><% }) %></select></label><button class="button secondary" type="submit">Save task</button></form></details><span class="priority-flag"><i data-lucide="flag"></i>
                     <%= task.priority || 'Normal' %>
                 </span><form data-live-form action="/tasks/<%= task.id %>/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete task"><i data-lucide="trash-2"></i></button></form><button class="icon-button drag-handle" aria-label="Move task" type="button"><i
                     data-lucide="grip-vertical"></i></button>
@@ -43,8 +43,8 @@
                     data-lucide="x"></i></button>
             <p class="eyebrow">PERSONAL TASK</p>
             <h2>Keep one more thing visible.</h2>
-            <form class="page-form" action="/tasks" method="post" data-live-form data-live-todo-form><label>Task<input
-                        name="title" placeholder="Review chapter notes" required></label><label>Due date<input
+            <form class="page-form link-composer" action="/tasks" method="post" data-live-form data-live-todo-form data-link-composer><label>Task<input
+                        name="title" placeholder="Review chapter notes" required></label><label>Details<textarea name="details" rows="4" placeholder="What needs to be done?"></textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Due date<input
                         name="due" type="date"></label><label>Priority<select name="priority">
                         <option>Normal</option>
                         <option>Medium</option>

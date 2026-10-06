@@ -370,7 +370,35 @@ async function userDateLocation(user, request) {
   if (settings.dateFormat && settings.dateFormat !== 'auto') location.locale = settings.dateFormat === 'mdy' ? 'en-US' : settings.dateFormat === 'ymd' ? 'sv-SE' : 'en-GB';
   return location;
 }
-function normalizeTask(task, index = 0) { return { ...task, position: Number.isFinite(Number(task.position)) ? Number(task.position) : index, linked: task.sourceId ? task.linked !== false : false, importance: dueImportance(task.due) }; }
+function normalizeLink(link) { const url = String(typeof link === 'string' ? link : link?.url || ''); let domain = url; try { domain = new URL(url).hostname; } catch (error) {} const fallbackImage = domain && domain !== url ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` : ''; return typeof link === 'string' ? { url, title: domain, description: '', image: fallbackImage, domain } : { url, title: link.title || domain, description: link.description || '', image: link.image || fallbackImage, domain: link.domain || domain }; }
+function normalizeLinks(links) { return (Array.isArray(links) ? links : []).filter((link) => link?.url).map(normalizeLink); }
+function submittedLinkUrls(value) { return [...new Set(String(value || '').match(/https?:\/\/[^\s<>"']+/gi) || [])].map((entry) => entry.replace(/[),.;!?]+$/, '')).filter((entry) => { try { const url = new URL(entry); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password; } catch (error) { return false; } }).slice(0, 5); }
+async function fetchLinkPreviews(value) {
+  const links = submittedLinkUrls(value);
+  return Promise.all(links.map(async (link) => {
+    const fallback = normalizeLink(link);
+    try {
+      const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 5000);
+      const result = await fetch(link, { signal: controller.signal, redirect: 'follow', headers: { Accept: 'text/html,application/xhtml+xml' } });
+      const html = (await result.text()).slice(0, 500000);
+      const readMeta = (...names) => {
+        for (const name of names) {
+          const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const match = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]*content=["']([^"']*)["']`, 'i')) || html.match(new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${escaped}["']`, 'i'));
+          if (match?.[1]) return match[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
+        }
+        return '';
+      };
+      const resolveUrl = (candidate) => { try { return candidate ? new URL(candidate, result.url || link).href : ''; } catch (error) { return ''; } };
+      const title = readMeta('og:title', 'twitter:title') || (html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] || '').trim() || fallback.title;
+      const description = readMeta('og:description', 'twitter:description', 'description');
+      const image = resolveUrl(readMeta('og:image', 'og:image:url', 'twitter:image', 'twitter:image:src', 'image_src')) || `https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(link).hostname)}&sz=128`;
+      clearTimeout(timeout);
+      return { url: link, title, description, image, domain: new URL(link).hostname, status: result.status };
+    } catch (error) { return fallback; }
+  }));
+}
+function normalizeTask(task, index = 0) { return { ...task, details: task.details || '', links: normalizeLinks(task.links), position: Number.isFinite(Number(task.position)) ? Number(task.position) : index, linked: task.sourceId ? task.linked !== false : false, importance: dueImportance(task.due) }; }
 function normalizeUserTasks(user) { if (!user) return; user.tasks = (user.tasks || []).map(normalizeTask); }
 function normalizeCourseItems(course) {
   course.items = (course.items || []).map((item, index) => {
@@ -414,7 +442,19 @@ function requireUser(request, response, next) {
 function membership(org, user) { return org && user ? org.members.find((member) => member.userId === user.id) : null; }
 function pendingInvite(org, user) { return org && user ? (org.pendingInvites || []).find((invite) => invite.userId === user.id) : null; }
 function canonicalUrl(request) { return `${process.env.PUBLIC_URL || 'https://lockedin.burchweb.com'}${request.path}`; }
-function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs, canEdit, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), ...extra }); }
+function escapeHtmlServer(value) { return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character])); }
+function trimmedLinkLabel(url) { try { const parsed = new URL(url); return `${parsed.hostname.replace(/^www\./i, '')}${parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/$/, '')}`; } catch (error) { return String(url).replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[?#]/)[0].replace(/\/$/, ''); } }
+function renderLinkedText(text, links = []) {
+  const value = String(text || ''); const pattern = /https?:\/\/[^\s<>'"]+/gi; let output = ''; let cursor = 0;
+  for (const match of value.matchAll(pattern)) {
+    const rawUrl = match[0]; const url = rawUrl.replace(/[),.;!?]+$/, ''); const link = links.find((entry) => entry.url === url) || { url, title: trimmedLinkLabel(url), description: '', image: '' };
+    output += escapeHtmlServer(value.slice(cursor, match.index));
+    output += `<a class="inline-link-preview" href="${escapeHtmlServer(url)}" target="_blank" rel="noopener noreferrer"><span>${escapeHtmlServer(trimmedLinkLabel(url))}</span><span class="link-hover-card">${link.image ? `<img src="${escapeHtmlServer(link.image)}" alt="">` : '<span class="link-snapshot-placeholder"></span>'}<span class="link-hover-copy"><strong>${escapeHtmlServer(link.title || trimmedLinkLabel(url))}</strong><small>${escapeHtmlServer(link.description || '')}</small><em>${escapeHtmlServer(url)}</em></span></span></a>`;
+    cursor = match.index + rawUrl.length;
+  }
+  return output + escapeHtmlServer(value.slice(cursor));
+}
+function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs, canEdit, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), renderLinkedText, ...extra }); }
 function renderPublicPage(request, response, page, extra = {}) { response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: null, canonicalUrl: canonicalUrl(request), ...extra }); }
 function getOrg(request) { return orgs.find((entry) => entry.id === request.params.id || entry.slug === request.params.slug); }
 function getCourse(org, courseId) { return org?.courses.find((course) => course.id === courseId); }
@@ -817,7 +857,7 @@ app.post('/org/:id/courses/:courseId/items', requireUser, async (request, respon
   if (!course || !canEdit(membership(org, request.user))) return sendMutation(request, response, { error: 'You cannot edit this course.' }, `/org/${request.params.id}/course/${request.params.courseId}`);
   const policyError = await contentPolicyError({ type: 'course-item', text: request.body.title });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${request.params.id}/course/${request.params.courseId}`);
-  const item = { id: id(), title: String(request.body.title || '').trim(), type: request.body.type, due: request.body.due || 'No date', done: request.body.type !== 'Event' ? false : null, comments: [], verifiedBy: [], downvotedBy: [], createdBy: request.user.id, position: course.items.length, past: dueImportance(request.body.due || 'No date') === 'Overdue' };
+  const item = { id: id(), title: String(request.body.title || '').trim(), details: String(request.body.details || '').trim(), links: await fetchLinkPreviews(`${request.body.title || ''}\n${request.body.details || ''}`), type: request.body.type, due: request.body.due || 'No date', done: request.body.type !== 'Event' ? false : null, comments: [], verifiedBy: [], downvotedBy: [], createdBy: request.user.id, position: course.items.length, past: dueImportance(request.body.due || 'No date') === 'Overdue' };
   if (!item.title) return sendMutation(request, response, { error: 'A title is required.' }, `/org/${org.id}/course/${course.id}`);
   course.items.push(item); persistState(); emitCourse(org, course, 'course:item-created', { item });
   return sendMutation(request, response, { item }, `/org/${org.id}/course/${course.id}`);
@@ -890,8 +930,8 @@ app.post('/org/:id/items/:itemId/update', requireUser, async (request, response)
   const title = String(request.body.title || '').trim(); const course = org.courses.find((entry) => entry.items.includes(item)); if (!title) return sendMutation(request, response, { error: 'A title is required.' }, `/org/${org.id}`);
   const nextType = request.body.type || item.type; const policyError = nextType === 'Event' ? null : await contentPolicyError({ type: 'course-item', text: title });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/course/${course.id}`);
-  item.title = title; item.type = nextType; item.due = request.body.due || 'No date'; item.past = typeof item.pastOverride === 'boolean' ? item.pastOverride : dueImportance(item.due) === 'Overdue';
-  users.forEach((user) => { const task = (user.tasks || []).find((entry) => entry.sourceId === item.id && entry.linked !== false); if (task) { task.title = item.title; task.due = item.due; task.source = `${course.name} · ${org.name}`; task.importance = dueImportance(task.due); emitTodo(user.id, 'todo:task-updated', { task: normalizeTask(task) }); } });
+  item.title = title; item.details = String(request.body.details || '').trim(); item.links = await fetchLinkPreviews(`${title}\n${item.details}`); item.type = nextType; item.due = request.body.due || 'No date'; item.past = typeof item.pastOverride === 'boolean' ? item.pastOverride : dueImportance(item.due) === 'Overdue';
+  users.forEach((user) => { const task = (user.tasks || []).find((entry) => entry.sourceId === item.id && entry.linked !== false); if (task) { task.title = item.title; task.details = item.details; task.links = item.links; task.due = item.due; task.source = `${course.name} · ${org.name}`; task.importance = dueImportance(task.due); emitTodo(user.id, 'todo:task-updated', { task: normalizeTask(task) }); } });
   persistState(); emitCourse(org, course, 'item:updated', { item });
   return sendMutation(request, response, { item }, `/org/${org.id}/course/${course.id}`);
 });
@@ -909,7 +949,7 @@ app.post('/org/:id/items/:itemId/delete', requireUser, (request, response) => {
 app.post('/org/:id/items/:itemId/todo', requireUser, (request, response) => {
   const org = getOrg(request); const course = canAccess(org, request.user) ? org.courses.find((entry) => entry.items.some((entryItem) => entryItem.id === request.params.itemId)) : null; const item = course?.items.find((entry) => entry.id === request.params.itemId);
   let task;
-  if (org && course && item) { request.user.tasks ||= []; task = request.user.tasks.find((entry) => entry.sourceId === item.id); if (!task) { task = normalizeTask({ id: id(), title: item.title, sourceId: item.id, source: `${course.name} · ${org.name}`, due: item.due, priority: 'Normal', done: false, position: request.user.tasks.length }); request.user.tasks.push(task); persistState(); emitCourse(org, course, 'task:added', { userId: request.user.id, task }); emitTodo(request.user.id, 'todo:task-added', { task }); } }
+  if (org && course && item) { request.user.tasks ||= []; task = request.user.tasks.find((entry) => entry.sourceId === item.id); if (!task) { task = normalizeTask({ id: id(), title: item.title, details: item.details, links: item.links, sourceId: item.id, source: `${course.name} · ${org.name}`, due: item.due, priority: 'Normal', done: false, position: request.user.tasks.length }); request.user.tasks.push(task); persistState(); emitCourse(org, course, 'task:added', { userId: request.user.id, task }); emitTodo(request.user.id, 'todo:task-added', { task }); } }
   return sendMutation(request, response, { task: task || null, todoPendingCount: (request.user.tasks || []).filter((entry) => !entry.done).length }, `/org/${org?.id || ''}/course/${course?.id || ''}`);
 });
 
@@ -922,9 +962,21 @@ app.post('/tasks', requireUser, async (request, response) => {
   if (request.body.title?.trim()) {
     const policyError = await contentPolicyError({ type: 'text', text: request.body.title });
     if (policyError) return sendMutation(request, response, { error: policyError }, '/todo');
-    request.user.tasks ||= []; task = normalizeTask({ id: id(), title: request.body.title.trim(), sourceId: null, source: 'Personal study goal', due: request.body.due || 'No date', priority: request.body.priority || 'Normal', done: false, position: request.user.tasks.length }); request.user.tasks.push(task); persistState(); emitTodo(request.user.id, 'todo:task-added', { task });
+    request.user.tasks ||= []; task = normalizeTask({ id: id(), title: request.body.title.trim(), details: String(request.body.details || '').trim(), links: await fetchLinkPreviews(`${request.body.title || ''}\n${request.body.details || ''}`), sourceId: null, source: 'Personal study goal', due: request.body.due || 'No date', priority: request.body.priority || 'Normal', done: false, position: request.user.tasks.length }); request.user.tasks.push(task); persistState(); emitTodo(request.user.id, 'todo:task-added', { task });
   }
   return sendMutation(request, response, { task, todoPendingCount: (request.user.tasks || []).filter((entry) => !entry.done).length }, '/todo');
+});
+
+app.post('/tasks/:taskId/update', requireUser, async (request, response) => {
+  const task = (request.user.tasks || []).find((entry) => entry.id === request.params.taskId);
+  if (!task) return sendMutation(request, response, { error: 'Task not found.' }, '/todo');
+  const title = String(request.body.title || '').trim();
+  if (!title) return sendMutation(request, response, { error: 'A title is required.' }, '/todo');
+  const policyError = await contentPolicyError({ type: 'text', text: title });
+  if (policyError) return sendMutation(request, response, { error: policyError }, '/todo');
+  task.title = title; task.details = String(request.body.details || '').trim(); task.links = await fetchLinkPreviews(`${title}\n${task.details}`); task.due = request.body.due || 'No date'; task.priority = ['Low', 'Normal', 'Medium', 'High'].includes(request.body.priority) ? request.body.priority : 'Normal';
+  persistState(); emitTodo(request.user.id, 'todo:task-updated', { task: normalizeTask(task) });
+  return sendMutation(request, response, { task: normalizeTask(task) }, '/todo');
 });
 
 app.post('/tasks/:taskId/priority', requireUser, (request, response) => {
@@ -1008,9 +1060,7 @@ app.post('/org/:id/breakout/:groupId/ping/:userId', requireUser, (request, respo
 app.post('/org/:id/breakout/:groupId/tasks/:taskId/delegate', requireUser, (request, response) => {
   const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId); const task = group?.tasks?.find((entry) => entry.id === request.params.taskId); const targetId = String(request.body.userId || '');
   if (!group || !task || !canManageBreakoutGroup(org, group, request.user) || !group.members.includes(targetId)) return sendMutation(request, response, { error: 'Only group admins can delegate tasks to group members.' }, `/org/${request.params.id}`);
-  task.claimedBy = targetId; const target = users.find((user) => user.id === targetId); if (target && target.id !== request.user.id) addNotification(target, { type: 'breakout-task', title: `A task was assigned to you in ${group.name}`, message: task.title, href: `/org/${org.id}/breakout/${group.id}`, actionLabel: 'Open group' }); persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
-    task.claimedBy = targetId; const target = users.find((user) => user.id === targetId); if (target && target.id !== request.user.id && !isUserOnBreakoutPage(org.id, group.id, target.id)) addNotification(target, { type: 'breakout-task', title: `A task was assigned to you in ${group.name}`, message: task.title, href: `/org/${org.id}/breakout/${group.id}`, actionLabel: 'Open group' }); persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
-  registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse, emitGroup, emitOrg, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification, isUserOnBreakoutPage, appendRemovedTextForReview, appendAppealPhrase });
+  task.claimedBy = targetId; const target = users.find((user) => user.id === targetId); if (target && target.id !== request.user.id && !isUserOnBreakoutPage(org.id, group.id, target.id)) addNotification(target, { type: 'breakout-task', title: `A task was assigned to you in ${group.name}`, message: task.title, href: `/org/${org.id}/breakout/${group.id}`, actionLabel: 'Open group' }); persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
   return sendMutation(request, response, { task }, `/org/${org.id}/breakout/${group.id}`);
 });
 
@@ -1224,10 +1274,11 @@ app.use((request, response) => {
 app.use((error, request, response, next) => {
   if (response.headersSent) return next(error);
   console.error('Unhandled request error:', error);
-  response.status(500).render('error', {
-    status: 500,
-    title: 'The server missed a step.',
-    message: 'Something went sideways on our end. No need to debug it from your side; head back to LockIn and try again.'
+  const status = Number(error.status || error.statusCode) === 502 ? 502 : 500;
+  response.status(status).render('error', {
+    status,
+    title: status === 502 ? 'The upstream service is unavailable.' : 'The server missed a step.',
+    message: status === 502 ? 'LockIn reached the server, but an upstream service returned a bad gateway response. Please try again shortly.' : 'Something went sideways on our end. No need to debug it from your side; head back to LockIn and try again.'
   });
 });
 

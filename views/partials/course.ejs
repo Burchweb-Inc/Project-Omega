@@ -71,8 +71,9 @@
 <%= item.type %> · <%= formatCourseDate(item.due, courseTimezone, courseDateLocale) %>
 </span>
 <h3>
-<%= item.title %>
+<%- renderLinkedText(item.title, item.links) %>
 </h3>
+<% if (item.details) { %><p class="task-details"><%- renderLinkedText(item.details, item.links) %></p><% } %>
 </div>
 <span class="confidence">
 <i data-lucide="shield-check">
@@ -116,6 +117,8 @@
 <summary class="text-button"><i data-lucide="pencil"></i> Edit</summary>
 <form class="inline-tool-form" data-live-form action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/update" method="post">
 <input name="title" value="<%= item.title %>" required>
+<textarea name="details" rows="3" placeholder="Details"><%= item.details || '' %></textarea>
+<div class="link-draft-previews" data-link-draft-previews hidden></div>
 <select name="type"><option <%= item.type === 'Homework' ? 'selected' : '' %>>Homework</option><option <%= item.type === 'Upcoming test' ? 'selected' : '' %>>Upcoming test</option><option <%= item.type === 'Event' ? 'selected' : '' %>>Event</option><option <%= item.type === 'Project' ? 'selected' : '' %>>Project</option></select>
 <input name="due" type="date" value="<%= item.due !== 'No date' ? item.due : '' %>">
 <button class="button secondary" type="submit">Save</button>
