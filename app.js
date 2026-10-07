@@ -125,6 +125,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 const users = [];
 const orgs = [];
 const sessions = new Map();
+const snarkyTypePending = new Map();
+const snarkyTypeLinkRequests = new Map();
 const loginAttempts = new Map();
 const courseReorderWindows = new Map();
 const ipLocationCache = new Map();
@@ -166,20 +168,24 @@ function decryptTasks(storedTasks) {
 function loadUsersFromDatabase() {
   const rows = db.prepare('SELECT * FROM users ORDER BY username ASC').all();
   taskEncryptionMigrationNeeded = rows.some((row) => !row.tasks?.startsWith('v1:'));
-  users.splice(0, users.length, ...rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    username: row.username,
-    age: Number(row.age),
-    passwordHash: row.password_hash,
-    isSiteAdmin: Boolean(row.is_site_admin) || row.username === 'admin',
-    tasks: decryptTasks(row.tasks).map(normalizeTask),
-    settings: JSON.parse(row.settings || '{}'),
-    notifications: JSON.parse(row.notifications || '[]'),
-    moderationStatus: row.moderation_status || 'active',
-    moderationMessage: row.moderation_message || '',
-    moderationUntil: row.moderation_until || ''
-  })));
+  users.splice(0, users.length, ...rows.map((row) => {
+    const settings = JSON.parse(row.settings || '{}');
+    if (settings.snarkyType && settings.passwordSet === undefined) settings.passwordSet = false;
+    return {
+      id: row.id,
+      name: row.name,
+      username: row.username,
+      age: Number(row.age),
+      passwordHash: row.password_hash,
+      isSiteAdmin: Boolean(row.is_site_admin) || row.username === 'admin',
+      tasks: decryptTasks(row.tasks).map(normalizeTask),
+      settings,
+      notifications: JSON.parse(row.notifications || '[]'),
+      moderationStatus: row.moderation_status || 'active',
+      moderationMessage: row.moderation_message || '',
+      moderationUntil: row.moderation_until || ''
+    };
+  }));
 }
 
 function loadOrgsFromDatabase() {
@@ -253,7 +259,7 @@ function parseCookies(request) {
 function setSession(response, userId) {
   const token = id() + id();
   sessions.set(token, userId);
-  response.setHeader('Set-Cookie', `session=${token}; HttpOnly; Path=/; SameSite=Strict${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+  response.setHeader('Set-Cookie', `session=${token}; HttpOnly; Path=/; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
 }
 function passwordHash(password, salt = crypto.randomBytes(16).toString('hex')) {
   return `${salt}:${crypto.scryptSync(password, salt, 64).toString('hex')}`;
@@ -274,6 +280,58 @@ function recordLoginFailure(request) {
 function currentUser(request) {
   const userId = sessions.get(parseCookies(request).session);
   return users.find((user) => user.id === userId);
+}
+function snarkyTypeConfigured() {
+  return Boolean(process.env.SNARKYTYPE_CLIENT_ID && process.env.SNARKYTYPE_CLIENT_SECRET);
+}
+function snarkyTypeIdentity(user) {
+  return user?.settings?.snarkyType || null;
+}
+function snarkyTypeCallbackUrl(request, state = '') {
+  const origin = process.env.PUBLIC_URL || `${request.protocol}://${request.get('host')}`;
+  const callback = new URL('/auth/snarkytype/callback', origin);
+  if (state) callback.searchParams.set('state', state);
+  return callback.toString();
+}
+function snarkyTypeStartUrl(request, mode, next, state = '') {
+  const start = new URL('/login/superlink/create', process.env.SNARKYTYPE_URL || 'https://snarkytype.net');
+  start.searchParams.set('returnto', snarkyTypeCallbackUrl(request, state));
+  const redirectPath = mode === 'link' ? next : `/snarkytype-${mode}?next=${encodeURIComponent(safeReturnTo(next))}`;
+  start.searchParams.set('redirect', redirectPath);
+  start.searchParams.set('client_id', process.env.SNARKYTYPE_CLIENT_ID);
+  return start.toString();
+}
+function rememberSnarkyTypeLink(userId, next) {
+  const requestId = crypto.randomBytes(24).toString('base64url');
+  snarkyTypeLinkRequests.set(requestId, { userId, next: safeReturnTo(next), expiresAt: Date.now() + 10 * 60 * 1000 });
+  return requestId;
+}
+function takeSnarkyTypeLink(requestId) {
+  const pending = snarkyTypeLinkRequests.get(requestId);
+  snarkyTypeLinkRequests.delete(requestId);
+  return pending && pending.expiresAt > Date.now() ? pending : null;
+}
+function rememberSnarkyTypePending(profile, mode, next) {
+  const pendingId = crypto.randomBytes(24).toString('base64url');
+  snarkyTypePending.set(pendingId, { profile, mode, next: safeReturnTo(next), expiresAt: Date.now() + 10 * 60 * 1000 });
+  return pendingId;
+}
+function takeSnarkyTypePending(pendingId) {
+  const pending = snarkyTypePending.get(pendingId);
+  snarkyTypePending.delete(pendingId);
+  return pending && pending.expiresAt > Date.now() ? pending : null;
+}
+async function verifySnarkyTypeToken(token) {
+  if (!snarkyTypeConfigured() || typeof token !== 'string' || token.length > 128) return null;
+  const verifyUrl = new URL('/login/superlink/verify-token', process.env.SNARKYTYPE_URL || 'https://snarkytype.net');
+  verifyUrl.searchParams.set('token', token);
+  const response = await fetch(verifyUrl, { headers: { Authorization: `Bearer ${process.env.SNARKYTYPE_CLIENT_ID}:${process.env.SNARKYTYPE_CLIENT_SECRET}`, Accept: 'application/json' } });
+  const responseBody = await response.text();
+  let payload;
+  try { payload = JSON.parse(responseBody); } catch (error) { payload = null; }
+  if (!response.ok) throw new Error(`SnarkyType token verification failed (${response.status}): ${payload?.error || 'unknown error'}`);
+  if (!payload.ok || !payload.user?.id || !payload.user?.username) throw new Error('SnarkyType returned an invalid profile.');
+  return { id: String(payload.user.id), username: String(payload.user.username).trim().toLowerCase(), displayName: String(payload.user.displayName || payload.user.username).trim() };
 }
 const server = http.createServer(app);
 const io = new Server(server);
@@ -563,7 +621,57 @@ app.get(['/signup', '/login'], (request, response) => {
   request.user = currentUser(request);
   if (request.user) return response.redirect('/dashboard');
   const page = request.path.slice(1) === 'login' ? 'login' : 'signup';
-  response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: request.query.error, next: safeReturnTo(request.query.next) });
+  response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: request.query.error, next: safeReturnTo(request.query.next), snarkyTypeConfigured: snarkyTypeConfigured(), snarkyTypePending: Boolean(request.query.snarky) });
+});
+
+app.get('/auth/snarkytype', (request, response) => {
+  if (!snarkyTypeConfigured()) return response.redirect(authRedirect(request.query.mode === 'signup' ? '/signup' : '/login', 'snarkytype', safeReturnTo(request.query.next)));
+  const mode = ['signup', 'link'].includes(request.query.mode) ? request.query.mode : 'login';
+  const next = safeReturnTo(request.query.next);
+  if (mode === 'link') {
+    const user = currentUser(request);
+    if (!user) return response.redirect(authRedirect('/login', null, '/settings'));
+    const requestId = rememberSnarkyTypeLink(user.id, next);
+    return response.redirect(snarkyTypeStartUrl(request, 'link', `/snarkytype-link/${requestId}`, requestId));
+  }
+  response.redirect(snarkyTypeStartUrl(request, mode, next));
+});
+
+app.get('/auth/snarkytype/callback', async (request, response) => {
+  try {
+    const profile = await verifySnarkyTypeToken(request.query.superlink_token);
+    const state = String(request.query.state || '');
+    const stateLinkRequest = takeSnarkyTypeLink(state);
+    const redirectValue = String(request.query.redirect || '');
+    const redirectPath = redirectValue.split('?', 1)[0];
+    const mode = stateLinkRequest || redirectPath.startsWith('/snarkytype-link/') ? 'link' : redirectPath === '/snarkytype-signup' ? 'signup' : 'login';
+    const redirectQuery = new URLSearchParams(redirectValue.split('?', 2)[1] || '');
+    const next = safeReturnTo(redirectQuery.get('next') || '/dashboard');
+    const linkedUser = users.find((user) => snarkyTypeIdentity(user)?.id === profile.id);
+    const linkId = mode === 'link' && redirectPath.startsWith('/snarkytype-link/') ? redirectPath.slice('/snarkytype-link/'.length) : '';
+    const linkRequest = stateLinkRequest || takeSnarkyTypeLink(linkId);
+    const linkUser = linkRequest && users.find((user) => user.id === linkRequest.userId);
+    const linkNext = linkRequest?.next || next;
+    const activeUser = currentUser(request);
+    if (mode === 'link' && linkUser) {
+      if (linkedUser && linkedUser.id !== linkUser.id) return response.redirect('/settings?error=snarkytype-linked');
+      linkUser.settings = { ...(linkUser.settings || {}), snarkyType: profile };
+      persistState();
+      setSession(response, linkUser.id);
+      return response.redirect(linkNext || '/settings');
+    }
+    if (linkedUser) {
+      setSession(response, linkedUser.id);
+      return response.redirect(next);
+    }
+    const pendingId = rememberSnarkyTypePending(profile, mode, next);
+    response.setHeader('Set-Cookie', `snarky_pending=${pendingId}; HttpOnly; Path=/; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+    return response.redirect(`/signup?snarky=1&next=${encodeURIComponent(next)}`);
+  } catch (error) {
+    console.error('SnarkyType authentication failed', error.message);
+    const fallback = String(request.query.redirect || '').split('?', 1)[0] === '/snarkytype-signup' ? '/signup' : '/login';
+    return response.redirect(`${fallback}?error=snarkytype`);
+  }
 });
 
 app.get('/about', (request, response) => renderPublicPage(request, response, 'about', { creators }));
@@ -581,6 +689,18 @@ app.post('/signup', (request, response) => {
   const normalizedUsername = username.trim().toLowerCase();
   const user = { id: id(), name: name.trim(), username: normalizedUsername, age: Number(age), passwordHash: passwordHash(password), isSiteAdmin: normalizedUsername === 'admin', tasks: [], settings: {} };
   users.push(user); persistState(); setSession(response, user.id); response.redirect(next);
+});
+
+app.post('/signup/snarkytype', (request, response) => {
+  const pending = takeSnarkyTypePending(parseCookies(request).snarky_pending);
+  const name = String(request.body.name || '').trim();
+  const username = String(request.body.username || '').trim().toLowerCase();
+  const age = Number(request.body.age);
+  if (!pending || !name || !/^[a-z0-9_]{3,24}$/.test(username) || !Number.isInteger(age) || age < 13 || users.some((user) => user.username === username)) return response.redirect('/signup?error=signup&snarky=1');
+  const user = { id: id(), name, username, age, passwordHash: passwordHash(crypto.randomBytes(32).toString('base64url')), isSiteAdmin: false, tasks: [], settings: { snarkyType: pending.profile, passwordSet: false } };
+  users.push(user); persistState(); setSession(response, user.id);
+  response.append('Set-Cookie', 'snarky_pending=; HttpOnly; Max-Age=0; Path=/; SameSite=Lax');
+  response.redirect(pending.next);
 });
 
 app.post('/login', (request, response) => {
@@ -726,7 +846,7 @@ app.post('/beta/feedback', requireUser, async (request, response) => {
   db.prepare('INSERT INTO site_feedback (id, user_id, username, kind, message, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(id(), request.user.id, request.user.username, String(request.body.kind || 'general').slice(0, 40), message, new Date().toISOString());
   return sendMutation(request, response, { successMessage: 'Thanks. Your beta feedback is in.' }, '/beta');
 });
-app.get('/settings', requireUser, (request, response) => render(request, response, 'account-settings', { accountSettings: request.user.settings || {}, pushSettings: pushNotificationSettings(request.user) }));
+app.get('/settings', requireUser, (request, response) => render(request, response, 'account-settings', { accountSettings: request.user.settings || {}, pushSettings: pushNotificationSettings(request.user), snarkyTypeConfigured: snarkyTypeConfigured(), snarkyTypeLinked: request.query.saved === 'snarkytype' }));
 app.post('/settings', requireUser, (request, response) => {
   const name = String(request.body.name || '').trim(); const username = String(request.body.username || '').trim().toLowerCase();
   if (!name || !/^[a-z0-9_]{3,24}$/.test(username) || users.some((user) => user.id !== request.user.id && user.username === username)) return sendMutation(request, response, { error: 'Use a valid, available username and a name.' }, '/settings');
@@ -740,8 +860,11 @@ app.post('/settings/push', requireUser, (request, response) => {
   return sendMutation(request, response, { successMessage: 'Push notification preferences saved.' }, '/settings#push-notifications');
 });
 app.post('/settings/password', requireUser, (request, response) => {
-  if (!passwordMatches(request.body.currentPassword || '', request.user.passwordHash) || String(request.body.newPassword || '').length < 8) return sendMutation(request, response, { error: 'Enter your current password and a new password with at least 8 characters.' }, '/settings');
-  request.user.passwordHash = passwordHash(request.body.newPassword); persistState(); return sendMutation(request, response, { successMessage: 'Password updated.' }, '/settings');
+  const newPassword = String(request.body.newPassword || '');
+  const passwordSet = request.user.settings?.passwordSet !== false;
+  const currentPasswordValid = passwordSet && passwordMatches(request.body.currentPassword || '', request.user.passwordHash);
+  if ((!passwordSet && newPassword.length < 8) || (passwordSet && (!currentPasswordValid || newPassword.length < 8))) return sendMutation(request, response, { error: passwordSet ? 'Enter your current password and a new password with at least 8 characters.' : 'Create a password with at least 8 characters.' }, '/settings');
+  request.user.passwordHash = passwordHash(newPassword); request.user.settings = { ...(request.user.settings || {}), passwordSet: true }; persistState(); return sendMutation(request, response, { successMessage: passwordSet ? 'Password updated.' : 'Password created.' }, '/settings');
 });
 app.post('/settings/delete', requireUser, (request, response) => {
   if (String(request.body.confirmation || '') !== 'DELETE' || !passwordMatches(request.body.password || '', request.user.passwordHash)) return sendMutation(request, response, { error: 'Type DELETE and enter your password to close your account.' }, '/settings');

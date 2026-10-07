@@ -2827,6 +2827,10 @@ textarea {
 .settings-section h2 { font-size: 19px }
 .settings-section > div > .muted { display: block; margin-top: 7px; line-height: 1.5 }
 .settings-section .page-form { max-width: none; padding: 0; border: 0; box-shadow: none }
+.settings-security-stack { display: grid; gap: 24px }
+.settings-provider { padding-top: 20px; border-top: 1px solid var(--line) }
+.settings-provider p { margin: 7px 0 12px }
+.settings-provider .button { display: inline-flex; margin-top: 4px }
 .settings-section.danger-zone { border-color: #efc8bc }
 .settings-section.danger-zone h2 { color: #a34c40 }
 .button.danger { background: #b95647; color: white }
