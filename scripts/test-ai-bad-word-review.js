@@ -7,7 +7,7 @@ const { reviewQueuedBadWords } = require('../moderation/bad-word-queue');
 
 async function main() {
   const result = await reviewQueuedBadWords({
-    apiKey: process.env.OPENROUTER_API_KEY,
+    apiKey: docker.readSecret('openrouter_api_key') || process.env.OPENROUTER_API_KEY,
     model: process.env.OPENROUTER_MODEL || undefined,
     batchSize: Number(process.env.BAD_WORD_REVIEW_BATCH_SIZE || '50')
   });

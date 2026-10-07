@@ -2,7 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-
+const docker = require('../utils/docker.js');
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MODEL = 'nvidia/nemotron-3.5-content-safety:free';
 const DEFAULT_QUEUE_PATH = path.join(__dirname, 'bad-word-queue.txt');
@@ -212,7 +212,7 @@ async function reviewQueuedBadWords({
   badWordsPath = DEFAULT_USER_BAD_WORDS_PATH,
   discardPath = DEFAULT_DISCARD_PATH,
   instructionsPath = DEFAULT_INSTRUCTIONS_PATH,
-  apiKey = process.env.OPENROUTER_API_KEY,
+  apiKey = docker.readSecret('openrouter_api_key') || process.env.OPENROUTER_API_KEY,
   model = process.env.OPENROUTER_MODEL || DEFAULT_MODEL,
   fetchImpl = globalThis.fetch,
   batchSize = Number(process.env.BAD_WORD_REVIEW_BATCH_SIZE || '25')
