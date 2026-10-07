@@ -56,7 +56,7 @@ function contentCheckerResult(local) {
   return { ...local, badScore: Math.max(20, local.badScore), band: local.band === 'safe' ? 'review' : local.band, findings: [...local.findings, { category: 'content-checker', points: 20, matches: 1, source: 'content-checker' }] };
 }
 
-function createIffyModerator({ apiKey = process.env.OPENROUTER_API_KEY, model = process.env.OPENROUTER_MODEL || DEFAULT_MODEL, fetchImpl = globalThis.fetch, urlListPath = process.env.NSFW_URL_LIST_PATH || path.join(__dirname, 'nsfw-urls.txt'), urlSourceUrl = process.env.NSFW_URL_SOURCE_URL || DEFAULT_URL_SOURCE, remoteTimeoutMs = Number(process.env.OPENROUTER_TIMEOUT_MS || DEFAULT_REMOTE_TIMEOUT_MS) } = {}) {
+function createIffyModerator({ apiKey = docker.readSecret('openrouter_api_key') || process.env.OPENROUTER_API_KEY, model = process.env.OPENROUTER_MODEL || DEFAULT_MODEL, fetchImpl = globalThis.fetch, urlListPath = process.env.NSFW_URL_LIST_PATH || path.join(__dirname, 'nsfw-urls.txt'), urlSourceUrl = process.env.NSFW_URL_SOURCE_URL || DEFAULT_URL_SOURCE, remoteTimeoutMs = Number(process.env.OPENROUTER_TIMEOUT_MS || DEFAULT_REMOTE_TIMEOUT_MS) } = {}) {
   const knownUrls = readUrlList(urlListPath);
   let remoteUrlsPromise;
 
