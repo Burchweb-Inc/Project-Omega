@@ -264,6 +264,26 @@ function connectLiveBreakout() {
 }
 
 function todoList() { return document.querySelector('[data-live-todo-list]'); }
+function todoRoot() { return document.querySelector('[data-todo-date-locale]'); }
+function formatTodoDate(due) {
+  if (!due || due === 'No date') return 'No date';
+  const date = new Date(`${due}T12:00:00Z`); if (Number.isNaN(date.getTime())) return due;
+  const root = todoRoot();
+  try { return new Intl.DateTimeFormat(root?.dataset.todoDateLocale || 'en-US', { timeZone: root?.dataset.todoDateTimezone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date); } catch (error) { return due; }
+}
+function captureTodoPositions() { return new Map([...(todoList()?.querySelectorAll('.private-task') || [])].map((task) => [task.dataset.taskId, task.getBoundingClientRect()])); }
+function animateTodoPositions(previous, organizing = false) {
+  const list = todoList(); if (!list || !previous) return;
+  list.querySelectorAll('.private-task').forEach((task, index) => { const before = previous.get(task.dataset.taskId); if (!before || task.hidden) return; const after = task.getBoundingClientRect(); const deltaX = before.left - after.left; const deltaY = before.top - after.top; if (!deltaX && !deltaY && !organizing) return; task.animate([{ transform: `translate3d(${deltaX}px, ${deltaY}px, 0) rotateY(${organizing ? (index % 2 ? 7 : -7) : 0}deg)` }, { transform: 'translate3d(0, 0, 0) rotateY(0deg)' }], { duration: organizing ? 520 : 300, easing: 'cubic-bezier(.22,.8,.32,1)' }); });
+}
+function celebrateTask(task) {
+  task.classList.add('task-completing');
+  const check = task.querySelector('.task-check'); if (!check) return;
+  const colors = ['#ef7357', '#e9b44c', '#4c8fd0', '#43a66a'];
+  const burst = document.createElement('span'); burst.className = 'task-confetti'; burst.setAttribute('aria-hidden', 'true');
+  burst.innerHTML = colors.map((color, index) => `<i style="--confetti-color:${color};--confetti-angle:${index * 90}deg"></i>`).join('');
+  check.append(burst); window.setTimeout(() => { burst.remove(); task.classList.remove('task-completing'); }, 650);
+}
 function todoImportance(due) {
   if (!due || due === 'No date') return 'Unscheduled';
   const today = new Date(); today.setHours(0, 0, 0, 0); const date = new Date(`${due}T00:00:00`); const days = Math.round((date - today) / 86400000);
@@ -272,7 +292,7 @@ function todoImportance(due) {
 function todoTaskMarkup(task) {
   const importance = task.importance || todoImportance(task.due); const priority = task.priority || 'Normal';
   const editForm = `<details class="task-edit-details"><summary class="icon-button" aria-label="Edit task"><i data-lucide="pencil"></i></summary><form class="task-edit-form link-composer" action="/tasks/${escapeHtml(task.id)}/update" method="post" data-live-form data-link-composer><label>Title<input name="title" value="${escapeHtml(task.title)}" required></label><label>Details<textarea name="details" rows="3">${escapeHtml(task.details || '')}</textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Due date<input name="due" type="date" value="${task.due !== 'No date' ? escapeHtml(task.due) : ''}"></label><label>Priority<select name="priority">${['Low', 'Normal', 'Medium', 'High'].map((value) => `<option ${priority === value ? 'selected' : ''}>${value}</option>`).join('')}</select></label><button class="button secondary" type="submit">Save task</button></form></details>`;
-  return `<article class="private-task ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}" data-due="${escapeHtml(task.due)}" data-importance="${importance}" data-position="${Number(task.position) || 0}" draggable="false"><form class="toggle-task-form" action="/tasks/${escapeHtml(task.id)}/toggle" method="post" data-live-form><button class="task-check" aria-label="Toggle ${escapeHtml(task.title)}"><i data-lucide="check"></i></button></form><div class="private-task-copy"><h3>${linkedTaskTextMarkup(task.title, task.links)}</h3>${task.details ? `<p class="task-details">${linkedTaskTextMarkup(task.details, task.links)}</p>` : ''}<span><i data-lucide="link-2"></i> ${escapeHtml(task.source)}</span><small>Due ${escapeHtml(task.due)} · ${importance}</small></div>${editForm}<div class="priority-menu"><button class="priority-flag" type="button" aria-haspopup="menu" aria-expanded="false"><i data-lucide="flag"></i> <span>${escapeHtml(priority)}</span><i data-lucide="chevron-down"></i></button><div class="priority-options" role="menu"><button type="button" data-priority="Low">Low</button><button type="button" data-priority="Normal">Normal</button><button type="button" data-priority="Medium">Medium</button><button type="button" data-priority="High">High</button></div></div><form data-live-form action="/tasks/${escapeHtml(task.id)}/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete task"><i data-lucide="trash-2"></i></button></form><button class="icon-button drag-handle" aria-label="Move task" type="button"><i data-lucide="grip-vertical"></i></button></article>`;
+  return `<article class="private-task ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}" data-due="${escapeHtml(task.due)}" data-importance="${importance}" data-priority="${escapeHtml(priority.toLowerCase())}" data-position="${Number(task.position) || 0}" draggable="false"><form class="toggle-task-form" action="/tasks/${escapeHtml(task.id)}/toggle" method="post" data-live-form><button class="task-check" aria-label="Toggle ${escapeHtml(task.title)}"><i data-lucide="check"></i></button></form><div class="private-task-copy"><h3>${linkedTaskTextMarkup(task.title, task.links)}</h3>${task.details ? `<p class="task-details">${linkedTaskTextMarkup(task.details, task.links)}</p>` : ''}<span><i data-lucide="link-2"></i> ${escapeHtml(task.source)}</span><small class="task-due" data-raw-due="${escapeHtml(task.due)}">Due ${escapeHtml(formatTodoDate(task.due))} · ${importance}</small></div>${editForm}<div class="priority-menu"><button class="priority-flag" type="button" aria-haspopup="menu" aria-expanded="false"><i data-lucide="flag"></i> <span>${escapeHtml(priority)}</span><i data-lucide="chevron-down"></i></button><div class="priority-options" role="menu"><button type="button" data-priority="Low">Low</button><button type="button" data-priority="Normal">Normal</button><button type="button" data-priority="Medium">Medium</button><button type="button" data-priority="High">High</button></div></div><form data-live-form action="/tasks/${escapeHtml(task.id)}/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete task"><i data-lucide="trash-2"></i></button></form><button class="icon-button drag-handle" aria-label="Move task" type="button"><i data-lucide="grip-vertical"></i></button></article>`;
 }
 function sortTodoDom(compare) { const list = todoList(); if (!list) return; [...list.querySelectorAll('.private-task')].sort(compare).forEach((task) => list.appendChild(task)); }
 function persistTodoOrder() {
@@ -282,23 +302,27 @@ function persistTodoOrder() {
 }
 function applyTodoFilter(filter = 'all') {
   const list = todoList(); if (!list) return;
+  const previous = captureTodoPositions();
   document.querySelectorAll('[data-todo-filter]').forEach((link) => link.classList.toggle('active', link.dataset.todoFilter === filter));
   list.querySelectorAll('.private-task').forEach((task) => { task.hidden = filter === 'pending' ? task.classList.contains('is-done') : filter === 'completed' ? !task.classList.contains('is-done') : false; });
+  list.dataset.activeFilter = filter; animateTodoPositions(previous);
 }
 function toggleFocusMode(button) {
   const list = todoList(); if (!list) return;
-  const rank = { Overdue: 0, Today: 1, Soon: 2, Later: 3, Unscheduled: 4 };
+  const previous = captureTodoPositions();
   const active = button.classList.toggle('active');
-  if (active) sortTodoDom((left, right) => (rank[left.dataset.importance] - rank[right.dataset.importance]) || (new Date(`${left.dataset.due}T00:00:00`) - new Date(`${right.dataset.due}T00:00:00`)) || (Number(left.dataset.position) - Number(right.dataset.position)));
+  if (active) sortTodoDom((left, right) => { const leftDue = left.dataset.due === 'No date' ? Number.MAX_SAFE_INTEGER : new Date(`${left.dataset.due}T00:00:00`).getTime(); const rightDue = right.dataset.due === 'No date' ? Number.MAX_SAFE_INTEGER : new Date(`${right.dataset.due}T00:00:00`).getTime(); return (leftDue - rightDue) || (Number(left.dataset.position) - Number(right.dataset.position)); });
   else sortTodoDom((left, right) => Number(left.dataset.position) - Number(right.dataset.position));
+  animateTodoPositions(previous, true);
 }
 function enhanceTodoTasks() {
   const list = todoList(); if (!list) return;
   list.querySelectorAll('.private-task').forEach((task, index) => {
-    task.draggable = false; task.dataset.position ||= index; task.dataset.due ||= task.querySelector('small')?.textContent.replace(/^Due\s+/, '').split(' · ')[0] || 'No date'; task.dataset.importance ||= todoImportance(task.dataset.due);
+    task.draggable = false; task.dataset.position ||= index; task.dataset.due ||= task.querySelector('[data-raw-due]')?.dataset.rawDue || 'No date'; task.dataset.importance ||= todoImportance(task.dataset.due); task.dataset.priority ||= task.querySelector('.priority-flag')?.textContent.trim().toLowerCase() || 'normal';
     const priority = task.querySelector('.priority-flag');
     if (priority && !priority.closest('.priority-menu')) { const value = priority.textContent.trim(); const menu = document.createElement('div'); menu.className = 'priority-menu'; menu.innerHTML = `<button class="priority-flag" type="button" aria-haspopup="menu" aria-expanded="false"><i data-lucide="flag"></i> <span>${escapeHtml(value)}</span><i data-lucide="chevron-down"></i></button><div class="priority-options" role="menu"><button type="button" data-priority="Low">Low</button><button type="button" data-priority="Normal">Normal</button><button type="button" data-priority="Medium">Medium</button><button type="button" data-priority="High">High</button></div>`; priority.replaceWith(menu); }
   });
+  bindTodoPriorityMenus(list);
   list.querySelectorAll('.private-task').forEach((task) => {
     const grip = task.querySelector('.drag-handle, button[aria-label="Move task"]');
     grip?.classList.add('drag-handle');
@@ -316,6 +340,14 @@ function enhanceTodoTasks() {
   });
   lucide.createIcons();
 }
+function bindTodoPriorityMenus(scope = document) {
+  scope.querySelectorAll('.priority-menu').forEach((menu) => {
+    if (menu.dataset.priorityBound === 'true') return;
+    menu.dataset.priorityBound = 'true';
+    menu.querySelector('.priority-flag')?.addEventListener('click', () => { const open = menu.classList.toggle('open'); menu.querySelector('.priority-flag').setAttribute('aria-expanded', String(open)); });
+    menu.querySelectorAll('[data-priority]').forEach((option) => option.addEventListener('click', async () => { const row = menu.closest('.private-task'); const response = await fetch(`/tasks/${row.dataset.taskId}/priority`, { method: 'POST', body: new URLSearchParams({ priority: option.dataset.priority }), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); if (!response.ok) return; row.dataset.priority = option.dataset.priority.toLowerCase(); menu.querySelector('.priority-flag span').textContent = option.dataset.priority; menu.classList.remove('open'); menu.querySelector('.priority-flag').setAttribute('aria-expanded', 'false'); }));
+  });
+}
 function connectLiveTodo() {
   const list = todoList(); if (!list || typeof io !== 'function') return;
   liveState.socket?.disconnect(); liveState.socket = io(); liveState.socket.on('connect', () => liveState.socket.emit('todo:join'));
@@ -329,10 +361,7 @@ function bindTodoControls() {
   enhanceTodoTasks();
   document.querySelectorAll('[data-todo-filter]').forEach((link) => link.addEventListener('click', (event) => { event.preventDefault(); applyTodoFilter(link.dataset.todoFilter); history.replaceState({}, '', `/todo${link.dataset.todoFilter === 'all' ? '' : `?filter=${link.dataset.todoFilter}`}`); }));
   document.querySelector('[data-focus-mode]')?.addEventListener('click', (event) => toggleFocusMode(event.currentTarget));
-  document.querySelectorAll('.priority-menu').forEach((menu) => {
-    menu.querySelector('.priority-flag')?.addEventListener('click', () => { const open = menu.classList.toggle('open'); menu.querySelector('.priority-flag').setAttribute('aria-expanded', String(open)); });
-    menu.querySelectorAll('[data-priority]').forEach((option) => option.addEventListener('click', async () => { const row = menu.closest('.private-task'); const response = await fetch(`/tasks/${row.dataset.taskId}/priority`, { method: 'POST', body: new URLSearchParams({ priority: option.dataset.priority }), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); if (!response.ok) return; menu.querySelector('.priority-flag span').textContent = option.dataset.priority; menu.classList.remove('open'); menu.querySelector('.priority-flag').setAttribute('aria-expanded', 'false'); }));
-  });
+  bindTodoPriorityMenus();
   const filter = new URLSearchParams(window.location.search).get('filter') || 'all'; applyTodoFilter(filter);
 }
 
@@ -415,7 +444,7 @@ async function submitLiveForm(form, animatedEntry = null) {
     }
     if (payload.task && isTaskToggle) {
       const row = document.querySelector(`[data-task-id="${CSS.escape(payload.task.id)}"]`);
-      if (row) row.classList.toggle('is-done', Boolean(payload.task.done));
+      if (row) { row.classList.toggle('is-done', Boolean(payload.task.done)); if (payload.task.done) celebrateTask(row); applyTodoFilter(document.querySelector('[data-live-todo-list]')?.dataset.activeFilter || 'all'); }
     }
     if (payload.deleted && payload.taskId) document.querySelector(`[data-task-id="${CSS.escape(payload.taskId)}"]`)?.remove();
     if (payload.deleted && payload.resourceId) document.querySelector(`[data-resource-id="${CSS.escape(payload.resourceId)}"]`)?.remove();

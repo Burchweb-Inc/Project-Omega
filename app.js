@@ -362,6 +362,7 @@ function formatCourseDate(due, timezone = 'UTC', locale = 'en-US') {
   const date = new Date(`${due}T12:00:00Z`); if (Number.isNaN(date.getTime())) return due;
   return new Intl.DateTimeFormat(locale, { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
+function formatTaskDate(due, timezone = 'UTC', locale = 'en-US') { return formatCourseDate(due, timezone, locale); }
 async function userDateLocation(user, request) {
   const settings = user?.settings || {};
   if (settings.timezone && settings.dateFormat && settings.dateFormat !== 'auto') return { timezone: settings.timezone, locale: settings.dateFormat === 'mdy' ? 'en-US' : settings.dateFormat === 'ymd' ? 'sv-SE' : 'en-GB' };
@@ -749,7 +750,7 @@ app.post('/settings/delete', requireUser, (request, response) => {
   for (const [token, userId] of sessions) if (userId === deletedUserId) sessions.delete(token);
   users.splice(users.findIndex((user) => user.id === deletedUserId), 1); persistState(); response.setHeader('Set-Cookie', 'session=; HttpOnly; Max-Age=0; Path=/'); return sendMutation(request, response, { deletedAccount: true, successMessage: 'Your account has been deleted.' }, '/');
 });
-app.get('/todo', requireUser, (request, response) => render(request, response, 'todo'));
+app.get('/todo', requireUser, async (request, response) => { const location = await userDateLocation(request.user, request); return render(request, response, 'todo', { todoDateTimezone: location.timezone, todoDateLocale: location.locale, formatTaskDate }); });
 app.get('/calendar', requireUser, (request, response) => render(request, response, 'calendar', { calendarItems: allItems().filter((entry) => entry.due && entry.due !== 'No date') }));
 app.get('/groups', requireUser, (request, response) => render(request, response, 'groups', { groups: orgs.filter((org) => membership(org, request.user) || pendingInvite(org, request.user)).map((org) => ({ ...org, pendingInvite: pendingInvite(org, request.user) })) }));
 app.get(['/org/new', '/group/new'], requireUser, (request, response) => render(request, response, 'new-org'));

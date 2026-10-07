@@ -1,4 +1,4 @@
-<section class="content-wrap todo-page">
+<section class="content-wrap todo-page" data-todo-date-timezone="<%= todoDateTimezone || 'UTC' %>" data-todo-date-locale="<%= todoDateLocale || 'en-US' %>">
     <div class="page-heading hero-heading">
         <div>
             <p class="eyebrow">PRIVATE BY DEFAULT</p>
@@ -8,13 +8,13 @@
             personal task</button>
     </div>
     <div class="todo-toolbar">
-        <div class="segmented"><a class="active" href="/todo">All tasks</a><a href="/todo?filter=pending">Pending</a><a
-                href="/todo?filter=completed">Completed</a></div><span class="muted" data-todo-summary>
+        <div class="segmented"><a class="active" data-todo-filter="all" href="/todo">All tasks</a><a data-todo-filter="pending" href="/todo?filter=pending">Pending</a><a
+            data-todo-filter="completed" href="/todo?filter=completed">Completed</a></div><div class="todo-toolbar-actions"><button class="button secondary" type="button" data-focus-mode><i data-lucide="sparkles"></i> Auto organize</button><span class="muted" data-todo-summary>
             <%= (user.tasks || []).filter(task=> !task.done).length %> things still in motion
-        </span>
+        </span></div>
     </div>
     <section class="private-list" data-live-todo-list>
-        <% (user.tasks || []).forEach(task=> { %><article class="private-task <%= task.done ? 'is-done' : '' %>"
+        <% (user.tasks || []).forEach(task=> { %><article class="private-task <%= task.done ? 'is-done' : '' %>" data-priority="<%= (task.priority || 'Normal').toLowerCase() %>"
                 data-task-id="<%= task.id %>">
                 <form class="toggle-task-form" action="/tasks/<%= task.id %>/toggle" method="post" data-live-form>
                     <button class="task-check" aria-label="Toggle <%= task.title %>"><i
@@ -24,7 +24,7 @@
                         <%- renderLinkedText(task.title, task.links) %>
                     </h3><% if (task.details) { %><p class="task-details"><%- renderLinkedText(task.details, task.links) %></p><% } %><span><i data-lucide="link-2"></i>
                         <%= task.source %>
-                    </span><small>Due <%= task.due %></small>
+                    </span><small class="task-due" data-raw-due="<%= task.due %>">Due <%= formatTaskDate(task.due, todoDateTimezone, todoDateLocale) %></small>
                 </div><details class="task-edit-details"><summary class="icon-button" aria-label="Edit task"><i data-lucide="pencil"></i></summary><form class="task-edit-form link-composer" action="/tasks/<%= task.id %>/update" method="post" data-live-form><label>Title<input name="title" value="<%= task.title %>" required></label><label>Details<textarea name="details" rows="3"><%= task.details || '' %></textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Due date<input name="due" type="date" value="<%= task.due !== 'No date' ? task.due : '' %>"></label><label>Priority<select name="priority"><% ['Low', 'Normal', 'Medium', 'High'].forEach(priority => { %><option <%= task.priority === priority ? 'selected' : '' %>><%= priority %></option><% }) %></select></label><button class="button secondary" type="submit">Save task</button></form></details><span class="priority-flag"><i data-lucide="flag"></i>
                     <%= task.priority || 'Normal' %>
                 </span><form data-live-form action="/tasks/<%= task.id %>/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete task"><i data-lucide="trash-2"></i></button></form><button class="icon-button drag-handle" aria-label="Move task" type="button"><i
