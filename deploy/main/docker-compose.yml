@@ -21,6 +21,10 @@ services:
 secrets:
   openrouter_api_key:
     environment: OPENROUTER_API_KEY
+  snarkytype_client_id:
+    environment: SNARKYTYPE_CLIENT_ID
+  snarkytype_client_secret:
+    environment: SNARKYTYPE_CLIENT_SECRET
 volumes:
   database:
 
