@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const config = require('./config.js');
 const creators = require('./config/creators');
 const express = require('express');
 const http = require('http');
@@ -282,7 +283,7 @@ function currentUser(request) {
   return users.find((user) => user.id === userId);
 }
 function snarkyTypeConfigured() {
-  return Boolean(process.env.SNARKYTYPE_CLIENT_ID && process.env.SNARKYTYPE_CLIENT_SECRET);
+  return Boolean(config.snarky.client_id && config.snarky.client_secret);
 }
 function snarkyTypeIdentity(user) {
   return user?.settings?.snarkyType || null;
@@ -294,11 +295,11 @@ function snarkyTypeCallbackUrl(request, state = '') {
   return callback.toString();
 }
 function snarkyTypeStartUrl(request, mode, next, state = '') {
-  const start = new URL('/login/superlink/create', process.env.SNARKYTYPE_URL || 'https://snarkytype.net');
+  const start = new URL('/login/superlink/create', config.snarky.url );
   start.searchParams.set('returnto', snarkyTypeCallbackUrl(request, state));
   const redirectPath = mode === 'link' ? next : `/snarkytype-${mode}?next=${encodeURIComponent(safeReturnTo(next))}`;
   start.searchParams.set('redirect', redirectPath);
-  start.searchParams.set('client_id', process.env.SNARKYTYPE_CLIENT_ID);
+  start.searchParams.set('client_id', config.snarky.client_id );
   return start.toString();
 }
 function rememberSnarkyTypeLink(userId, next) {
@@ -323,9 +324,9 @@ function takeSnarkyTypePending(pendingId) {
 }
 async function verifySnarkyTypeToken(token) {
   if (!snarkyTypeConfigured() || typeof token !== 'string' || token.length > 128) return null;
-  const verifyUrl = new URL('/login/superlink/verify-token', process.env.SNARKYTYPE_URL || 'https://snarkytype.net');
+  const verifyUrl = new URL('/login/superlink/verify-token', config.snarky.url || 'https://snarkytype.net');
   verifyUrl.searchParams.set('token', token);
-  const response = await fetch(verifyUrl, { headers: { Authorization: `Bearer ${process.env.SNARKYTYPE_CLIENT_ID}:${process.env.SNARKYTYPE_CLIENT_SECRET}`, Accept: 'application/json' } });
+  const response = await fetch(verifyUrl, { headers: { Authorization: `Bearer ${config.snarky.client_id}:${config.snarky.client_secret}`, Accept: 'application/json' } });
   const responseBody = await response.text();
   let payload;
   try { payload = JSON.parse(responseBody); } catch (error) { payload = null; }
