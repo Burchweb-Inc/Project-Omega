@@ -4,12 +4,14 @@ pipeline {
     stages {
         stage('Build') {
             environment {
-                TAG = "project-omega:latest"
+                TAG = "project-omega:${BRANCH_NAME}"
             }
             steps {
                 echo "Building ${TAG}"
                 script {
-                    docker.build(env.TAG)
+                    docker.build(env.TAG).inside {
+                        node '/home/node/app/scripts/test-ai-bad-word-review.js'
+                    }
                 }
             }
         }

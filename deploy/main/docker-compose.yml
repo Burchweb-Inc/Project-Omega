@@ -1,6 +1,6 @@
 services:
   project-omega-main:
-    image: project-omega:latest
+    image: project-omega:main
     container_name: project-omega
     ports:
       - "8891:3000"

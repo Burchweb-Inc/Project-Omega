@@ -6,6 +6,9 @@ const docker = require("./utils/docker.js");
 
 const config = function () {
   return {
+    openrouter: {
+      api_key: docker.readSecret('openrouter_api_key') || process.env.OPENROUTER_API_KEY
+    },
     snarky: {
       url: process.env.SNARKYTYPE_URL || "https://snarkytype.net",
       client_id:
