@@ -1,12 +1,15 @@
+<% const calendarDate = new Date(calendarYear, calendarMonth - 1, 1); const daysInMonth = new Date(calendarYear, calendarMonth, 0).getDate(); const firstWeekday = (calendarDate.getDay() + 6) % 7; const today = new Date(); %>
 <section class="content-wrap calendar-page">
     <div class="page-heading hero-heading">
         <div>
             <h1>Academic calendar</h1>
             <p class="lead">One view for deadlines, exams, and school events across every space.</p>
         </div>
-        <div class="calendar-actions"><button class="icon-button" aria-label="Previous month"><i
-                    data-lucide="chevron-left"></i></button><strong>September 2026</strong><button class="icon-button"
-                aria-label="Next month"><i data-lucide="chevron-right"></i></button></div>
+        <div class="calendar-actions">
+            <a class="icon-button" aria-label="Previous month" href="/calendar/<%= calendarMonth === 1 ? calendarYear - 1 : calendarYear %>/<%= calendarMonth === 1 ? 12 : calendarMonth - 1 %>"><i data-lucide="chevron-left"></i></a>
+            <strong><%= calendarDate.toLocaleDateString('en', { month: 'long', year: 'numeric' }) %></strong>
+            <a class="icon-button" aria-label="Next month" href="/calendar/<%= calendarMonth === 12 ? calendarYear + 1 : calendarYear %>/<%= calendarMonth === 12 ? 1 : calendarMonth + 1 %>"><i data-lucide="chevron-right"></i></a>
+        </div>
     </div>
     <div class="calendar-legend"><span><i class="legend-dot homework-dot"></i> Homework</span><span><i
                 class="legend-dot test-dot"></i> Tests & quizzes</span><span><i class="legend-dot event-dot"></i>
@@ -16,19 +19,17 @@
             <span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span>SUN</span>
         </div>
         <div class="calendar-days">
-            <% for (let day=1; day <=30; day++) { const dayItems=calendarItems.filter(entry=>
-                entry.due.endsWith(`-${String(day).padStart(2, '0')}`)); %><div
-                    class="calendar-day <%= day === 17 ? 'today' : '' %>"><strong>
-                        <%= day %>
-                    </strong>
-                    <% dayItems.slice(0, 2).forEach(entry=> { %><a
-                            class="calendar-event <%= entry.type === 'Event' ? 'event-event' : entry.type === 'Upcoming test' ? 'test-event' : 'homework-event' %>"
-                            href="/org/<%= entry.org.id %>/course/<%= entry.course.id %>">
+            <% for (let blank = 0; blank < firstWeekday; blank++) { %><div class="calendar-day calendar-day-empty" aria-hidden="true"></div><% } %>
+            <% for (let day = 1; day <= daysInMonth; day++) { const dayItems = calendarItems.filter((entry) => entry.due.endsWith(`-${String(day).padStart(2, '0')}`)); const isToday = calendarYear === today.getFullYear() && calendarMonth === today.getMonth() + 1 && day === today.getDate(); %>
+                <div class="calendar-day <%= isToday ? 'today' : '' %>">
+                    <strong><%= day %></strong>
+                    <% dayItems.slice(0, 2).forEach((entry) => { %>
+                        <a class="calendar-event <%= entry.type === 'Event' ? 'event-event' : entry.type === 'Upcoming test' ? 'test-event' : 'homework-event' %>" href="/org/<%= entry.org.id %>/course/<%= entry.course.id %>">
                             <%= entry.title %>
                         </a>
-                        <% }) %>
+                    <% }) %>
                 </div>
-                <% } %>
+            <% } %>
         </div>
     </div>
 </section>
