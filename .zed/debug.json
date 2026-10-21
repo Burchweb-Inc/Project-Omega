@@ -1,0 +1,14 @@
+[
+  {
+    "label": "debug (localhost)",
+    "adapter": "JavaScript",
+    "env": {
+      "HOST": "localhost",
+      "PORT": "3000"
+    },
+    "type" :"node",
+    "request": "launch",
+    "program": "${ZED_WORKTREE_ROOT}/app.js",
+    "cwd": "${ZED_WORKTREE_ROOT}"
+  }
+]
