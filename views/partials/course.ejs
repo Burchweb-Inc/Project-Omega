@@ -60,7 +60,7 @@
 <% } %>
 <div class="course-feed-tools"><label class="course-feed-search"><i data-lucide="search"></i><input type="search" data-course-search placeholder="Search the class feed" aria-label="Search the class feed"></label><select data-course-filter aria-label="Filter the class feed"><option value="all">All items</option><option value="active">Active</option><option value="past">Past</option><option value="homework">Homework</option><option value="tests">Tests</option><option value="projects">Projects</option></select></div>
 <div class="course-feed-folders" data-feed-list>
-<% ['current', 'past'].forEach(folder => { %><section class="course-feed-folder" data-course-folder="<%= folder %>"><div class="course-feed-folder-heading"><h3><%= folder === 'past' ? 'Past' : 'Current' %></h3><span data-course-folder-count="<%= folder %>"></span></div><div class="feed-list">
+<% ['current', 'past'].forEach(folder => { %><section class="course-feed-folder" data-course-folder="<%= folder %>"><div class="course-feed-folder-heading"><div class="course-feed-folder-title"><h3><%= folder === 'past' ? 'Past' : 'Current' %></h3><button class="course-feed-folder-toggle" type="button" data-course-folder-toggle="<%= folder %>" aria-label="Collapse <%= folder %> assignments" aria-expanded="true" aria-controls="course-feed-<%= course.id %>-<%= folder %>-content"><i data-lucide="chevron-down"></i></button></div><span data-course-folder-count="<%= folder %>"></span></div><div class="course-feed-folder-content" id="course-feed-<%= course.id %>-<%= folder %>-content" data-course-folder-content="<%= folder %>"><div class="feed-list">
 <% course.items.filter(item => folder === 'past' ? item.past : !item.past).forEach(item => { %>
 <article class="feed-card feed-item" data-item-id="<%= item.id %>" data-position="<%= item.position || 0 %>" data-past="<%= item.past ? 'true' : 'false' %>" data-type="<%= item.type %>">
 <div class="feed-card-head">
@@ -150,7 +150,7 @@
 </div>
 </article>
 <% }) %>
-</div></section><% }) %>
+</div></div></section><% }) %>
 <% if (!course.items.length) { %><div class="empty-panel" data-empty-feed>
 <i data-lucide="message-square-plus">
 </i>

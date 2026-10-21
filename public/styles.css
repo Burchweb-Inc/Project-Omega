@@ -866,6 +866,18 @@ select {
     gap: 30px
 }
 
+.course-feed-folder {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px;
+    transition: grid-template-rows .24s ease, row-gap .24s ease
+}
+
+.course-feed-folder.is-collapsed {
+    grid-template-rows: auto minmax(0, 0fr);
+    row-gap: 0
+}
+
 .course-feed-folder-heading {
     display: flex;
     align-items: baseline;
@@ -874,8 +886,51 @@ select {
     border-bottom: 2px solid var(--ink)
 }
 
+.course-feed-folder-title {
+    display: flex;
+    align-items: center;
+    gap: 7px
+}
+
 .course-feed-folder-heading h3 {
     font-size: 18px
+}
+
+.course-feed-folder-toggle {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    place-items: center;
+    border: 0;
+    color: var(--muted);
+    background: transparent;
+    cursor: pointer
+}
+
+.course-feed-folder-toggle svg {
+    width: 17px;
+    transition: transform .22s ease
+}
+
+.course-feed-folder.is-collapsed .course-feed-folder-toggle svg {
+    transform: rotate(-90deg)
+}
+
+.course-feed-folder-content {
+    min-height: 0;
+    overflow: hidden;
+    opacity: 1;
+    transition: opacity .18s ease
+}
+
+.course-feed-folder-content .feed-list {
+    min-height: 0;
+    overflow: hidden
+}
+
+.course-feed-folder.is-collapsed .course-feed-folder-content {
+    opacity: 0
 }
 
 .course-feed-folder-heading span {

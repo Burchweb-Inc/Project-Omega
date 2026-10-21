@@ -190,9 +190,47 @@ function applyCourseFeedControls(root) {
   root.querySelectorAll('[data-item-id]').forEach((card) => { const type = (card.dataset.type || '').toLowerCase(); const matchesQuery = !query || card.textContent.toLowerCase().includes(query); const matchesFilter = filter === 'active' ? card.dataset.past !== 'true' : filter === 'past' ? card.dataset.past === 'true' : filter === 'homework' ? type === 'homework' : filter === 'tests' ? type.includes('test') : filter === 'projects' ? type === 'project' : true; card.hidden = !matchesQuery || !matchesFilter; });
   root.querySelectorAll('[data-course-folder-count]').forEach((count) => { const past = count.dataset.courseFolderCount === 'past'; count.textContent = String(root.querySelectorAll(`[data-item-id][data-past="${past}"]:not([hidden])`).length); });
 }
+function setCourseFolderCollapsed(root, folder, collapsed) {
+  const section = root.querySelector(`[data-course-folder="${folder}"]`); const toggle = section?.querySelector('[data-course-folder-toggle]'); const content = section?.querySelector('[data-course-folder-content]');
+  if (!section || !toggle || !content) return;
+  section.classList.toggle('is-collapsed', collapsed); toggle.setAttribute('aria-expanded', String(!collapsed)); toggle.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} ${folder} assignments`); content.setAttribute('aria-hidden', String(collapsed)); content.inert = collapsed;
+}
+function courseFeedStorageKey(root) { return `lockin-course-feed-${root.dataset.orgId}-${root.dataset.courseId}`; }
+function loadCourseFeedState(root) {
+  const state = { filter: 'all', query: '', collapsed: { current: false, past: false } };
+  try {
+    const saved = localStorage.getItem(courseFeedStorageKey(root));
+    if (!saved) return state;
+    const parsed = JSON.parse(saved);
+    if (['all', 'active', 'past', 'homework', 'tests', 'projects'].includes(parsed.filter)) state.filter = parsed.filter;
+    if (typeof parsed.query === 'string') state.query = parsed.query;
+    if (typeof parsed.collapsed?.current === 'boolean') state.collapsed.current = parsed.collapsed.current;
+    if (typeof parsed.collapsed?.past === 'boolean') state.collapsed.past = parsed.collapsed.past;
+  } catch (error) {
+    console.warn('Unable to load saved course feed preferences.', error);
+  }
+  return state;
+}
+function saveCourseFeedState(root, state) {
+  try {
+    localStorage.setItem(courseFeedStorageKey(root), JSON.stringify(state));
+  } catch (error) {
+    console.warn('Unable to save course feed preferences.', error);
+  }
+}
 function bindCourseFeedControls(root) {
   if (!root || root.dataset.feedControlsBound === 'true') return;
-  root.dataset.feedControlsBound = 'true'; root.querySelector('[data-course-filter]')?.addEventListener('change', () => applyCourseFeedControls(root)); root.querySelector('[data-course-search]')?.addEventListener('input', () => applyCourseFeedControls(root)); applyCourseFeedControls(root);
+  root.dataset.feedControlsBound = 'true';
+  const state = loadCourseFeedState(root); const filter = root.querySelector('[data-course-filter]'); const search = root.querySelector('[data-course-search]');
+  if (filter) filter.value = state.filter;
+  if (search) search.value = state.query;
+  Object.entries(state.collapsed).forEach(([folder, collapsed]) => setCourseFolderCollapsed(root, folder, collapsed));
+  filter?.addEventListener('change', () => { state.filter = filter.value; applyCourseFeedControls(root); saveCourseFeedState(root, state); });
+  search?.addEventListener('input', () => { state.query = search.value; applyCourseFeedControls(root); saveCourseFeedState(root, state); });
+  root.querySelectorAll('[data-course-folder-toggle]').forEach((toggle) => toggle.addEventListener('click', () => {
+    const folder = toggle.dataset.courseFolderToggle; state.collapsed[folder] = toggle.getAttribute('aria-expanded') === 'true'; setCourseFolderCollapsed(root, folder, state.collapsed[folder]); saveCourseFeedState(root, state);
+  }));
+  applyCourseFeedControls(root);
 }
 
 function connectLiveCourse() {
