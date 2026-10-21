@@ -875,7 +875,7 @@ app.post('/settings/delete', requireUser, (request, response) => {
   users.splice(users.findIndex((user) => user.id === deletedUserId), 1); persistState(); response.setHeader('Set-Cookie', 'session=; HttpOnly; Max-Age=0; Path=/'); return sendMutation(request, response, { deletedAccount: true, successMessage: 'Your account has been deleted.' }, '/');
 });
 app.get('/todo', requireUser, async (request, response) => { const location = await userDateLocation(request.user, request); return render(request, response, 'todo', { todoDateTimezone: location.timezone, todoDateLocale: location.locale, formatTaskDate }); });
-app.get('/calendar', requireUser, (request, response) => render(request, response, 'calendar', { calendarItems: allItems().filter((entry) => entry.due && entry.due !== 'No date') }));
+app.use('/calendar', require('./calendar/routes')({ requireUser, render, allItems }));
 app.get('/groups', requireUser, (request, response) => render(request, response, 'groups', { groups: orgs.filter((org) => membership(org, request.user) || pendingInvite(org, request.user)).map((org) => ({ ...org, pendingInvite: pendingInvite(org, request.user) })) }));
 app.get(['/org/new', '/group/new'], requireUser, (request, response) => render(request, response, 'new-org'));
 
