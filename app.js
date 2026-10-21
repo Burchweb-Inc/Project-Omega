@@ -514,7 +514,7 @@ function renderLinkedText(text, links = []) {
   }
   return output + escapeHtmlServer(value.slice(cursor));
 }
-function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs, canEdit, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), renderLinkedText, ...extra }); }
+function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs, canEdit, canManageItem, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), renderLinkedText, ...extra }); }
 function renderPublicPage(request, response, page, extra = {}) { response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: null, canonicalUrl: canonicalUrl(request), ...extra }); }
 function getOrg(request) { return orgs.find((entry) => entry.id === request.params.id || entry.slug === request.params.slug); }
 function getCourse(org, courseId) { return org?.courses.find((course) => course.id === courseId); }
@@ -926,7 +926,19 @@ app.get('/b/:code', requireUser, (request, response) => {
 app.get('/org/:id/course/:courseId', requireUser, async (request, response) => {
   const org = getOrg(request); const course = getCourse(org, request.params.courseId);
   if (!course || !canAccess(org, request.user)) return response.redirect(`/org/${request.params.id}`);
-  normalizeCourseItems(course); const location = await userDateLocation(request.user, request); renderOrgPage(request, response, 'course', { course: { ...course, items: [...course.items].sort((left, right) => left.position - right.position) }, courseTimezone: location.timezone, courseDateLocale: location.locale, formatCourseDate });
+  normalizeCourseItems(course); const location = await userDateLocation(request.user, request);
+  const copyDestinations = orgs
+    .filter((destinationOrg) => destinationOrg.id === org.id || org.allowCrossGroupTaskCopy !== false)
+    .filter((destinationOrg) => canAccess(destinationOrg, request.user) && canEdit(membership(destinationOrg, request.user)))
+    .map((destinationOrg) => ({
+      id: destinationOrg.id,
+      name: destinationOrg.name,
+      courses: (destinationOrg.courses || [])
+        .filter((destinationCourse) => destinationOrg.id !== org.id || destinationCourse.id !== course.id)
+        .map((destinationCourse) => ({ id: destinationCourse.id, name: destinationCourse.name, code: destinationCourse.code || '' }))
+    }))
+    .filter((destinationOrg) => destinationOrg.courses.length);
+  renderOrgPage(request, response, 'course', { course: { ...course, items: [...course.items].sort((left, right) => left.position - right.position) }, courseTimezone: location.timezone, courseDateLocale: location.locale, formatCourseDate, copyDestinations });
 });
 
 app.get('/org/:id/course/:courseId/items/new', requireUser, (request, response) => {
@@ -1059,6 +1071,51 @@ app.post('/org/:id/items/:itemId/update', requireUser, async (request, response)
   users.forEach((user) => { const task = (user.tasks || []).find((entry) => entry.sourceId === item.id && entry.linked !== false); if (task) { task.title = item.title; task.details = item.details; task.links = item.links; task.due = item.due; task.source = `${course.name} · ${org.name}`; task.importance = dueImportance(task.due); emitTodo(user.id, 'todo:task-updated', { task: normalizeTask(task) }); } });
   persistState(); emitCourse(org, course, 'item:updated', { item });
   return sendMutation(request, response, { item }, `/org/${org.id}/course/${course.id}`);
+});
+
+app.post('/org/:id/items/:itemId/copy', requireUser, async (request, response) => {
+  const sourceOrg = getOrg(request);
+  const sourceCourse = sourceOrg?.courses.find((entry) => entry.items.some((item) => item.id === request.params.itemId));
+  const sourceItem = sourceCourse?.items.find((entry) => entry.id === request.params.itemId);
+  const destinationOrg = orgs.find((entry) => entry.id === request.body.destinationOrgId);
+  const destinationCourse = getCourse(destinationOrg, String(request.body.destinationCourseId || ''));
+  const sourceFallback = `/org/${sourceOrg?.id || ''}/course/${sourceCourse?.id || ''}`;
+  if (!sourceOrg || !sourceItem || !canAccess(sourceOrg, request.user) || !canManageItem(sourceOrg, sourceItem, request.user) || sourceItem.type === 'Event') {
+    return sendMutation(request, response, { error: 'You cannot copy this task.' }, sourceFallback);
+  }
+  if (!destinationOrg || !destinationCourse || !canAccess(destinationOrg, request.user) || !canEdit(membership(destinationOrg, request.user))) {
+    return sendMutation(request, response, { error: 'Choose a course you can edit.' }, sourceFallback);
+  }
+  if (sourceOrg.id !== destinationOrg.id && sourceOrg.allowCrossGroupTaskCopy === false) {
+    return sendMutation(request, response, { error: 'This group does not allow copying tasks to other groups.' }, sourceFallback);
+  }
+  if (sourceOrg.id === destinationOrg.id && sourceCourse.id === destinationCourse.id) {
+    return sendMutation(request, response, { error: 'Choose a different course.' }, sourceFallback);
+  }
+  const policyError = await contentPolicyError({ type: 'course-item', text: `${sourceItem.title}\n${sourceItem.details || ''}` });
+  if (policyError) return sendMutation(request, response, { error: policyError }, sourceFallback);
+
+  normalizeCourseItems(destinationCourse);
+  const copiedItem = {
+    id: id(),
+    title: sourceItem.title,
+    details: sourceItem.details || '',
+    links: (sourceItem.links || []).map((link) => ({ ...link })),
+    type: sourceItem.type,
+    due: sourceItem.due || 'No date',
+    done: false,
+    comments: [],
+    verifiedBy: [],
+    downvotedBy: [],
+    createdBy: request.user.id,
+    position: destinationCourse.items.length,
+    past: dueImportance(sourceItem.due || 'No date') === 'Overdue'
+  };
+  destinationCourse.items.push(copiedItem);
+  persistState();
+  emitCourse(destinationOrg, destinationCourse, 'course:item-created', { item: copiedItem });
+  const copiedUrl = `/org/${destinationOrg.id}/course/${destinationCourse.id}#item-${copiedItem.id}`;
+  return sendMutation(request, response, { copiedItemId: copiedItem.id, copiedUrl, successMessage: 'Task copied.' }, sourceFallback);
 });
 
 app.post('/org/:id/items/:itemId/delete', requireUser, (request, response) => {
@@ -1246,7 +1303,7 @@ app.post('/org/:id/admin/settings', requireUser, async (request, response) => {
   if (!org || member?.role !== 'admin') return response.redirect(`/org/${request.params.id}`);
   const name = String(request.body.name || '').trim(); const description = String(request.body.description || '').trim();
   if (!name || await contentPolicyError({ type: 'text', text: `${name} ${description}` })) return response.redirect(`/org/${request.params.id}/admin/settings?error=policy`);
-  org.name = name; org.description = description; org.theme = ['coral', 'green', 'blue', 'gold'].includes(request.body.theme) ? request.body.theme : 'coral'; persistState(); response.redirect(`/org/${org.id}/admin/settings?saved=settings`);
+  org.name = name; org.description = description; org.theme = ['coral', 'green', 'blue', 'gold'].includes(request.body.theme) ? request.body.theme : 'coral'; org.allowCrossGroupTaskCopy = request.body.allowCrossGroupTaskCopy === 'on'; persistState(); response.redirect(`/org/${org.id}/admin/settings?saved=settings`);
 });
 
 app.post('/org/:id/admin/share', requireUser, (request, response) => {

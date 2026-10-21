@@ -39,6 +39,7 @@
       <label>Group name<input name="name" value="<%= adminOrg.name || '' %>" required></label>
       <label>Description<textarea name="description"><%= adminOrg.description || '' %></textarea></label>
       <label>Theme<select name="theme"><option value="coral" <%= (adminOrg.theme || 'coral') === 'coral' ? 'selected' : '' %>>Coral</option><option value="green" <%= adminOrg.theme === 'green' ? 'selected' : '' %>>Green</option><option value="blue" <%= adminOrg.theme === 'blue' ? 'selected' : '' %>>Blue</option><option value="gold" <%= adminOrg.theme === 'gold' ? 'selected' : '' %>>Gold</option></select></label>
+      <label class="toggle-row"><span><strong>Allow copying tasks to other groups</strong><small>When enabled, editors can copy a task into another group where they have course-edit access.</small></span><input type="checkbox" name="allowCrossGroupTaskCopy" <%= adminOrg.allowCrossGroupTaskCopy !== false ? 'checked' : '' %>></label>
       <button class="button primary" type="submit">Save group settings</button>
     </form>
   <% } else { %>

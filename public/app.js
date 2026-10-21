@@ -73,11 +73,19 @@ function courseItemEditMarkup(item, root, orgId, itemId) {
   const selected = (type) => item.type === type ? 'selected' : '';
   return `<details class="item-edit-details"><summary class="text-button"><i data-lucide="pencil"></i> Edit</summary><form class="inline-tool-form item-edit-form" data-live-form action="/org/${orgId}/items/${itemId}/update" method="post"><label class="item-title-field">Title<input name="title" value="${escapeHtml(item.title)}" required></label><label>Details<textarea name="details" rows="5" placeholder="Details">${escapeHtml(item.details || '')}</textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Type<select name="type"><option ${selected('Homework')}>Homework</option><option ${selected('Upcoming test')}>Upcoming test</option><option ${selected('Event')}>Event</option><option ${selected('Project')}>Project</option></select></label><label>Date<input name="due" type="date" value="${item.due !== 'No date' ? escapeHtml(item.due) : ''}"></label><button class="button secondary" type="submit">Save</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/delete" method="post"><button class="text-button" type="submit"><i data-lucide="trash-2"></i> Delete</button></form></details>`;
 }
+function courseItemCopyActionMarkup(item, root, orgId, itemId) {
+  const copyableIds = JSON.parse(root.dataset.copyableItemIds || '[]');
+  const canCopy = item.type !== 'Event' && root.dataset.copyAvailable === 'true' && (
+    root.dataset.isAdmin === 'true' || item.createdBy === root.dataset.userId || copyableIds.includes(item.id)
+  );
+  if (!canCopy) return '';
+  return `<details class="task-menu copy-task-menu"><summary class="icon-button" aria-label="More actions for ${escapeHtml(item.title)}"><i data-lucide="ellipsis"></i></summary><div class="task-menu-popover"><button class="menu-action" type="button" data-copy-task-open data-copy-url="/org/${orgId}/items/${itemId}/copy" data-copy-title="${escapeHtml(item.title)}"><i data-lucide="copy"></i> Copy task</button></div></details>`;
+}
 function itemCard(item) {
   const typeClass = String(item.type || '').toLowerCase().replace(/[^a-z]/g, '-');
   const root = courseRoot(); const orgId = escapeHtml(root.dataset.orgId); const itemId = escapeHtml(item.id); const taskSlug = `${String(item.title || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || itemId}-${itemId.slice(-8)}`; const projectAction = item.type === 'Project' ? `<a class="text-button breakout-action" href="/org/${orgId}/course/${escapeHtml(root.dataset.courseId)}/task/${escapeHtml(taskSlug)}/breakout-groups"><i data-lucide="users-round"></i> Breakout Groups</a>` : ''; const canModerate = root.dataset.isAdmin === 'true'; const downvoteAction = `<form data-live-form action="/org/${orgId}/items/${itemId}/downvote" method="post"><button class="text-button" type="submit"><i data-lucide="thumbs-down"></i>${canModerate ? ` <span data-downvote-count>${(item.downvotedBy || []).length}</span>` : ''}</button></form>`;
   const dragHandle = `<button class="icon-button course-drag-handle" type="button" aria-label="Move ${escapeHtml(item.title)}"><i data-lucide="grip-vertical"></i></button>`;
-  return `<article class="feed-card feed-item" data-item-id="${itemId}" data-position="${Number(item.position) || 0}" data-past="${courseItemPast(item)}" data-type="${escapeHtml(item.type)}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(formatCourseDate(item.due, root))}</span><h3 data-item-title>${linkedTaskTextMarkup(item.title, item.links)}</h3>${item.details ? `<p class="task-details">${linkedTaskTextMarkup(item.details, item.links)}</p>` : ''}</div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="text-button" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="text-button" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}${courseItemEditMarkup(item, root, orgId, itemId)}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${(item.comments || []).filter((comment) => !comment.reported).length}</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><small class="form-error" data-form-error hidden></small><button class="button primary" type="submit">Reply</button></form></div></details></div></article>`;
+  return `<article class="feed-card feed-item" id="item-${itemId}" data-item-id="${itemId}" data-position="${Number(item.position) || 0}" data-past="${courseItemPast(item)}" data-type="${escapeHtml(item.type)}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(formatCourseDate(item.due, root))}</span><h3 data-item-title>${linkedTaskTextMarkup(item.title, item.links)}</h3>${item.details ? `<p class="task-details">${linkedTaskTextMarkup(item.details, item.links)}</p>` : ''}</div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="text-button" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="text-button" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}${courseItemEditMarkup(item, root, orgId, itemId)}${courseItemCopyActionMarkup(item, root, orgId, itemId)}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${(item.comments || []).filter((comment) => !comment.reported).length}</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><small class="form-error" data-form-error hidden></small><button class="button primary" type="submit">Reply</button></form></div></details></div></article>`;
 }
 
 function commentMenuMarkup(comment, context) {
@@ -524,6 +532,160 @@ function showFormError(form, message, phrase) {
   bindLiveForms(error);
 }
 
+function bindTaskCopyModal() {
+  const modal = document.querySelector('[data-task-copy-modal]');
+  if (!modal || modal.dataset.bound === 'true') return;
+  modal.dataset.bound = 'true';
+  const dialog = modal.querySelector('.task-copy-dialog');
+  const heading = modal.querySelector('[data-copy-heading]');
+  const description = modal.querySelector('[data-copy-description]');
+  const groups = modal.querySelector('[data-copy-groups]');
+  const review = modal.querySelector('[data-copy-review]');
+  const progress = modal.querySelector('[data-copy-progress]');
+  const result = modal.querySelector('[data-copy-result]');
+  const errorMessage = modal.querySelector('[data-copy-error]');
+  const back = modal.querySelector('[data-copy-back]');
+  const groupCrumb = modal.querySelector('[data-copy-group-crumb]');
+  const courseCrumb = modal.querySelector('[data-copy-course-crumb]');
+  const groupCrumbButton = groupCrumb.querySelector('button');
+  const courseLabel = modal.querySelector('[data-copy-course-label]');
+  let selectedGroup = null;
+  let selectedCourse = null;
+  let returnFocus = null;
+
+  const renderStep = (step) => {
+    modal.dataset.step = step;
+    const locked = step === 'copying' || step === 'done';
+    groups.hidden = !['groups', 'courses'].includes(step);
+    review.hidden = step !== 'review';
+    progress.hidden = step !== 'copying';
+    result.hidden = step !== 'done';
+    back.hidden = !['courses', 'review'].includes(step);
+    back.disabled = locked;
+    groupCrumb.hidden = !selectedGroup || !['courses', 'review'].includes(step);
+    courseCrumb.hidden = !selectedCourse || !['review', 'copying', 'done'].includes(step);
+    modal.querySelectorAll('[data-copy-group]').forEach((button) => {
+      button.hidden = step !== 'groups';
+    });
+    modal.querySelectorAll('[data-copy-courses]').forEach((list) => {
+      list.hidden = step !== 'courses' || list.dataset.copyCourses !== selectedGroup?.id;
+    });
+    const labels = {
+      groups: ['Choose a group', modal.dataset.copyTitle ? `Copy “${modal.dataset.copyTitle}” into a course you can edit.` : 'Select the group that contains the destination course.'],
+      courses: ['Choose a course', `Select a course in ${selectedGroup?.name || 'this group'}.`],
+      review: ['Ready to copy', 'Check the destination, then make the copy.'],
+      copying: ['Copying task', 'Your task is being added to the selected course.'],
+      done: ['Copy complete', 'Your copied task is ready to open.']
+    };
+    heading.textContent = labels[step][0];
+    description.textContent = labels[step][1];
+    groupCrumbButton.textContent = selectedGroup?.name || '';
+    courseLabel.textContent = selectedCourse ? `${selectedCourse.code ? `${selectedCourse.code} · ` : ''}${selectedCourse.name}` : '';
+    errorMessage.hidden = true;
+    if (step === 'review') modal.querySelector('[data-copy-destination]').textContent = `${selectedGroup.name} · ${selectedCourse.code ? `${selectedCourse.code} · ` : ''}${selectedCourse.name}`;
+  };
+
+  const reset = () => {
+    selectedGroup = null;
+    selectedCourse = null;
+    modal.dataset.copyUrl = '';
+    modal.dataset.copyTitle = '';
+    renderStep('groups');
+  };
+  const close = () => {
+    if (modal.dataset.step === 'copying') return;
+    modal.hidden = true;
+    modal.classList.remove('open');
+    document.body.classList.remove('task-copy-open');
+    returnFocus?.focus();
+  };
+
+  const course = courseRoot();
+  course?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-copy-task-open]');
+    if (!button) return;
+    returnFocus = button;
+    selectedGroup = null;
+    selectedCourse = null;
+    modal.dataset.copyUrl = button.dataset.copyUrl || '';
+    modal.dataset.copyTitle = button.dataset.copyTitle || '';
+    button.closest('details')?.removeAttribute('open');
+    renderStep('groups');
+    modal.hidden = false;
+    modal.classList.add('open');
+    document.body.classList.add('task-copy-open');
+    requestAnimationFrame(() => dialog.focus());
+  });
+
+  modal.querySelectorAll('[data-copy-group]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedGroup = { id: button.dataset.copyGroup, name: button.dataset.copyGroupName };
+      selectedCourse = null;
+      renderStep('courses');
+      modal.querySelector(`[data-copy-courses="${CSS.escape(selectedGroup.id)}"] [data-copy-course]`)?.focus();
+    });
+  });
+  modal.querySelectorAll('[data-copy-course]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedCourse = { id: button.dataset.copyCourse, name: button.dataset.copyCourseName, code: button.dataset.copyCourseCode };
+      renderStep('review');
+      modal.querySelector('[data-copy-submit]').focus();
+    });
+  });
+  modal.querySelector('[data-copy-back]').addEventListener('click', () => renderStep(modal.dataset.step === 'review' ? 'courses' : 'groups'));
+  modal.querySelectorAll('[data-copy-nav="groups"]').forEach((button) => button.addEventListener('click', () => renderStep('groups')));
+  groupCrumbButton.addEventListener('click', () => renderStep('courses'));
+  modal.querySelector('[data-copy-close]').addEventListener('click', close);
+  modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+  modal.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') { event.preventDefault(); close(); return; }
+    if (event.key !== 'Tab') return;
+    const focusable = [...dialog.querySelectorAll('button:not([disabled]), a[href]:not([hidden])')].filter((element) => !element.closest('[hidden]'));
+    if (!focusable.length) return;
+    if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable.at(-1).focus(); }
+    else if (!event.shiftKey && document.activeElement === focusable.at(-1)) { event.preventDefault(); focusable[0].focus(); }
+  });
+  modal.querySelector('[data-copy-another]').addEventListener('click', () => {
+    selectedGroup = null;
+    selectedCourse = null;
+    renderStep('groups');
+    modal.querySelector('[data-copy-nav="groups"]').focus();
+  });
+  modal.querySelector('[data-copy-submit]').addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    if (!selectedGroup || !selectedCourse || !modal.dataset.copyUrl) return;
+    errorMessage.hidden = true;
+    button.disabled = true;
+    const startedAt = Date.now();
+    renderStep('copying');
+    try {
+      const request = fetch(modal.dataset.copyUrl, {
+        method: 'POST',
+        body: new URLSearchParams({ destinationOrgId: selectedGroup.id, destinationCourseId: selectedCourse.id }),
+        headers: { Accept: 'application/json', 'X-Live-Request': 'true' }
+      }).then((response) => ({ response }), (error) => ({ error }));
+      const [result] = await Promise.all([request, new Promise((resolve) => window.setTimeout(resolve, 500))]);
+      if (result.error) throw result.error;
+      const response = result.response;
+      const payload = await response.json();
+      if (!response.ok || payload.error) throw new Error(payload.error || 'The task could not be copied.');
+      const link = modal.querySelector('[data-copy-result-link]');
+      link.href = payload.copiedUrl;
+      renderStep('done');
+      link.focus();
+      lucide.createIcons();
+    } catch (error) {
+      renderStep('review');
+      errorMessage.textContent = error.message || 'The task could not be copied. Try again.';
+      errorMessage.hidden = false;
+      modal.querySelector('[data-copy-submit]').focus();
+    } finally {
+      if (Date.now() - startedAt < 500) await new Promise((resolve) => window.setTimeout(resolve, 500 - (Date.now() - startedAt)));
+      modal.querySelector('[data-copy-submit]').disabled = false;
+    }
+  });
+}
+
 function syncTodoSummary() {
   const list = document.querySelector('[data-live-todo-list]'); const summary = document.querySelector('[data-todo-summary]'); const countTarget = document.querySelector('[data-live-todo-count]');
   if (!list) return;
@@ -839,7 +1001,7 @@ function bindInteractions() {
   });
   const hash = window.location.hash.slice(1); if (courseRoot() && ['feed', 'board', 'resources'].includes(hash)) setCourseTab(hash, false);
   syncTodoSummary(); bindPushNotifications();
-  lucide.createIcons(); bindLinkComposers(); bindTodoControls(); bindDashboardInteractions(); bindCourseFeedControls(courseRoot()); bindCourseItemEditing(courseRoot()); bindCourseReorder(courseRoot()); bindTutorial(); connectLiveCourse(); connectLiveBreakout(); connectLiveTodo(); connectLiveNotifications(); connectLiveDashboard();
+  lucide.createIcons(); bindLinkComposers(); bindTodoControls(); bindDashboardInteractions(); bindCourseFeedControls(courseRoot()); bindCourseItemEditing(courseRoot()); bindCourseReorder(courseRoot()); bindTaskCopyModal(); bindTutorial(); connectLiveCourse(); connectLiveBreakout(); connectLiveTodo(); connectLiveNotifications(); connectLiveDashboard();
 }
 
 function bindTutorial() {
@@ -865,7 +1027,7 @@ function bindTutorial() {
 window.addEventListener('live-error', (event) => showLiveError(event.detail || 'Action failed. Please try again.'));
 
 function isInternalGetLink(link) { return link.origin === window.location.origin && link.pathname && !link.pathname.startsWith('/share/') && !link.hasAttribute('download') && link.target !== '_blank' && !link.dataset.noRouter; }
-async function navigate(url, pushState = true) { routeProgress.classList.add('active'); document.body.classList.add('is-navigating'); try { const response = await fetch(url, { headers: { 'X-Studyline-Navigation': 'true' } }); if (!response.ok || response.redirected) throw new Error(`Navigation failed: ${response.status}`); const nextDocument = new DOMParser().parseFromString(await response.text(), 'text/html'); const nextShell = nextDocument.querySelector('.app-shell'); if (!nextShell) throw new Error('Navigation returned an incomplete page.'); nextDocument.body.querySelectorAll('script').forEach((script) => script.remove()); liveState.socket?.disconnect(); liveState.notificationSocket?.disconnect(); document.querySelector('.app-shell')?.replaceWith(nextShell); document.body.className = nextDocument.body.className; document.body.classList.add('is-navigating'); document.body.appendChild(routeProgress); document.title = nextDocument.title; if (pushState) window.history.pushState({}, '', url); window.scrollTo({ top: 0, behavior: 'instant' }); bindInteractions(); requestAnimationFrame(() => document.body.classList.remove('is-navigating')); } catch (error) { window.location.assign(url); } finally { routeProgress.classList.remove('active'); } }
+async function navigate(url, pushState = true) { routeProgress.classList.add('active'); document.body.classList.add('is-navigating'); try { const response = await fetch(url, { headers: { 'X-Studyline-Navigation': 'true' } }); if (!response.ok || response.redirected) throw new Error(`Navigation failed: ${response.status}`); const nextDocument = new DOMParser().parseFromString(await response.text(), 'text/html'); const nextShell = nextDocument.querySelector('.app-shell'); if (!nextShell) throw new Error('Navigation returned an incomplete page.'); nextDocument.body.querySelectorAll('script').forEach((script) => script.remove()); liveState.socket?.disconnect(); liveState.notificationSocket?.disconnect(); document.querySelector('.app-shell')?.replaceWith(nextShell); document.body.className = nextDocument.body.className; document.body.classList.add('is-navigating'); document.body.appendChild(routeProgress); document.title = nextDocument.title; if (pushState) window.history.pushState({}, '', url); window.scrollTo({ top: 0, behavior: 'instant' }); bindInteractions(); const target = new URL(url, window.location.href); if (target.hash) requestAnimationFrame(() => document.getElementById(decodeURIComponent(target.hash.slice(1)))?.scrollIntoView({ behavior: 'smooth' })); requestAnimationFrame(() => document.body.classList.remove('is-navigating')); } catch (error) { window.location.assign(url); } finally { routeProgress.classList.remove('active'); } }
 document.addEventListener('click', (event) => { const link = event.target.closest('a'); if (!link || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !isInternalGetLink(link)) return; const target = new URL(link.href); if (target.hash && target.pathname === window.location.pathname) return; event.preventDefault(); navigate(target.href); });
 window.addEventListener('popstate', () => navigate(window.location.href, false));
 window.addEventListener('hashchange', () => { const hash = window.location.hash.slice(1); if (['feed', 'board', 'resources'].includes(hash)) setCourseTab(hash, false); });
