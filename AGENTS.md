@@ -34,4 +34,14 @@ Unless the user *wants* a boring website, don’t give them one. Judging by what
 3. Try new animations. Depending on the site (boring vs creative studio), create custom on scroll, scroll-driven, or on load animations that make content pop. Whether it’s an intro animation for a game studio, a typing effect for a developer, or something else!
 
 
+## Persistence architecture
+
+- Keep entity persistence in a dedicated model module, not in `app.js` or route handlers. `app.js` should initialize the database, instantiate each model, load entities through model methods, and pass model operations to routes as needed. It should not contain ad hoc SQL for entity read/write logic.
+- Follow the user model pattern in `users/model.js`: the model owns its schema initialization and safe, repeatable migrations, row-to-domain mapping, and persistence queries. Expose a small, explicit interface such as `init`, `all`/`get`, and targeted create/update/delete or persistence methods.
+- When introducing persistence for another entity (for example orgs), create a separate model module for it rather than extending the user model or embedding SQL in `app.js`. Keep each model responsible for its entity's tables and serialization details.
+- Write only affected rows using stable IDs. Never clear and repopulate an entire table from an in-memory collection. If syncing a collection is explicitly required, scope changes by IDs and use a transaction; make absence/deactivation semantics explicit.
+- Use SQLite expressions such as `CURRENT_TIMESTAMP` for database-generated timestamps. Do not pass Node-generated timestamps when the database is the source of time.
+- Keep schema migrations safe and repeatable. SQLite may require a table rebuild for changes that cannot be applied with `ALTER TABLE ADD COLUMN`, such as adding a non-constant default; perform rebuilds transactionally while preserving existing columns and data.
+- Add or update tests for model initialization/migration and persistence behavior, including that unrelated rows are preserved and only intended entity rows change.
+
 ALWAYS ask questions if needed. ALWAYS!
