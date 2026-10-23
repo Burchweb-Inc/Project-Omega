@@ -9,7 +9,7 @@ npm install
 npm start
 ```
 
-Then open `http://localhost:3000`. Data is stored in `data/studyline.db`; personal task payloads are encrypted at rest with AES-256-GCM. A local 32-byte key is created at `data/.task-encryption-key` with owner-only permissions for development.
+Then open `http://localhost:3000`. On startup, the app creates the ignored `data/` directory, SQLite database, and missing runtime keys. The 32-byte `data/.task-encryption-key` encrypts personal task payloads at rest with AES-256-GCM; `data/.build-id-key` supports build ID decoding. Both keys are created with owner-only permissions. Keep the data volume persistent in production: losing either key makes its associated stored data or historical build IDs unreadable.
 
 ## Task integrations
 

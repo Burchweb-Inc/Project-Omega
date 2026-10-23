@@ -16,8 +16,20 @@
   .review-log { padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); }
   .review-log p { margin: 6px 0 0; }
   .site-admin-reports { margin-top: 24px; }
+  .build-id-current { display: grid; gap: 8px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); }
+  .build-id-current > p { margin: 0; }
+  .build-id-current > code { overflow-wrap: anywhere; font-size: 20px; font-weight: 700; letter-spacing: .08em; }
+  .build-id-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin: 8px 0 0; }
+  .build-id-details div { min-width: 0; }
+  .build-id-details dt { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .build-id-details dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+  .build-id-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; margin-top: 24px; }
+  .build-id-form label { display: grid; gap: 6px; font-weight: 700; }
+  .build-id-form input { width: 100%; font-variant-numeric: tabular-nums; letter-spacing: .08em; }
+  .build-id-result { margin-top: 20px; }
+  .build-id-error { margin: 16px 0 0; color: var(--coral); }
   @media (max-width: 800px) { .moderation-tools { grid-template-columns: 1fr; } }
-  @media (max-width: 700px) { .announcement-form .form-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) { .announcement-form .form-grid, .build-id-form { grid-template-columns: 1fr; } }
 </style>
 <section class="content-wrap site-admin-page">
   <div class="page-heading hero-heading"><div><p class="kicker">SITE ADMINISTRATION</p><h1>Keep the whole space healthy.</h1><p class="lead">Manage the whole site from one focused workspace.</p></div></div>
@@ -28,6 +40,7 @@
     <a class="<%= siteAdminTab === 'feedback' ? 'active' : '' %>" href="/site-admin?tab=feedback"><i data-lucide="messages-square"></i> Feedback</a>
     <a class="<%= siteAdminTab === 'announcements' ? 'active' : '' %>" href="/site-admin?tab=announcements"><i data-lucide="megaphone"></i> Announcements</a>
     <a class="<%= siteAdminTab === 'cache' ? 'active' : '' %>" href="/site-admin?tab=cache"><i data-lucide="database-zap"></i> Cache</a>
+    <a class="<%= siteAdminTab === 'developers' ? 'active' : '' %>" href="/site-admin?tab=developers"><i data-lucide="terminal"></i> Developers</a>
   </nav>
 
   <% if (siteAdminTab === 'admins') { %>
@@ -70,11 +83,46 @@
       <form class="inline-admin-form" data-live-form action="/site-admin/cache" method="post"><label class="cache-target-field">Username <span class="muted">leave blank for everyone</span><input name="username" placeholder="username"></label><button class="button danger" type="submit"><i data-lucide="bomb"></i> Nuke cache</button></form>
       <p class="muted cache-warning"><i data-lucide="triangle-alert"></i> The selected browser will lose offline media and any locally cached files. The next load downloads fresh versions and may take longer.</p>
     </section>
-  <% } else { %>
+  <% } else if (siteAdminTab === 'announcements') { %>
     <section class="admin-panel">
       <div class="admin-section-heading"><div><h2>Broadcast announcement</h2><p class="muted">Every user will receive a popup. Markdown supports headings, links, lists, emphasis, code, tables, and images.</p></div></div>
       <form class="announcement-form" data-live-form action="/site-admin/announcements" method="post"><label>Title<input name="title" maxlength="160" required placeholder="A clear title for everyone"></label><label>Message<textarea name="body" maxlength="30000" required placeholder="# What is changing?&#10;&#10;Write the full announcement in Markdown.&#10;&#10;- Use **bold** and links&#10;- Add images with `![alt text](https://...)`"></textarea></label><div class="form-grid"><label>Media link <span class="muted">optional</span><input name="mediaUrl" type="url" placeholder="https://..."></label><label>Media type<select name="mediaType"><option value="none">None</option><option value="image">Image</option><option value="video">Video</option></select></label><label>Text size<select name="fontSize"><option value="normal">Normal</option><option value="small">Small</option><option value="large">Large</option></select></label></div><button class="button primary" type="submit"><i data-lucide="send"></i> Broadcast to all users</button></form>
     </section>
     <section class="admin-panel announcement-history"><div class="admin-section-heading"><div><h2>Announcement history</h2><p class="muted">Previously broadcast announcements.</p></div></div><% if (announcements.length) { announcements.forEach(announcement => { %><article><h3><%= announcement.title %></h3><small><%= new Date(announcement.created_at).toLocaleString() %> · <%= announcement.media_type === 'none' ? 'No media' : announcement.media_type %></small></article><% }) } else { %><p class="muted">No announcements yet.</p><% } %></section>
+  <% } else if (siteAdminTab === 'developers') { %>
+    <section class="admin-panel">
+      <div class="admin-section-heading"><div><h2>Decrypt build</h2><p class="muted">Build IDs are generated when a development or production server starts. Enter a recorded ID to inspect its build details.</p></div></div>
+      <div class="build-id-current" aria-label="Current server build">
+        <p class="muted">Current server build ID</p>
+        <code><%= buildInfo.id %></code>
+        <dl class="build-id-details">
+          <div><dt>Build number</dt><dd><%= buildInfo.buildNumber %></dd></div>
+          <div><dt>Built at</dt><dd><time datetime="<%= buildInfo.builtAt %>"><%= new Date(buildInfo.builtAt).toLocaleString() %></time></dd></div>
+          <div><dt>Environment</dt><dd><%= buildInfo.environment %></dd></div>
+          <div><dt>App version</dt><dd><%= buildInfo.appVersion %></dd></div>
+        </dl>
+      </div>
+      <form class="build-id-form" action="/site-admin/build-id/decrypt" method="post">
+        <label for="build-id-input">Build ID
+          <input id="build-id-input" name="buildId" type="text" inputmode="numeric" autocomplete="off" maxlength="15" pattern="[0-9]{15}" value="<%= buildIdInput %>" aria-describedby="build-id-help" required>
+        </label>
+        <button class="button secondary" type="submit"><i data-lucide="scan-search"></i> Decrypt build</button>
+      </form>
+      <p id="build-id-help" class="muted">Enter the complete 15-digit ID. Only IDs recorded by this server can be decoded.</p>
+      <% if (buildDecodeError) { %><p class="build-id-error" role="alert"><%= buildDecodeError %></p><% } %>
+      <% if (buildDecodeResult) { %>
+        <section class="build-id-result" aria-live="polite" aria-labelledby="build-id-result-title">
+          <div class="admin-section-heading"><div><h3 id="build-id-result-title">Build details</h3><p class="muted">Decoded from the submitted build ID.</p></div></div>
+          <dl class="build-id-details">
+            <div><dt>Build number</dt><dd><%= buildDecodeResult.buildNumber %></dd></div>
+            <div><dt>Built at</dt><dd><time datetime="<%= buildDecodeResult.builtAt %>"><%= new Date(buildDecodeResult.builtAt).toLocaleString() %></time></dd></div>
+            <div><dt>Environment</dt><dd><%= buildDecodeResult.environment %></dd></div>
+            <div><dt>App version</dt><dd><%= buildDecodeResult.appVersion %></dd></div>
+            <div><dt>Node.js</dt><dd><%= buildDecodeResult.nodeVersion %></dd></div>
+            <div><dt>Platform</dt><dd><%= buildDecodeResult.platform %> / <%= buildDecodeResult.architecture %></dd></div>
+          </dl>
+        </section>
+      <% } %>
+    </section>
   <% } %>
 </section>

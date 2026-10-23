@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
+const packageInfo = require('./package.json');
 const { marked } = require('marked');
 const sanitizeHtml = require('sanitize-html');
 const { Server } = require('socket.io');
@@ -36,6 +37,15 @@ db.pragma('foreign_keys = ON');
 db.pragma('journal_mode = WAL');
 
 userModel.init(); // creates and migrates the user table when needed
+
+const buildIdModel = require('./utils/build-id').initializeBuildIds(db, path.join(dataDir, '.build-id-key'));
+const buildInfo = buildIdModel.createBuild({
+  environment: process.env.NODE_ENV === 'production' ? 'production' : 'development',
+  appVersion: packageInfo.version,
+  nodeVersion: process.version,
+  platform: process.platform,
+  architecture: process.arch
+});
 
 db.prepare(`CREATE TABLE IF NOT EXISTS orgs (
   id TEXT PRIMARY KEY,
@@ -506,8 +516,8 @@ function renderLinkedText(text, links = []) {
   }
   return output + escapeHtmlServer(value.slice(cursor));
 }
-function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs, canEdit, canManageItem, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), renderLinkedText, ...extra }); }
-function renderPublicPage(request, response, page, extra = {}) { response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: null, canonicalUrl: canonicalUrl(request), ...extra }); }
+function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs, canEdit, canManageItem, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), renderLinkedText, buildInfo, ...extra }); }
+function renderPublicPage(request, response, page, extra = {}) { response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: null, canonicalUrl: canonicalUrl(request), buildInfo, ...extra }); }
 function getOrg(request) { return orgs.find((entry) => entry.id === request.params.id || entry.slug === request.params.slug); }
 function getCourse(org, courseId) { return org?.courses.find((course) => course.id === courseId); }
 function isSiteAdmin(user) { return Boolean(user?.isSiteAdmin); }
@@ -528,6 +538,25 @@ function canAccess(org, user) { return Boolean(org && user && (isSiteAdmin(user)
 function requireSiteAdmin(request, response, next) { if (!isSiteAdmin(request.user)) return response.status(403).send('Site admin access required.'); next(); }
 function siteFeedback() { return db.prepare('SELECT * FROM site_feedback ORDER BY created_at DESC').all(); }
 function siteAnnouncements() { return db.prepare('SELECT * FROM site_announcements ORDER BY created_at DESC').all(); }
+function siteAdminPageData(request) {
+  return {
+    siteAdminTab: ['admins', 'groups', 'moderation', 'feedback', 'announcements', 'cache', 'developers'].includes(request.query.tab) ? request.query.tab : 'admins',
+    siteAdminComments: globalModerationComments().filter((comment) => !comment.reviewedAt),
+    siteAdminReports: globalReports().filter((report) => report.status === 'open'),
+    feedback: siteFeedback(),
+    siteAdminUsers: users.filter((user) => user.isSiteAdmin),
+    announcements: siteAnnouncements(),
+    badWordReviewLogs: db.prepare('SELECT * FROM bad_word_review_logs ORDER BY created_at DESC LIMIT 20').all().map((entry) => ({
+      ...entry,
+      keptWords: JSON.parse(entry.kept_words || '[]'),
+      removedWords: JSON.parse(entry.removed_words || '[]')
+    })),
+    buildInfo,
+    buildIdInput: '',
+    buildDecodeResult: null,
+    buildDecodeError: ''
+  };
+}
 function renderAnnouncementMarkdown(markdown) {
   const rendered = marked.parse(String(markdown || ''), { breaks: true, gfm: true });
   return sanitizeHtml(rendered, {
@@ -742,19 +771,19 @@ app.get('/dashboard', requireUser, (request, response) => {
     dashboardModeration
   });
 });
-app.get('/site-admin', requireUser, requireSiteAdmin, (request, response) => render(request, response, 'site-admin', {
-  siteAdminTab: ['admins', 'groups', 'moderation', 'feedback', 'announcements', 'cache'].includes(request.query.tab) ? request.query.tab : 'admins',
-  siteAdminComments: globalModerationComments().filter((comment) => !comment.reviewedAt),
-  siteAdminReports: globalReports().filter((report) => report.status === 'open'),
-  feedback: siteFeedback(),
-  siteAdminUsers: users.filter((user) => user.isSiteAdmin),
-  announcements: siteAnnouncements(),
-  badWordReviewLogs: db.prepare('SELECT * FROM bad_word_review_logs ORDER BY created_at DESC LIMIT 20').all().map((entry) => ({
-    ...entry,
-    keptWords: JSON.parse(entry.kept_words || '[]'),
-    removedWords: JSON.parse(entry.removed_words || '[]')
-  }))
-}));
+app.get('/site-admin', requireUser, requireSiteAdmin, (request, response) => render(request, response, 'site-admin', siteAdminPageData(request)));
+
+app.post('/site-admin/build-id/decrypt', requireUser, requireSiteAdmin, (request, response) => {
+  const buildIdInput = String(request.body.buildId || '').trim();
+  const buildDecodeResult = buildIdModel.decode(buildIdInput);
+  return render(request, response, 'site-admin', {
+    ...siteAdminPageData(request),
+    siteAdminTab: 'developers',
+    buildIdInput,
+    buildDecodeResult,
+    buildDecodeError: buildDecodeResult ? '' : 'No recorded build matches that ID. Check that all 15 digits are correct.'
+  });
+});
 
 app.post('/site-admin/groups/:id/suspension', requireUser, requireSiteAdmin, (request, response) => {
   const org = getOrg(request); const action = request.body.action;
