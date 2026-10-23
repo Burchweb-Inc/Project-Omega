@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+let taskEncryptionMigrationNeeded = false;
 
 function loadTaskEncryptionKey() {
   if (process.env.TASK_ENCRYPTION_KEY) {
@@ -139,5 +140,6 @@ function persistState(db, users) {
 module.exports = (db) => ({
   init: () => initialize(db),
   all: () => loadUsersFromDatabase(db),
+  needsEncryptionMigration: () => taskEncryptionMigrationNeeded,
   persistState: (users) => persistState(db, users)
 });

@@ -1,3 +1,16 @@
+function loadTaskSyncConfig(environment = process.env, readSecret = () => null) {
+  return {
+    googleTasks: {
+      client_id: environment.GOOGLE_TASKS_CLIENT_ID,
+      client_secret: readSecret('google_tasks_client_secret') || environment.GOOGLE_TASKS_CLIENT_SECRET,
+      redirect_uri: environment.GOOGLE_TASKS_REDIRECT_URI
+    },
+    appleReminders: {
+      caldav_server: environment.APPLE_CALDAV_SERVER
+    }
+  };
+}
+
 function taskSyncConfiguration(config) {
   const missing = [];
   const google = config?.googleTasks || {};
@@ -27,4 +40,4 @@ function taskSyncConfiguration(config) {
   return { enabled: missing.length === 0, missing };
 }
 
-module.exports = { taskSyncConfiguration };
+module.exports = { loadTaskSyncConfig, taskSyncConfiguration };

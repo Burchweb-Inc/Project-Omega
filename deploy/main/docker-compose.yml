@@ -11,6 +11,7 @@ services:
     restart: unless-stopped
     secrets:
       - openrouter_api_key
+      - google_tasks_client_secret
     environment:
       - NODE_ENV=production
       - ORIGIN=https://lockedin.burchweb.com
@@ -18,9 +19,8 @@ services:
       - BAD_WORD_REVIEW_INTERVAL_MINUTES=10
       - BAD_WORD_REVIEW_INTERVAL_MS=600000
       - APP_MODE=beta
-      - GOOGLE_TASKS_CLIENT_ID=${GOOGLE_TASKS_CLIENT_ID}
-      - GOOGLE_TASKS_CLIENT_SECRET=${GOOGLE_TASKS_CLIENT_SECRET}
-      - GOOGLE_TASKS_REDIRECT_URI=${GOOGLE_TASKS_REDIRECT_URI}
+      - GOOGLE_TASKS_CLIENT_ID=${GOOGLE_TASKS_CLIENT_ID:-}
+      - GOOGLE_TASKS_REDIRECT_URI=${GOOGLE_TASKS_REDIRECT_URI:-}
       - APPLE_CALDAV_SERVER=${APPLE_CALDAV_SERVER:-https://caldav.icloud.com}
 secrets:
   openrouter_api_key:

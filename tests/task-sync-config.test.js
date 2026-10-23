@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { taskSyncConfiguration } = require('../utils/task-sync-config');
+const { loadTaskSyncConfig, taskSyncConfiguration } = require('../utils/task-sync-config');
 
 const readyConfig = {
   googleTasks: {
@@ -47,4 +47,23 @@ test('requires the Apple CalDAV endpoint to use HTTPS on iCloud', () => {
   });
   assert.equal(configuration.enabled, false);
   assert.deepEqual(configuration.missing, ['APPLE_CALDAV_SERVER']);
+});
+
+test('loads the Google client secret from a mounted Docker secret before environment fallback', () => {
+  const environment = {
+    GOOGLE_TASKS_CLIENT_ID: 'client-id',
+    GOOGLE_TASKS_CLIENT_SECRET: 'environment-secret',
+    GOOGLE_TASKS_REDIRECT_URI: 'https://lockin.example/integrations/google/callback',
+    APPLE_CALDAV_SERVER: 'https://caldav.icloud.com'
+  };
+  const dockerConfig = loadTaskSyncConfig(environment, (name) => {
+    assert.equal(name, 'google_tasks_client_secret');
+    return 'mounted-secret';
+  });
+  assert.equal(dockerConfig.googleTasks.client_secret, 'mounted-secret');
+  assert.deepEqual(taskSyncConfiguration(dockerConfig), { enabled: true, missing: [] });
+
+  const localConfig = loadTaskSyncConfig(environment);
+  assert.equal(localConfig.googleTasks.client_secret, 'environment-secret');
+  assert.deepEqual(taskSyncConfiguration(localConfig), { enabled: true, missing: [] });
 });

@@ -123,7 +123,6 @@ const courseReorderWindows = new Map();
 const ipLocationCache = new Map();
 const breakoutPresence = new Map();
 const breakoutPingWindows = new Map();
-let taskEncryptionMigrationNeeded = false;
 
 function loadTaskEncryptionKey() {
   if (process.env.TASK_ENCRYPTION_KEY) {
@@ -155,9 +154,6 @@ function decryptData(storedValue) {
   decipher.setAuthTag(Buffer.from(encodedTag, 'base64url'));
   return JSON.parse(Buffer.concat([decipher.update(Buffer.from(encodedCiphertext, 'base64url')), decipher.final()]).toString('utf8'));
 }
-
-const encryptTasks = encryptData;
-const decryptTasks = decryptData;
 
 async function syncUserTaskIntegrations(user, providers = ['googleTasks', 'appleReminders']) {
   if (!taskSyncConfig.enabled) return { busy: false, disabled: true, synced: [], errors: [] };
@@ -214,29 +210,6 @@ async function syncUserTaskIntegrations(user, providers = ['googleTasks', 'apple
   }
 }
 
-function loadUsersFromDatabase() {
-  const rows = db.prepare('SELECT * FROM users ORDER BY username ASC').all();
-  taskEncryptionMigrationNeeded = rows.some((row) => !row.tasks?.startsWith('v1:'));
-  users.splice(0, users.length, ...rows.map((row) => {
-    const settings = JSON.parse(row.settings || '{}');
-    if (settings.snarkyType && settings.passwordSet === undefined) settings.passwordSet = false;
-    return {
-      id: row.id,
-      name: row.name,
-      username: row.username,
-      age: Number(row.age),
-      passwordHash: row.password_hash,
-      isSiteAdmin: Boolean(row.is_site_admin) || row.username === 'admin',
-      tasks: decryptTasks(row.tasks).map(normalizeTask),
-      settings,
-      notifications: JSON.parse(row.notifications || '[]'),
-      moderationStatus: row.moderation_status || 'active',
-      moderationMessage: row.moderation_message || '',
-      moderationUntil: row.moderation_until || ''
-    };
-  }));
-}
-
 function loadOrgsFromDatabase() {
   const rows = db.prepare('SELECT * FROM orgs ORDER BY updated_at ASC').all();
   orgs.splice(0, orgs.length, ...rows.map((row) => {
@@ -253,7 +226,7 @@ function persistState() {
     VALUES (@id, @payload, @updatedAt)
     ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`);
 
-  persistUsersState(users);
+  userModel.persistState(users);
   db.prepare('DELETE FROM orgs').run();
 
   orgs.forEach((org) => orgWrite.run({
@@ -263,7 +236,8 @@ function persistState() {
   }));
 }
 
-const users = loadUsersFromDatabase();
+const users = userModel.all();
+if (userModel.needsEncryptionMigration()) userModel.persistState(users);
 loadOrgsFromDatabase();
 
 function id() { return crypto.randomBytes(4).toString('hex'); }

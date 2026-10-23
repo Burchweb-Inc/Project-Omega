@@ -3,6 +3,13 @@
 // Eventually centralize config here and load just this module
 require("dotenv").config();
 const docker = require("./utils/docker.js");
+const fs = require("fs");
+const { loadTaskSyncConfig } = require("./utils/task-sync-config");
+
+const taskSyncConfig = loadTaskSyncConfig(process.env, (secretName) => {
+  const secretPath = `/run/secrets/${secretName}`;
+  return fs.existsSync(secretPath) ? docker.readSecret(secretName) : null;
+});
 
 const config = function () {
   return {
@@ -18,14 +25,7 @@ const config = function () {
         docker.readSecret("snarkytype_client_secret") ||
         process.env.SNARKYTYPE_CLIENT_SECRET,
     },
-    googleTasks: {
-      client_id: process.env.GOOGLE_TASKS_CLIENT_ID,
-      client_secret: process.env.GOOGLE_TASKS_CLIENT_SECRET,
-      redirect_uri: process.env.GOOGLE_TASKS_REDIRECT_URI,
-    },
-    appleReminders: {
-      caldav_server: process.env.APPLE_CALDAV_SERVER,
-    }
+    ...taskSyncConfig
   };
 };
 
