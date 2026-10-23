@@ -14,8 +14,12 @@ const { Server } = require('socket.io');
 const { scanContent } = require('./moderation/content-safety');
 const { moderationComments, registerCommentRoutes } = require('./moderation/comments');
 const { appendRemovedTextForReview, appendAppealPhrase, reviewQueuedBadWords, reviewAppealWords, addUserBadWord } = require('./moderation/bad-word-queue');
+const { discoverAppleCalendar, syncAppleReminders, syncGoogleTasks } = require('./utils/task-integrations');
+const { isSyncDue, isSyncSchedule, syncInterval } = require('./utils/task-sync-schedule');
+const { taskSyncConfiguration } = require('./utils/task-sync-config');
 
 const app = express();
+const taskSyncConfig = taskSyncConfiguration(config);
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || '0.0.0.0';
 const serviceWorkerVersion = 'lockin-sw-20261004-1';
@@ -112,14 +116,126 @@ const orgs = [];
 const sessions = new Map();
 const snarkyTypePending = new Map();
 const snarkyTypeLinkRequests = new Map();
+const googleTasksOAuthStates = new Map();
+const activeTaskSyncs = new Set();
 const loginAttempts = new Map();
 const courseReorderWindows = new Map();
 const ipLocationCache = new Map();
 const breakoutPresence = new Map();
 const breakoutPingWindows = new Map();
+let taskEncryptionMigrationNeeded = false;
 
-const loadUsersFromDatabase = userModel.all;
-const persistUsersState = userModel.persistState;
+function loadTaskEncryptionKey() {
+  if (process.env.TASK_ENCRYPTION_KEY) {
+    const key = Buffer.from(process.env.TASK_ENCRYPTION_KEY, 'base64url');
+    if (key.length !== 32) throw new Error('TASK_ENCRYPTION_KEY must decode to exactly 32 bytes.');
+    return key;
+  }
+  const keyPath = path.join(dataDir, '.task-encryption-key');
+  if (!fs.existsSync(keyPath)) fs.writeFileSync(keyPath, crypto.randomBytes(32), { mode: 0o600 });
+  fs.chmodSync(keyPath, 0o600);
+  const key = fs.readFileSync(keyPath);
+  if (key.length !== 32) throw new Error(`${keyPath} must contain exactly 32 bytes.`);
+  return key;
+}
+
+const taskEncryptionKey = loadTaskEncryptionKey();
+
+function encryptData(value) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', taskEncryptionKey, iv);
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(value), 'utf8'), cipher.final()]);
+  return `v1:${iv.toString('base64url')}:${cipher.getAuthTag().toString('base64url')}:${ciphertext.toString('base64url')}`;
+}
+
+function decryptData(storedValue) {
+  if (!storedValue?.startsWith('v1:')) return JSON.parse(storedValue || 'null');
+  const [, encodedIv, encodedTag, encodedCiphertext] = storedValue.split(':');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', taskEncryptionKey, Buffer.from(encodedIv, 'base64url'));
+  decipher.setAuthTag(Buffer.from(encodedTag, 'base64url'));
+  return JSON.parse(Buffer.concat([decipher.update(Buffer.from(encodedCiphertext, 'base64url')), decipher.final()]).toString('utf8'));
+}
+
+const encryptTasks = encryptData;
+const decryptTasks = decryptData;
+
+async function syncUserTaskIntegrations(user, providers = ['googleTasks', 'appleReminders']) {
+  if (!taskSyncConfig.enabled) return { busy: false, disabled: true, synced: [], errors: [] };
+  if (activeTaskSyncs.has(user.id)) return { busy: true, synced: [], errors: [] };
+  activeTaskSyncs.add(user.id);
+  try {
+    user.settings ||= {};
+    const synced = [];
+    const errors = [];
+    const connectedProviders = providers.filter((provider) => user.settings[provider]?.credentials);
+    if (!connectedProviders.length) return { busy: false, noConnections: true, synced, errors };
+
+    for (const provider of connectedProviders) {
+      const current = user.settings[provider];
+      try {
+        if (provider === 'googleTasks') {
+          const result = await syncGoogleTasks({
+            tasks: user.tasks || [],
+            credentials: decryptData(current.credentials),
+            integration: current,
+            clientId: config.googleTasks.client_id,
+            clientSecret: config.googleTasks.client_secret
+          });
+          user.settings.googleTasks = { ...result.integration, credentials: encryptData(result.credentials) };
+        } else {
+          const result = await syncAppleReminders({
+            tasks: user.tasks || [],
+            credentials: decryptData(current.credentials),
+            integration: current,
+            server: config.appleReminders.caldav_server
+          });
+          user.settings.appleReminders = { ...current, ...result };
+        }
+        synced.push(provider);
+      } catch (error) {
+        console.error(`${provider} task sync failed`, error.message);
+        errors.push(`${provider === 'googleTasks' ? 'Google Tasks' : 'Apple Reminders'}: ${error.message}`);
+      }
+    }
+
+    const now = Date.now();
+    const taskSync = user.settings.taskSync || { schedule: 'manual' };
+    const interval = syncInterval(taskSync.schedule);
+    user.settings.taskSync = {
+      ...taskSync,
+      lastSyncAt: now,
+      lastSyncError: errors.join(' ').slice(0, 500),
+      nextSyncAt: interval ? now + interval : null
+    };
+    persistState();
+    return { busy: false, noConnections: false, synced, errors };
+  } finally {
+    activeTaskSyncs.delete(user.id);
+  }
+}
+
+function loadUsersFromDatabase() {
+  const rows = db.prepare('SELECT * FROM users ORDER BY username ASC').all();
+  taskEncryptionMigrationNeeded = rows.some((row) => !row.tasks?.startsWith('v1:'));
+  users.splice(0, users.length, ...rows.map((row) => {
+    const settings = JSON.parse(row.settings || '{}');
+    if (settings.snarkyType && settings.passwordSet === undefined) settings.passwordSet = false;
+    return {
+      id: row.id,
+      name: row.name,
+      username: row.username,
+      age: Number(row.age),
+      passwordHash: row.password_hash,
+      isSiteAdmin: Boolean(row.is_site_admin) || row.username === 'admin',
+      tasks: decryptTasks(row.tasks).map(normalizeTask),
+      settings,
+      notifications: JSON.parse(row.notifications || '[]'),
+      moderationStatus: row.moderation_status || 'active',
+      moderationMessage: row.moderation_message || '',
+      moderationUntil: row.moderation_until || ''
+    };
+  }));
+}
 
 function loadOrgsFromDatabase() {
   const rows = db.prepare('SELECT * FROM orgs ORDER BY updated_at ASC').all();
@@ -762,6 +878,137 @@ app.post('/settings/push', requireUser, (request, response) => {
   persistState();
   return sendMutation(request, response, { successMessage: 'Push notification preferences saved.' }, '/settings#push-notifications');
 });
+app.get('/integrations/google/connect', requireUser, (request, response) => {
+  const { client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri } = config.googleTasks;
+  if (!taskSyncConfig.enabled || !clientId || !clientSecret || !redirectUri) return response.redirect('/todo?integration=sync-env-not-configured#task-sync-modal');
+  const state = crypto.randomBytes(32).toString('base64url');
+  googleTasksOAuthStates.forEach((entry, key) => {
+    if (entry.createdAt < Date.now() - 10 * 60 * 1000 || entry.userId === request.user.id) googleTasksOAuthStates.delete(key);
+  });
+  googleTasksOAuthStates.set(state, { userId: request.user.id, createdAt: Date.now() });
+  const authorizeUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  authorizeUrl.search = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'https://www.googleapis.com/auth/tasks',
+    access_type: 'offline',
+    prompt: 'consent',
+    state
+  }).toString();
+  return response.redirect(authorizeUrl.href);
+});
+app.get('/integrations/google/callback', async (request, response) => {
+  if (!taskSyncConfig.enabled) return response.redirect('/todo?integration=sync-env-not-configured#task-sync-modal');
+  const state = String(request.query.state || '');
+  const oauthState = googleTasksOAuthStates.get(state);
+  googleTasksOAuthStates.delete(state);
+  if (!oauthState || oauthState.createdAt < Date.now() - 10 * 60 * 1000) return response.redirect('/todo?integration=google-connect-failed#task-sync-modal');
+  const user = users.find((entry) => entry.id === oauthState.userId);
+  if (!user || request.query.error || !request.query.code) return response.redirect('/todo?integration=google-connect-failed#task-sync-modal');
+  const { client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri } = config.googleTasks;
+  try {
+    const result = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ code: String(request.query.code), client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' })
+    });
+    if (!result.ok) throw new Error(`Google OAuth returned HTTP ${result.status}.`);
+    const token = await result.json();
+    const previous = user.settings?.googleTasks || {};
+    const previousCredentials = previous.credentials ? decryptData(previous.credentials) : {};
+    if (!token.access_token || (!token.refresh_token && !previousCredentials.refreshToken)) throw new Error('Google did not provide an offline refresh token.');
+    const credentials = {
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token || previousCredentials.refreshToken,
+      expiresAt: Date.now() + Number(token.expires_in || 3600) * 1000
+    };
+    user.settings = {
+      ...(user.settings || {}),
+      googleTasks: { credentials: encryptData(credentials), taskListId: null, taskMap: {} }
+    };
+    persistState();
+    return response.redirect('/todo?integration=google-connected#task-sync-modal');
+  } catch (error) {
+    console.error('Google Tasks connection failed', error.message);
+    return response.redirect('/todo?integration=google-connect-failed#task-sync-modal');
+  }
+});
+app.post('/integrations/google/sync', requireUser, async (request, response) => {
+  if (!taskSyncConfig.enabled) return response.redirect('/todo?integration=sync-env-not-configured#task-sync-modal');
+  const result = await syncUserTaskIntegrations(request.user, ['googleTasks']);
+  const status = result.disabled ? 'sync-env-not-configured' : result.busy ? 'sync-busy' : result.noConnections ? 'google-not-connected' : result.errors.length ? 'sync-failed' : 'sync-complete';
+  return response.redirect(`/todo?integration=${status}#task-sync-modal`);
+});
+app.post('/integrations/google/disconnect', requireUser, (request, response) => {
+  request.user.settings = { ...(request.user.settings || {}) };
+  delete request.user.settings.googleTasks;
+  persistState();
+  return response.redirect('/todo?integration=google-disconnected#task-sync-modal');
+});
+app.post('/integrations/apple/connect', requireUser, async (request, response) => {
+  if (!taskSyncConfig.enabled) return response.redirect('/todo?integration=sync-env-not-configured#task-sync-modal');
+  const username = String(request.body.username || '').trim().toLowerCase();
+  const password = String(request.body.appSpecificPassword || '').trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(username) || password.length < 8 || password.length > 128) {
+    return response.redirect('/todo?integration=apple-invalid-credentials#task-sync-modal');
+  }
+  try {
+    const credentials = { username, password };
+    const calendarHref = await discoverAppleCalendar(credentials, config.appleReminders.caldav_server);
+    const previous = request.user.settings?.appleReminders || {};
+    const unchangedAccount = previous.username === username;
+    request.user.settings = {
+      ...(request.user.settings || {}),
+      appleReminders: {
+        username,
+        credentials: encryptData(credentials),
+        calendarHref,
+        taskMap: unchangedAccount ? (previous.taskMap || {}) : {}
+      }
+    };
+    persistState();
+    return response.redirect('/todo?integration=apple-connected#task-sync-modal');
+  } catch (error) {
+    console.error('Apple Reminders connection failed', error.message);
+    return response.redirect('/todo?integration=apple-connect-failed#task-sync-modal');
+  }
+});
+app.post('/integrations/apple/sync', requireUser, async (request, response) => {
+  if (!taskSyncConfig.enabled) return response.redirect('/todo?integration=sync-env-not-configured#task-sync-modal');
+  const result = await syncUserTaskIntegrations(request.user, ['appleReminders']);
+  const status = result.disabled ? 'sync-env-not-configured' : result.busy ? 'sync-busy' : result.noConnections ? 'apple-not-connected' : result.errors.length ? 'sync-failed' : 'sync-complete';
+  return response.redirect(`/todo?integration=${status}#task-sync-modal`);
+});
+app.post('/integrations/apple/disconnect', requireUser, (request, response) => {
+  request.user.settings = { ...(request.user.settings || {}) };
+  delete request.user.settings.appleReminders;
+  persistState();
+  return response.redirect('/todo?integration=apple-disconnected#task-sync-modal');
+});
+app.post('/integrations/sync', requireUser, async (request, response) => {
+  if (!taskSyncConfig.enabled) return response.redirect('/todo?integration=sync-env-not-configured#task-sync-modal');
+  const result = await syncUserTaskIntegrations(request.user);
+  const status = result.disabled ? 'sync-env-not-configured' : result.busy ? 'sync-busy' : result.noConnections ? 'sync-no-connections' : result.errors.length ? 'sync-failed' : 'sync-complete';
+  return response.redirect(`/todo?integration=${status}#task-sync-modal`);
+});
+app.post('/integrations/sync/schedule', requireUser, (request, response) => {
+  if (!taskSyncConfig.enabled) return response.redirect('/todo?integration=sync-env-not-configured#task-sync-modal');
+  const schedule = String(request.body.schedule || '');
+  if (!isSyncSchedule(schedule)) {
+    return response.redirect('/todo?integration=sync-schedule-invalid#task-sync-modal');
+  }
+  request.user.settings ||= {};
+  const interval = syncInterval(schedule);
+  request.user.settings.taskSync = {
+    ...(request.user.settings.taskSync || {}),
+    schedule,
+    nextSyncAt: interval ? Date.now() + interval : null,
+    lastSyncError: null
+  };
+  persistState();
+  return response.redirect('/todo?integration=sync-schedule-saved#task-sync-modal');
+});
 app.post('/settings/password', requireUser, (request, response) => {
   const newPassword = String(request.body.newPassword || '');
   const passwordSet = request.user.settings?.passwordSet !== false;
@@ -776,7 +1023,21 @@ app.post('/settings/delete', requireUser, (request, response) => {
   for (const [token, userId] of sessions) if (userId === deletedUserId) sessions.delete(token);
   users.splice(users.findIndex((user) => user.id === deletedUserId), 1); persistState(); response.setHeader('Set-Cookie', 'session=; HttpOnly; Max-Age=0; Path=/'); return sendMutation(request, response, { deletedAccount: true, successMessage: 'Your account has been deleted.' }, '/');
 });
-app.get('/todo', requireUser, async (request, response) => { const location = await userDateLocation(request.user, request); return render(request, response, 'todo', { todoDateTimezone: location.timezone, todoDateLocale: location.locale, formatTaskDate }); });
+app.get('/todo', requireUser, async (request, response) => {
+  const location = await userDateLocation(request.user, request);
+  return render(request, response, 'todo', {
+    todoDateTimezone: location.timezone,
+    todoDateLocale: location.locale,
+    formatTaskDate,
+    googleTasksConnected: Boolean(request.user.settings?.googleTasks?.credentials),
+    appleRemindersConnected: Boolean(request.user.settings?.appleReminders?.credentials),
+    appleRemindersUsername: request.user.settings?.appleReminders?.username || '',
+    googleTasksConfigured: Boolean(config.googleTasks.client_id && config.googleTasks.client_secret && config.googleTasks.redirect_uri),
+    taskSyncConfigured: taskSyncConfig.enabled,
+    taskSyncMissingConfig: taskSyncConfig.missing.join(', '),
+    integrationStatus: String(request.query.integration || '')
+  });
+});
 app.use('/calendar', require('./calendar/routes')({ requireUser, render, allItems }));
 app.get('/groups', requireUser, (request, response) => render(request, response, 'groups', { groups: orgs.filter((org) => membership(org, request.user) || pendingInvite(org, request.user)).map((org) => ({ ...org, pendingInvite: pendingInvite(org, request.user) })) }));
 app.get(['/org/new', '/group/new'], requireUser, (request, response) => render(request, response, 'new-org'));
@@ -1365,6 +1626,18 @@ app.use((error, request, response, next) => {
     message: status === 502 ? 'LockIn reached the server, but an upstream service returned a bad gateway response. Please try again shortly.' : 'Something went sideways on our end. No need to debug it from your side; head back to LockIn and try again.'
   });
 });
+
+const taskSyncScheduler = setInterval(() => {
+  if (!taskSyncConfig.enabled) return;
+  const dueUsers = users.filter((user) =>
+    isSyncDue(user.settings?.taskSync) &&
+    (user.settings?.googleTasks?.credentials || user.settings?.appleReminders?.credentials)
+  );
+  dueUsers.forEach((user) => {
+    syncUserTaskIntegrations(user).catch((error) => console.error(`Scheduled task sync failed for user ${user.id}`, error.message));
+  });
+}, 15_000);
+taskSyncScheduler.unref();
 
 server.listen(port, host, () => {
   const codespacesUrl = process.env.CODESPACES && process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN

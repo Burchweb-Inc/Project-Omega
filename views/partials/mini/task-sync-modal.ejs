@@ -1,0 +1,75 @@
+<%
+    const taskSyncSettings = user.settings?.taskSync || {};
+    const taskSyncMessages = {
+        'google-not-configured': 'Google Tasks is not configured yet. Add its OAuth values to the environment.',
+        'google-connect-failed': 'Google could not be connected. Check the OAuth setup and try again.',
+        'google-connected': 'Google Tasks is connected.',
+        'google-disconnected': 'Google Tasks was disconnected. Existing Google copies are unchanged.',
+        'apple-invalid-credentials': 'Enter a valid Apple ID email and app-specific password.',
+        'apple-connect-failed': 'Apple Reminders could not be connected. Check your Apple ID and app-specific password.',
+        'apple-connected': 'Apple Reminders is connected.',
+        'apple-disconnected': 'Apple Reminders was disconnected. Existing reminders are unchanged.',
+        'sync-schedule-saved': 'Your sync schedule was saved.',
+        'sync-schedule-invalid': 'Choose one of the available sync schedules.',
+        'sync-env-not-configured': 'Task syncing is disabled because required integration ENV values are missing.',
+        'sync-complete': 'Your connected task tools are up to date.',
+        'sync-failed': 'Sync did not finish successfully. Check the connection status and try again.',
+        'sync-no-connections': 'Connect at least one task service before syncing.',
+        'sync-busy': 'A sync is already in progress.'
+    };
+%>
+<div id="task-sync-modal" class="modal-backdrop task-sync-modal <%= integrationStatus ? 'open' : '' %>" data-task-sync-modal>
+    <section class="modal-card task-sync-card" role="dialog" aria-modal="true" aria-labelledby="task-sync-title" aria-describedby="task-sync-description">
+        <button class="modal-close" data-close aria-label="Close task sync settings" type="button"><i data-lucide="x"></i></button>
+        <h2 id="task-sync-title">Task sync</h2>
+        <p id="task-sync-description" class="task-sync-intro">LockIn pushes task changes and deletions to connected tools. Edits in Google Tasks or Reminders do not sync back.</p>
+        <% if (!taskSyncConfigured) { %><p class="task-sync-status task-sync-error" role="status">Task syncing is disabled until these environment values are set: <%= taskSyncMissingConfig %>.</p><% } %>
+        <% if (taskSyncMessages[integrationStatus]) { %><p class="task-sync-status" role="status" aria-live="polite"><%= taskSyncMessages[integrationStatus] %></p><% } %>
+        <% if (taskSyncSettings.lastSyncError) { %><p class="task-sync-status task-sync-error" role="status">Last sync issue: <%= taskSyncSettings.lastSyncError %></p><% } else if (taskSyncSettings.lastSyncAt) { %><p class="task-sync-last-run">Last synced <%= new Date(taskSyncSettings.lastSyncAt).toLocaleString() %></p><% } %>
+
+        <div class="task-sync-connections">
+            <article class="task-sync-connection">
+                <div><h3>Google Tasks</h3><p><%= googleTasksConnected ? 'Connected to your Google account.' : 'Connect your Google account.' %></p></div>
+                <div class="task-sync-connection-actions">
+                    <% if (googleTasksConnected) { %>
+                        <span class="task-sync-connected">Connected</span>
+                        <form action="/integrations/google/disconnect" method="post"><button class="text-button" type="submit">Disconnect</button></form>
+                    <% } else if (taskSyncConfigured && googleTasksConfigured) { %>
+                        <a class="button secondary" href="/integrations/google/connect"><i data-lucide="link"></i> Connect Google</a>
+                    <% } else { %>
+                        <span class="fine-print"><%= googleTasksConfigured ? 'Task sync ENV configuration is incomplete.' : 'Google OAuth is not configured.' %></span>
+                    <% } %>
+                </div>
+            </article>
+            <article class="task-sync-connection">
+                <div><h3>Apple Reminders</h3><p><%= appleRemindersConnected ? `Connected as ${appleRemindersUsername}.` : 'Use your Apple ID and an app-specific password.' %></p></div>
+                <% if (appleRemindersConnected) { %>
+                    <div class="task-sync-connection-actions"><span class="task-sync-connected">Connected</span><form action="/integrations/apple/disconnect" method="post"><button class="text-button" type="submit">Disconnect</button></form></div>
+                <% } %>
+                <form class="task-sync-apple-form" action="/integrations/apple/connect" method="post">
+                    <label>Apple ID<input name="username" type="email" autocomplete="username" value="<%= appleRemindersUsername %>" <%= taskSyncConfigured ? '' : 'disabled' %> required></label>
+                    <label>App-specific password<input name="appSpecificPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" <%= taskSyncConfigured ? '' : 'disabled' %> required></label>
+                    <button class="button secondary" type="submit" <%= taskSyncConfigured ? '' : 'disabled' %>><%= appleRemindersConnected ? 'Update Apple connection' : 'Connect Apple' %></button>
+                    <small>Password is encrypted in LockIn and never displayed again. Create one at <a href="https://account.apple.com/" target="_blank" rel="noopener noreferrer">account.apple.com</a>.</small>
+                </form>
+            </article>
+        </div>
+
+        <div class="task-sync-controls">
+            <form action="/integrations/sync" method="post">
+                <button class="button primary" type="submit" <%= taskSyncConfigured && (googleTasksConnected || appleRemindersConnected) ? '' : 'disabled' %>><i data-lucide="refresh-cw"></i> Sync now</button>
+            </form>
+            <form class="task-sync-schedule-form" action="/integrations/sync/schedule" method="post">
+                <label for="task-sync-schedule">Automatic sync</label>
+                <select id="task-sync-schedule" name="schedule" data-modal-autofocus <%= taskSyncConfigured ? '' : 'disabled' %>>
+                    <option value="manual" <%= !taskSyncSettings.schedule || taskSyncSettings.schedule === 'manual' ? 'selected' : '' %>>Only manual</option>
+                    <option value="minute" <%= taskSyncSettings.schedule === 'minute' ? 'selected' : '' %>>Every minute</option>
+                    <option value="hour" <%= taskSyncSettings.schedule === 'hour' ? 'selected' : '' %>>Every hour</option>
+                    <option value="day" <%= taskSyncSettings.schedule === 'day' ? 'selected' : '' %>>Every 24 hours</option>
+                    <option value="week" <%= taskSyncSettings.schedule === 'week' ? 'selected' : '' %>>Every week</option>
+                </select>
+                <button class="button secondary" type="submit" <%= taskSyncConfigured ? '' : 'disabled' %>>Save schedule</button>
+            </form>
+        </div>
+    </section>
+</div>

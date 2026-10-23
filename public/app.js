@@ -965,9 +965,40 @@ function bindInteractions() {
   bindDebugTools();
   document.querySelectorAll('[data-inline-create]').forEach((button) => button.addEventListener('click', () => { const form = document.querySelector('.inline-create-form'); form?.classList.remove('hidden'); form?.querySelector('input[name="title"]')?.focus(); form?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }));
   document.querySelectorAll('[data-course-tab]').forEach((tab) => tab.addEventListener('click', (event) => { event.preventDefault(); setCourseTab(tab.dataset.courseTab); }));
-  document.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => { const target = document.getElementById(button.dataset.open); target?.classList.add('open'); target?.querySelector('input[name="title"]')?.focus(); }));
-  document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => { button.closest('.modal-backdrop')?.classList.remove('open'); }));
-  document.querySelectorAll('.modal-backdrop').forEach((backdrop) => backdrop.addEventListener('click', (event) => { if (event.target === backdrop) backdrop.classList.remove('open'); }));
+  document.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => { const target = document.getElementById(button.dataset.open); target?.classList.add('open'); target?.querySelector('[data-modal-autofocus], input[name="title"]')?.focus(); }));
+  document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => { const modal = button.closest('.modal-backdrop'); modal?.classList.remove('open'); if (modal?.matches('[data-task-sync-modal]')) document.querySelector('[data-open="task-sync-modal"]')?.focus(); }));
+  document.querySelectorAll('.modal-backdrop').forEach((backdrop) => backdrop.addEventListener('click', (event) => { if (event.target === backdrop) { backdrop.classList.remove('open'); if (backdrop.matches('[data-task-sync-modal]')) document.querySelector('[data-open="task-sync-modal"]')?.focus(); } }));
+  const taskSyncModal = document.querySelector('[data-task-sync-modal]');
+  if (taskSyncModal) {
+    if (taskSyncModal.classList.contains('open')) taskSyncModal.querySelector('[data-modal-autofocus]')?.focus();
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape' || !taskSyncModal.classList.contains('open')) return;
+      taskSyncModal.classList.remove('open');
+      document.querySelector('[data-open="task-sync-modal"]')?.focus();
+    });
+    taskSyncModal.addEventListener('keydown', (event) => {
+      if (event.key !== 'Tab') return;
+      const controls = [...taskSyncModal.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])')];
+      if (!controls.length) return;
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+  }
+  const taskSyncTip = document.querySelector('[data-task-sync-tip]');
+  if (taskSyncTip) {
+    try { taskSyncTip.hidden = localStorage.getItem('lockin-task-sync-tip-dismissed') === 'true'; } catch (error) {}
+    taskSyncTip.querySelector('[data-dismiss-sync-tip]')?.addEventListener('click', () => {
+      taskSyncTip.hidden = true;
+      try { localStorage.setItem('lockin-task-sync-tip-dismissed', 'true'); } catch (error) {}
+    });
+  }
   document.querySelectorAll('.comment-menu .menu-action.danger i[data-lucide="trash-2"]').forEach((icon) => icon.remove());
   bindNotificationGestures();
   document.querySelectorAll('[data-warning-close]').forEach((button) => button.addEventListener('click', () => { const modal = button.closest('[data-warning-modal]'); const warningId = modal?.dataset.warningId; modal?.remove(); if (warningId) fetch(`/notifications/${encodeURIComponent(warningId)}/read`, { method: 'POST', headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); }));

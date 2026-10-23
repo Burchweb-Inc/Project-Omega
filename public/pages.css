@@ -300,6 +300,254 @@
     margin-bottom: 14px
 }
 
+.todo-toolbar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px
+}
+
+.task-sync-trigger {
+    flex: 0 0 auto;
+    color: var(--navy)
+}
+
+.task-sync-trigger:hover {
+    color: var(--blue)
+}
+
+.task-sync-tip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: -2px 0 14px;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #fff;
+    color: var(--navy);
+    font-size: 12px
+}
+
+.task-sync-tip[hidden] {
+    display: none
+}
+
+.task-sync-tip p {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    gap: 8px;
+    margin: 0
+}
+
+.task-sync-tip p svg {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+    color: var(--blue)
+}
+
+.task-sync-tip .text-button {
+    flex: 0 0 auto;
+    color: var(--blue);
+    font-size: 11px;
+    font-weight: 700
+}
+
+.task-sync-tip-close {
+    display: grid;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer
+}
+
+.task-sync-tip-close:hover {
+    background: #eef2f5;
+    color: var(--navy)
+}
+
+.task-sync-tip-close svg {
+    width: 15px;
+    height: 15px
+}
+
+.task-sync-modal {
+    z-index: 80
+}
+
+.task-sync-card {
+    display: grid;
+    width: min(100%, 660px);
+    max-height: min(92vh, 900px);
+    gap: 14px;
+    overflow-y: auto;
+    padding: 26px
+}
+
+.task-sync-card h2 {
+    margin: 0;
+    color: var(--navy);
+    font-family: var(--display-font, inherit);
+    font-size: 22px
+}
+
+.task-sync-intro,
+.task-sync-last-run,
+.task-sync-status {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5
+}
+
+.task-sync-status {
+    color: var(--navy);
+    font-weight: 600
+}
+
+.task-sync-error {
+    color: #a34c40
+}
+
+.task-sync-connections {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px
+}
+
+.task-sync-connection {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px
+}
+
+.task-sync-connection h3 {
+    margin: 0;
+    color: var(--navy);
+    font-size: 13px
+}
+
+.task-sync-connection p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 11px
+}
+
+.task-sync-connection-actions,
+.task-sync-controls,
+.task-sync-schedule-form {
+    display: flex;
+    align-items: center;
+    gap: 9px
+}
+
+.task-sync-connection-actions form,
+.task-sync-controls form {
+    margin: 0
+}
+
+.task-sync-connection-actions .button,
+.task-sync-controls .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px
+}
+
+.task-sync-connection-actions .button svg,
+.task-sync-controls .button svg {
+    width: 15px;
+    height: 15px
+}
+
+.task-sync-connected {
+    color: #39775a;
+    font-size: 11px;
+    font-weight: 700
+}
+
+.task-sync-connection-actions .text-button {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px
+}
+
+.task-sync-apple-form {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px
+}
+
+.task-sync-apple-form label {
+    display: grid;
+    min-width: 0;
+    gap: 5px;
+    color: var(--navy);
+    font-size: 10px;
+    font-weight: 700
+}
+
+.task-sync-apple-form input,
+.task-sync-schedule-form select {
+    width: 100%;
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: #fff;
+    color: var(--navy)
+}
+
+.task-sync-apple-form .button,
+.task-sync-apple-form small {
+    grid-column: 1 / -1
+}
+
+.task-sync-apple-form small {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.5
+}
+
+.task-sync-apple-form small a {
+    color: var(--blue)
+}
+
+.task-sync-controls {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    padding-top: 14px;
+    border-top: 1px solid var(--line)
+}
+
+.task-sync-schedule-form {
+    flex-wrap: wrap
+}
+
+.task-sync-schedule-form label {
+    color: var(--navy);
+    font-size: 11px;
+    font-weight: 700
+
+}
+
+.task-sync-schedule-form select {
+    width: auto
+}
+
 .segmented {
     display: flex;
     gap: 3px;
@@ -809,6 +1057,41 @@
         align-items: flex-start;
         gap: 12px;
         flex-direction: column
+    }
+
+    .task-sync-connections {
+        grid-template-columns: 1fr
+    }
+
+    .task-sync-tip {
+        align-items: flex-start
+    }
+
+    .task-sync-schedule-form {
+        width: 100%
+    }
+
+    .task-sync-schedule-form label {
+        width: 100%
+    }
+
+    .task-sync-schedule-form select {
+        flex: 1
+    }
+
+    .task-sync-card {
+        max-height: 90vh;
+        padding: 22px 17px
+    }
+
+    .task-sync-apple-form {
+        grid-template-columns: 1fr
+    }
+
+    .task-sync-apple-form label,
+    .task-sync-apple-form .button,
+    .task-sync-apple-form small {
+        grid-column: 1
     }
 
     .private-task {

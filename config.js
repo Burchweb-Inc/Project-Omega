@@ -17,6 +17,14 @@ const config = function () {
       client_secret:
         docker.readSecret("snarkytype_client_secret") ||
         process.env.SNARKYTYPE_CLIENT_SECRET,
+    },
+    googleTasks: {
+      client_id: process.env.GOOGLE_TASKS_CLIENT_ID,
+      client_secret: process.env.GOOGLE_TASKS_CLIENT_SECRET,
+      redirect_uri: process.env.GOOGLE_TASKS_REDIRECT_URI,
+    },
+    appleReminders: {
+      caldav_server: process.env.APPLE_CALDAV_SERVER,
     }
   };
 };

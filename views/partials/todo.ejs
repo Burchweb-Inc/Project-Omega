@@ -10,8 +10,14 @@
         <div class="segmented"><a class="active" data-todo-filter="all" href="/todo">All tasks</a><a data-todo-filter="pending" href="/todo?filter=pending">Pending</a><a
             data-todo-filter="completed" href="/todo?filter=completed">Completed</a></div><div class="todo-toolbar-actions"><button class="button secondary" type="button" data-focus-mode><i data-lucide="sparkles"></i> Auto organize</button><span class="muted" data-todo-summary>
             <%= (user.tasks || []).filter(task=> !task.done).length %> things still in motion
-        </span></div>
+        </span><button class="icon-button task-sync-trigger" type="button" data-open="task-sync-modal" aria-controls="task-sync-modal" aria-label="Open task sync settings" title="Task sync"><i data-lucide="refresh-cw"></i></button></div>
     </div>
+    <aside class="task-sync-tip" data-task-sync-tip aria-label="Task sync setup tip">
+        <p><i data-lucide="refresh-cw" aria-hidden="true"></i><span>Sync your LockIn tasks to Google Tasks or Apple Reminders.</span></p>
+        <button class="text-button" type="button" data-open="task-sync-modal" aria-controls="task-sync-modal">Set up sync</button>
+        <button class="task-sync-tip-close" type="button" data-dismiss-sync-tip aria-label="Dismiss task sync tip"><i data-lucide="x"></i></button>
+    </aside>
+    <%- include('mini/task-sync-modal') %>
     <section class="private-list" data-live-todo-list>
         <% (user.tasks || []).forEach(task=> { %><article class="private-task <%= task.done ? 'is-done' : '' %>" data-priority="<%= (task.priority || 'Normal').toLowerCase() %>"
                 data-task-id="<%= task.id %>">
