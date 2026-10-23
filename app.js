@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config() ;
 
 const config = require('./config.js');
 const creators = require('./config/creators');
@@ -26,28 +26,13 @@ fs.mkdirSync(dataDir, { recursive: true });
 fs.chmodSync(dataDir, 0o700);
 
 const db = new Database(dbPath);
+const userModel = require('./users/model')(db); // user table and functions to access it are imported here
 fs.chmodSync(dbPath, 0o600);
 db.pragma('foreign_keys = ON');
 db.pragma('journal_mode = WAL');
-db.prepare(`CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  username TEXT NOT NULL UNIQUE,
-  age INTEGER NOT NULL,
-  password_hash TEXT NOT NULL,
-  tasks TEXT NOT NULL DEFAULT '[]'
-)`).run();
-try { db.prepare("ALTER TABLE users ADD COLUMN tasks TEXT NOT NULL DEFAULT '[]'").run(); } catch (error) { if (!error.message.includes('duplicate column name')) throw error; }
-for (const column of [
-  "is_site_admin INTEGER NOT NULL DEFAULT 0",
-  "notifications TEXT NOT NULL DEFAULT '[]'",
-  "settings TEXT NOT NULL DEFAULT '{}'",
-  "moderation_status TEXT NOT NULL DEFAULT 'active'",
-  "moderation_message TEXT NOT NULL DEFAULT ''",
-  "moderation_until TEXT NOT NULL DEFAULT ''"
-]) {
-  try { db.prepare(`ALTER TABLE users ADD COLUMN ${column}`).run(); } catch (error) { if (!error.message.includes('duplicate column name')) throw error; }
-}
+
+userModel.init(); // creates and migrates the user table when needed
+
 db.prepare(`CREATE TABLE IF NOT EXISTS orgs (
   id TEXT PRIMARY KEY,
   payload TEXT NOT NULL,
@@ -123,7 +108,6 @@ app.get('/media/offline-manifest.json', (request, response) => {
 });
 app.use(express.static(path.join(__dirname, 'public')));
 
-const users = [];
 const orgs = [];
 const sessions = new Map();
 const snarkyTypePending = new Map();
@@ -133,61 +117,9 @@ const courseReorderWindows = new Map();
 const ipLocationCache = new Map();
 const breakoutPresence = new Map();
 const breakoutPingWindows = new Map();
-let taskEncryptionMigrationNeeded = false;
 
-function loadTaskEncryptionKey() {
-  if (process.env.TASK_ENCRYPTION_KEY) {
-    const key = Buffer.from(process.env.TASK_ENCRYPTION_KEY, 'base64url');
-    if (key.length !== 32) throw new Error('TASK_ENCRYPTION_KEY must decode to exactly 32 bytes.');
-    return key;
-  }
-  const keyPath = path.join(dataDir, '.task-encryption-key');
-  if (!fs.existsSync(keyPath)) fs.writeFileSync(keyPath, crypto.randomBytes(32), { mode: 0o600 });
-  fs.chmodSync(keyPath, 0o600);
-  const key = fs.readFileSync(keyPath);
-  if (key.length !== 32) throw new Error(`${keyPath} must contain exactly 32 bytes.`);
-  return key;
-}
-
-const taskEncryptionKey = loadTaskEncryptionKey();
-
-function encryptTasks(tasks) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', taskEncryptionKey, iv);
-  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(tasks || []), 'utf8'), cipher.final()]);
-  return `v1:${iv.toString('base64url')}:${cipher.getAuthTag().toString('base64url')}:${ciphertext.toString('base64url')}`;
-}
-
-function decryptTasks(storedTasks) {
-  if (!storedTasks?.startsWith('v1:')) return JSON.parse(storedTasks || '[]');
-  const [, encodedIv, encodedTag, encodedCiphertext] = storedTasks.split(':');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', taskEncryptionKey, Buffer.from(encodedIv, 'base64url'));
-  decipher.setAuthTag(Buffer.from(encodedTag, 'base64url'));
-  return JSON.parse(Buffer.concat([decipher.update(Buffer.from(encodedCiphertext, 'base64url')), decipher.final()]).toString('utf8'));
-}
-
-function loadUsersFromDatabase() {
-  const rows = db.prepare('SELECT * FROM users ORDER BY username ASC').all();
-  taskEncryptionMigrationNeeded = rows.some((row) => !row.tasks?.startsWith('v1:'));
-  users.splice(0, users.length, ...rows.map((row) => {
-    const settings = JSON.parse(row.settings || '{}');
-    if (settings.snarkyType && settings.passwordSet === undefined) settings.passwordSet = false;
-    return {
-      id: row.id,
-      name: row.name,
-      username: row.username,
-      age: Number(row.age),
-      passwordHash: row.password_hash,
-      isSiteAdmin: Boolean(row.is_site_admin) || row.username === 'admin',
-      tasks: decryptTasks(row.tasks).map(normalizeTask),
-      settings,
-      notifications: JSON.parse(row.notifications || '[]'),
-      moderationStatus: row.moderation_status || 'active',
-      moderationMessage: row.moderation_message || '',
-      moderationUntil: row.moderation_until || ''
-    };
-  }));
-}
+const loadUsersFromDatabase = userModel.all;
+const persistUsersState = userModel.persistState;
 
 function loadOrgsFromDatabase() {
   const rows = db.prepare('SELECT * FROM orgs ORDER BY updated_at ASC').all();
@@ -201,41 +133,12 @@ function loadOrgsFromDatabase() {
 }
 
 function persistState() {
-  const userWrite = db.prepare(`INSERT INTO users (id, name, username, age, password_hash, is_site_admin, tasks, notifications, settings, moderation_status, moderation_message, moderation_until)
-    VALUES (@id, @name, @username, @age, @passwordHash, @isSiteAdmin, @tasks, @notifications, @settings, @moderationStatus, @moderationMessage, @moderationUntil)
-    ON CONFLICT(id) DO UPDATE SET
-      name = excluded.name,
-      username = excluded.username,
-      age = excluded.age,
-      password_hash = excluded.password_hash,
-      is_site_admin = excluded.is_site_admin,
-      tasks = excluded.tasks,
-      notifications = excluded.notifications,
-      settings = excluded.settings,
-      moderation_status = excluded.moderation_status,
-      moderation_message = excluded.moderation_message,
-      moderation_until = excluded.moderation_until`);
   const orgWrite = db.prepare(`INSERT INTO orgs (id, payload, updated_at)
     VALUES (@id, @payload, @updatedAt)
     ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`);
 
-  db.prepare('DELETE FROM users').run();
+  persistUsersState(users);
   db.prepare('DELETE FROM orgs').run();
-
-  users.forEach((user) => userWrite.run({
-    id: user.id,
-    name: user.name,
-    username: user.username,
-    age: Number(user.age),
-    passwordHash: user.passwordHash,
-    isSiteAdmin: user.isSiteAdmin ? 1 : 0,
-    tasks: encryptTasks(user.tasks),
-    notifications: JSON.stringify(user.notifications || []),
-    settings: JSON.stringify(user.settings || {}),
-    moderationStatus: user.moderationStatus || 'active',
-    moderationMessage: user.moderationMessage || '',
-    moderationUntil: user.moderationUntil || ''
-  }));
 
   orgs.forEach((org) => orgWrite.run({
     id: org.id,
@@ -244,9 +147,8 @@ function persistState() {
   }));
 }
 
-loadUsersFromDatabase();
+const users = loadUsersFromDatabase();
 loadOrgsFromDatabase();
-if (taskEncryptionMigrationNeeded) persistState();
 
 function id() { return crypto.randomBytes(4).toString('hex'); }
 function slug(value) { return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || id(); }
