@@ -13,6 +13,28 @@ pipeline {
                 }
             }
         }
+        stage('Unit Tests') {
+            agent {
+                docker {
+                    image TAG
+                }
+            }
+            steps {
+                sh '''
+                    mkdir -p $WORKSPACE/test-results
+                    cd /home/node/app
+                    node --test \
+                        --test-reporter=junit \
+                        --test-reporter-destination="$WORKSPACE/test-results/junit.xml" \
+                        tests/*.test.js
+                '''
+            }
+            post {
+                always {
+                    junit "test-results/junit.xml"
+                }
+            }
+        }
         stage('Test') {
             environment {
                 OPENROUTER_API_KEY = credentials('341a4e99-85d0-48d2-94e8-db3b96bf7e12')
