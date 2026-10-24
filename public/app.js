@@ -1058,7 +1058,64 @@ function bindTutorial() {
 window.addEventListener('live-error', (event) => showLiveError(event.detail || 'Action failed. Please try again.'));
 
 function isInternalGetLink(link) { return link.origin === window.location.origin && link.pathname && !link.pathname.startsWith('/share/') && !link.hasAttribute('download') && link.target !== '_blank' && !link.dataset.noRouter; }
-async function navigate(url, pushState = true) { routeProgress.classList.add('active'); document.body.classList.add('is-navigating'); try { const response = await fetch(url, { headers: { 'X-Studyline-Navigation': 'true' } }); if (!response.ok || response.redirected) throw new Error(`Navigation failed: ${response.status}`); const nextDocument = new DOMParser().parseFromString(await response.text(), 'text/html'); const nextShell = nextDocument.querySelector('.app-shell'); if (!nextShell) throw new Error('Navigation returned an incomplete page.'); nextDocument.body.querySelectorAll('script').forEach((script) => script.remove()); liveState.socket?.disconnect(); liveState.notificationSocket?.disconnect(); document.querySelector('.app-shell')?.replaceWith(nextShell); document.body.className = nextDocument.body.className; document.body.classList.add('is-navigating'); document.body.appendChild(routeProgress); document.title = nextDocument.title; if (pushState) window.history.pushState({}, '', url); window.scrollTo({ top: 0, behavior: 'instant' }); bindInteractions(); const target = new URL(url, window.location.href); if (target.hash) requestAnimationFrame(() => document.getElementById(decodeURIComponent(target.hash.slice(1)))?.scrollIntoView({ behavior: 'smooth' })); requestAnimationFrame(() => document.body.classList.remove('is-navigating')); } catch (error) { window.location.assign(url); } finally { routeProgress.classList.remove('active'); } }
+function setRouteProgress(fraction) {
+  routeProgress.classList.remove('indeterminate');
+  routeProgress.style.width = `${Math.min(1, Math.max(0, fraction)) * 100}%`;
+}
+
+async function readResponseWithProgress(response) {
+  if (!response.body) return response.text();
+  const total = Number(response.headers.get('Content-Length') || 0);
+  const reader = response.body.getReader();
+  const chunks = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    const fraction = total > 0 ? received / total : 1 - Math.exp(-received / 262144);
+    setRouteProgress(Math.min(0.99, fraction));
+  }
+  reader.releaseLock();
+  let html = '';
+  const decoder = new TextDecoder();
+  for (const chunk of chunks) html += decoder.decode(chunk, { stream: true });
+  html += decoder.decode();
+  return html;
+}
+
+async function navigate(url, pushState = true) {
+  routeProgress.classList.add('active', 'indeterminate');
+  routeProgress.style.width = '';
+  try {
+    const response = await fetch(url, { headers: { 'X-Studyline-Navigation': 'true' } });
+    if (!response.ok || response.redirected) throw new Error(`Navigation failed: ${response.status}`);
+    const html = await readResponseWithProgress(response);
+    setRouteProgress(1);
+    const nextDocument = new DOMParser().parseFromString(html, 'text/html');
+    const nextShell = nextDocument.querySelector('.app-shell');
+    if (!nextShell) throw new Error('Navigation returned an incomplete page.');
+    nextDocument.body.querySelectorAll('script').forEach((script) => script.remove());
+    liveState.socket?.disconnect();
+    liveState.notificationSocket?.disconnect();
+    document.querySelector('.app-shell')?.replaceWith(nextShell);
+    document.body.className = nextDocument.body.className;
+    document.body.classList.add('is-navigating');
+    document.body.appendChild(routeProgress);
+    document.title = nextDocument.title;
+    if (pushState) window.history.pushState({}, '', url);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    bindInteractions();
+    const target = new URL(url, window.location.href);
+    if (target.hash) requestAnimationFrame(() => document.getElementById(decodeURIComponent(target.hash.slice(1)))?.scrollIntoView({ behavior: 'smooth' }));
+    requestAnimationFrame(() => document.body.classList.remove('is-navigating'));
+  } catch (error) {
+    window.location.assign(url);
+  } finally {
+    routeProgress.classList.remove('active', 'indeterminate');
+  }
+}
 document.addEventListener('click', (event) => { const link = event.target.closest('a'); if (!link || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !isInternalGetLink(link)) return; const target = new URL(link.href); if (target.hash && target.pathname === window.location.pathname) return; event.preventDefault(); navigate(target.href); });
 window.addEventListener('popstate', () => navigate(window.location.href, false));
 window.addEventListener('hashchange', () => { const hash = window.location.hash.slice(1); if (['feed', 'board', 'resources'].includes(hash)) setCourseTab(hash, false); });

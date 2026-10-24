@@ -1,16 +1,35 @@
 .route-progress {
     position: fixed;
     z-index: 30;
-    inset: 0 100% auto 0;
+    top: 0;
+    left: 0;
     height: 3px;
+    width: 0;
+    max-width: 100%;
     background: var(--coral);
     opacity: 0;
-    transition: inset .25s ease, opacity .15s ease
+    transition: opacity .15s ease
 }
 
 .route-progress.active {
-    inset: 0 0 auto 0;
     opacity: 1
+}
+
+.route-progress.active.indeterminate {
+    width: 100%;
+    background: linear-gradient(90deg, var(--coral) 40%, rgba(255,255,255,.45) 50%, var(--coral) 60%);
+    background-size: 200% 100%;
+    animation: route-shimmer 1.4s ease-in-out infinite
+}
+
+@keyframes route-shimmer {
+    0% { background-position: 150% 0 }
+    50% { background-position: -150% 0 }
+    100% { background-position: 150% 0 }
+}
+
+@media(prefers-reduced-motion:reduce){
+    .route-progress.active.indeterminate { animation: none }
 }
 
 .main-content {
