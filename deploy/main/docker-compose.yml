@@ -11,6 +11,10 @@ services:
     restart: unless-stopped
     secrets:
       - openrouter_api_key
+      - snarkytype_client_id
+      - snarkytype_client_secret
+      - google_tasks_client_secret
+
     environment:
       - NODE_ENV=production
       - ORIGIN=https://lockedin.burchweb.com
