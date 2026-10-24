@@ -46,7 +46,7 @@
   <% if (siteAdminTab === 'admins') { %>
     <section class="admin-panel">
       <div class="admin-section-heading"><div><h2>Site admins</h2><p class="muted">Only explicit site admins appear here. Site admins remain invisible in group member lists unless invited.</p></div></div>
-      <form data-live-form action="/site-admin/users" method="post" class="inline-admin-form"><input name="username" placeholder="Search by username" required><button class="button secondary" type="submit"><i data-lucide="user-plus"></i> Add admin</button></form>
+      <form data-live-form action="/site-admin/users" method="post" class="inline-admin-form"><%- include('mini/user-search', { id: 'site-admin-user-search', label: 'Search users', name: 'username', placeholder: 'username' }) %><button class="button secondary" type="submit"><i data-lucide="user-plus"></i> Add admin</button></form>
       <div class="site-admin-list"><% siteAdminUsers.forEach(admin => { %><div><span class="avatar"><%= admin.name[0] %></span><span><strong><%= admin.name %></strong><small>@<%= admin.username %></small></span></div><% }) %></div>
     </section>
   <% } else if (siteAdminTab === 'groups') { %>

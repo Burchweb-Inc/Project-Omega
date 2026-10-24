@@ -1008,16 +1008,35 @@ function bindInteractions() {
   document.querySelectorAll('[data-user-search]').forEach((input) => {
     const results = input.closest('label')?.querySelector('[data-user-search-results]');
     let timer;
+    let controller;
     input.addEventListener('input', () => {
       window.clearTimeout(timer);
+      controller?.abort();
       const query = input.value.trim();
-      if (!query) { if (results) results.innerHTML = ''; return; }
+      if (!query) {
+        if (results) results.innerHTML = '';
+        input.setAttribute('aria-expanded', 'false');
+        return;
+      }
       timer = window.setTimeout(async () => {
-        const response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
-        if (!response.ok || !results) return;
-        const users = await response.json();
-        results.innerHTML = users.map((candidate) => `<button type="button" role="option" data-username="${escapeHtml(candidate.username)}"><strong>${escapeHtml(candidate.name)}</strong><small>@${escapeHtml(candidate.username)}</small></button>`).join('') || '<span class="user-search-empty">No users found</span>';
-        results.querySelectorAll('[data-username]').forEach((option) => option.addEventListener('click', () => { input.value = option.dataset.username; results.innerHTML = ''; input.focus(); }));
+        controller = new AbortController();
+        try {
+          const searchParams = new URLSearchParams({ q: query });
+          if (input.dataset.userSearchGroup) searchParams.set('groupId', input.dataset.userSearchGroup);
+          const response = await fetch(`/api/users/search?${searchParams}`, { signal: controller.signal });
+          if (!response.ok) throw new Error(`User search returned ${response.status}.`);
+          if (!results || input.value.trim() !== query) return;
+          const users = await response.json();
+          results.innerHTML = users.map((candidate) => `<button type="button" role="option" aria-selected="false" data-username="${escapeHtml(candidate.username)}"><strong>${escapeHtml(candidate.name)}</strong><small>@${escapeHtml(candidate.username)}</small></button>`).join('') || '<span class="user-search-empty">No classmates found</span>';
+          input.setAttribute('aria-expanded', 'true');
+          results.querySelectorAll('[data-username]').forEach((option) => option.addEventListener('click', () => { input.value = option.dataset.username; results.innerHTML = ''; input.setAttribute('aria-expanded', 'false'); input.focus(); }));
+        } catch (error) {
+          if (error.name === 'AbortError') return;
+          console.error('User search failed.', error);
+          if (!results) return;
+          results.innerHTML = '<span class="user-search-empty">Search is unavailable. Try again.</span>';
+          input.setAttribute('aria-expanded', 'true');
+        }
       }, 160);
     });
   });

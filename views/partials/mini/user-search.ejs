@@ -1,0 +1,4 @@
+<label for="<%= id %>"><%= label %>
+  <input id="<%= id %>" name="<%= name %>" type="text" data-user-search data-user-search-group="<%= typeof groupId === 'undefined' ? '' : groupId %>" placeholder="<%= placeholder %>" autocomplete="off" role="combobox" aria-haspopup="listbox" aria-autocomplete="list" aria-expanded="false" aria-controls="<%= id %>-results" required>
+  <span id="<%= id %>-results" class="user-search-results" data-user-search-results role="listbox" aria-label="<%= label %> results" aria-live="polite"></span>
+</label>

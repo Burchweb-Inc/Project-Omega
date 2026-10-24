@@ -18,6 +18,7 @@ const { appendRemovedTextForReview, appendAppealPhrase, reviewQueuedBadWords, re
 const { discoverAppleCalendar, syncAppleReminders, syncGoogleTasks } = require('./utils/task-integrations');
 const { isSyncDue, isSyncSchedule, syncInterval } = require('./utils/task-sync-schedule');
 const { taskSyncConfiguration } = require('./utils/task-sync-config');
+const sharedGroupUserIds = require('./utils/shared-group-users');
 
 const app = express();
 const taskSyncConfig = taskSyncConfiguration(config);
@@ -808,7 +809,9 @@ app.use(['/org/:id', '/group/:slug'], (request, response, next) => {
 app.get('/api/users/search', requireUser, (request, response) => {
   const query = String(request.query.q || '').trim().toLowerCase();
   if (query.length < 1) return response.json([]);
-  response.json(users.filter((candidate) => candidate.username.includes(query) || candidate.name.toLowerCase().includes(query)).slice(0, 8).map((candidate) => ({ id: candidate.id, name: candidate.name, username: candidate.username })));
+  const scopeGroupId = String(request.query.groupId || '');
+  const visibleUserIds = sharedGroupUserIds(orgs, request.user, scopeGroupId);
+  response.json(users.filter((candidate) => visibleUserIds.has(candidate.id) && (candidate.username.includes(query) || candidate.name.toLowerCase().includes(query))).slice(0, 8).map((candidate) => ({ id: candidate.id, name: candidate.name, username: candidate.username })));
 });
 app.post('/site-admin/users', requireUser, requireSiteAdmin, (request, response) => {
   const username = String(request.body.username || '').trim().toLowerCase();
