@@ -18,9 +18,9 @@ services:
       - BAD_WORD_REVIEW_INTERVAL_MINUTES=10
       - BAD_WORD_REVIEW_INTERVAL_MS=600000
       - APP_MODE=beta
-      - GOOGLE_TASKS_CLIENT_ID=${GOOGLE_TASKS_CLIENT_ID:216693838523-t33raubm0ulko1tq55fjs31liseevh9r.apps.googleusercontent.com}
-      - GOOGLE_TASKS_REDIRECT_URI=${GOOGLE_TASKS_REDIRECT_URI:https://lockedin.burchweb.com/integrations/google/callback}
-      - APPLE_CALDEV_SERVER=${APPLE_CALDEV_SERVER:https://caldev.apple.com}
+      - GOOGLE_TASKS_CLIENT_ID=${GOOGLE_TASKS_CLIENT_ID:-216693838523-t33raubm0ulko1tq55fjs31liseevh9r.apps.googleusercontent.com}
+      - GOOGLE_TASKS_REDIRECT_URI=${GOOGLE_TASKS_REDIRECT_URI:-https://lockedin.burchweb.com/integrations/google/callback}
+      - APPLE_CALDEV_SERVER=${APPLE_CALDEV_SERVER:-https://caldev.apple.com}
 secrets:
   openrouter_api_key:
     environment: OPENROUTER_API_KEY
