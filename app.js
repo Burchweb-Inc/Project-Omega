@@ -32,12 +32,14 @@ fs.mkdirSync(dataDir, { recursive: true });
 fs.chmodSync(dataDir, 0o700);
 
 const db = new Database(dbPath);
-const userModel = require('./users/model')(db); // user table and functions to access it are imported here
 fs.chmodSync(dbPath, 0o600);
 db.pragma('foreign_keys = ON');
 db.pragma('journal_mode = WAL');
 
+const userModel = require('./users/model')(db); // user table and functions to access it are imported here
+const orgModel = require('./org/model')(db);
 userModel.init(); // creates and migrates the user table when needed
+orgModel.init();
 
 const buildIdModel = require('./utils/build-id').initializeBuildIds(db, path.join(dataDir, '.build-id-key'));
 const buildInfo = buildIdModel.createBuild({
@@ -48,11 +50,6 @@ const buildInfo = buildIdModel.createBuild({
   architecture: process.arch
 });
 
-db.prepare(`CREATE TABLE IF NOT EXISTS orgs (
-  id TEXT PRIMARY KEY,
-  payload TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-)`).run();
 db.prepare(`CREATE TABLE IF NOT EXISTS site_feedback (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -123,7 +120,6 @@ app.get('/media/offline-manifest.json', (request, response) => {
 });
 app.use(express.static(path.join(__dirname, 'public')));
 
-const orgs = [];
 const sessions = new Map();
 const snarkyTypePending = new Map();
 const snarkyTypeLinkRequests = new Map();
@@ -221,35 +217,15 @@ async function syncUserTaskIntegrations(user, providers = ['googleTasks', 'apple
   }
 }
 
-function loadOrgsFromDatabase() {
-  const rows = db.prepare('SELECT * FROM orgs ORDER BY updated_at ASC').all();
-  orgs.splice(0, orgs.length, ...rows.map((row) => {
-    const org = JSON.parse(row.payload);
-    org.courses = (org.courses || []).map((course) => { normalizeCourseItems(course); return { ...course, items: course.items.map((item) => ({ ...item, comments: item.comments || [], verifiedBy: item.verifiedBy || [], downvotedBy: item.downvotedBy || [] })), board: course.board || [], resources: course.resources || [] }; });
-    org.groups = (org.groups || []).map((group) => { const task = group.itemId ? org.courses.flatMap((course) => course.items).find((item) => item.id === group.itemId) : null; return { ...group, members: group.members || [], roles: group.roles || {}, itemId: group.itemId || null, taskSlug: group.taskSlug || (task ? breakoutTaskSlug(task) : null), shareCode: group.shareCode || crypto.randomBytes(12).toString('base64url'), createdBy: group.createdBy || group.members?.[0] || null, tasks: group.tasks || [], resources: group.resources || [], polls: group.polls || [], comments: (group.comments || []).map((comment) => ({ ...comment, parentId: comment.parentId || null })) }; });
-      org.members = (org.members || []).map((member) => ({ ...member, role: member.role === 'writer' ? 'editor' : member.role || 'viewer' }));
-      return { ...org, slug: org.slug || secureSlug(org.name), reports: org.reports || [], groups: org.groups || [], pendingInvites: org.pendingInvites || [], suspendedAt: org.suspendedAt || '', shareCode: org.shareCode || crypto.randomBytes(32).toString('base64url') };
-  }));
-}
-
 function persistState() {
-  const orgWrite = db.prepare(`INSERT INTO orgs (id, payload, updated_at)
-    VALUES (@id, @payload, @updatedAt)
-    ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`);
-
   userModel.persistState(users);
-  db.prepare('DELETE FROM orgs').run();
-
-  orgs.forEach((org) => orgWrite.run({
-    id: org.id,
-    payload: JSON.stringify(org),
-    updatedAt: new Date().toISOString()
-  }));
+  orgModel.persistState(orgs);
 }
 
 const users = userModel.all();
+const orgs = orgModel.all();
 if (userModel.needsEncryptionMigration()) userModel.persistState(users);
-loadOrgsFromDatabase();
+
 
 function id() { return crypto.randomBytes(4).toString('hex'); }
 function slug(value) { return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || id(); }
