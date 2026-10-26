@@ -34,6 +34,12 @@ Unless the user *wants* a boring website, don’t give them one. Judging by what
 3. Try new animations. Depending on the site (boring vs creative studio), create custom on scroll, scroll-driven, or on load animations that make content pop. Whether it’s an intro animation for a game studio, a typing effect for a developer, or something else!
 
 
+## Route and model organization
+
+- Put new routes in a dedicated route module related to the model/entity they manipulate, such as org endpoints in `org/routes.js` and calendar endpoints in `calendar/routes.js`. Avoid adding feature routes to `app.js` when a relevant module exists; extract them incrementally while preserving existing paths and behavior.
+- Keep persistence and entity queries in the corresponding model module (for example, `org/model.js`), not in route handlers. Pass the route module only the model operations and shared services it needs from `app.js`.
+- Add focused tests for route behavior in a matching test file (for example, `tests/org-routes.test.js`).
+
 ## Persistence architecture
 
 - Keep entity persistence in a dedicated model module, not in `app.js` or route handlers. `app.js` should initialize the database, instantiate each model, load entities through model methods, and pass model operations to routes as needed. It should not contain ad hoc SQL for entity read/write logic.
