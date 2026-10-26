@@ -80,6 +80,39 @@ test('create throws a TypeError when any required field is null or missing', (co
   }
 });
 
+test('get and for load active orgs by ID or slug', (context) => {
+  const { model } = createModel(context);
+  model.save(orgData('org-1', 'Study Group', { slug: 'study-group' }));
+  model.save(orgData('inactive-org', 'Inactive org', { slug: 'inactive-org-slug' }));
+  model.delete('inactive-org');
+
+  assert.equal(model.get('org-1').name, 'Study Group');
+  assert.equal(model.for({ id: 'org-1' }).slug, 'study-group');
+  assert.equal(model.for({ slug: 'study-group' }).id, 'org-1');
+  assert.equal(model.get('inactive-org'), null);
+  assert.equal(model.for({ slug: 'missing' }), null);
+  assert.equal(model.for(), null);
+});
+
+test('share-code lookups find active orgs by org and breakout-group codes', (context) => {
+  const { model } = createModel(context);
+  model.save(orgData('org-1', 'Study Group', {
+    shareCode: 'org-share-code',
+    groups: [{ id: 'group-1', shareCode: 'group-share-code', members: [], tasks: [], comments: [] }]
+  }));
+  model.save(orgData('inactive-org', 'Inactive org', {
+    shareCode: 'inactive-share-code',
+    groups: [{ id: 'inactive-group', shareCode: 'inactive-group-share-code' }]
+  }));
+  model.delete('inactive-org');
+
+  assert.equal(model.byShareCode('group-share-code').id, 'org-1');
+  assert.equal(model.byOrgShareCode('org-share-code').id, 'org-1');
+  assert.equal(model.byShareCode('missing'), null);
+  assert.equal(model.byOrgShareCode('inactive-share-code'), null);
+  assert.equal(model.byShareCode('inactive-group-share-code'), null);
+});
+
 test('orgsFor returns active public orgs and orgs containing the requested member', (context) => {
   const { model } = createModel(context);
 
@@ -98,6 +131,27 @@ test('orgsFor returns active public orgs and orgs containing the requested membe
   assert.equal(result.find((org) => org.id === 'member-org').members.length, 2);
   assert.deepEqual(model.orgsFor('missing-user').map((org) => org.id), ['public-org']);
   assert.deepEqual(model.orgsFor('').map((org) => org.id), []);
+});
+
+test('forUserOrInvite includes public orgs, memberships, and pending invitations', (context) => {
+  const { model } = createModel(context);
+  model.save(orgData('member-org', 'Member org', { members: [{ userId: 'user-1', role: 'viewer' }] }));
+  model.save(orgData('invite-org', 'Invite org', { pendingInvites: [{ userId: 'user-1' }] }));
+  model.save(orgData('public-org', 'Public org', { visibility: 'public' }));
+  model.save(orgData('other-org', 'Other org'));
+
+  assert.deepEqual(model.forUserOrInvite('user-1').map((org) => org.id), ['member-org', 'invite-org', 'public-org']);
+  assert.deepEqual(model.forUserOrInvite('').map((org) => org.id), []);
+});
+
+test('copyCandidatesForUser only returns orgs where the user is a member', (context) => {
+  const { model } = createModel(context);
+  model.save(orgData('member-org', 'Member org', { members: [{ userId: 'user-1', role: 'editor' }] }));
+  model.save(orgData('public-org', 'Public org', { visibility: 'public' }));
+  model.save(orgData('invite-org', 'Invite org', { pendingInvites: [{ userId: 'user-1' }] }));
+
+  assert.deepEqual(model.copyCandidatesForUser('user-1').map((org) => org.id), ['member-org']);
+  assert.deepEqual(model.copyCandidatesForUser('').map((org) => org.id), []);
 });
 
 test('feedFor returns items from courses in public orgs and orgs where the user is a member', (context) => {
