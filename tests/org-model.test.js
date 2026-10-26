@@ -36,3 +36,40 @@ test('loads orgs, migrates is_active, and preserves inactive orgs through persis
   assert.equal(db.prepare('SELECT is_active FROM orgs WHERE id = ?').get('org-1').is_active, 0);
   assert.deepEqual(model.all(), []);
 });
+
+test('orgsFor returns active orgs containing the requested member', (context) => {
+  const db = new Database(':memory:');
+  context.after(() => db.close());
+
+  const model = createOrgModel(db);
+  model.init();
+
+  model.persistState([
+    {
+      id: 'org-1',
+      name: 'Member org',
+      slug: 'member-org',
+      courses: [],
+      groups: [],
+      members: [
+        { userId: 'user-1', role: 'admin' },
+        { userId: 'user-1', role: 'editor' }
+      ]
+    },
+    {
+      id: 'org-2',
+      name: 'Other org',
+      slug: 'other-org',
+      courses: [],
+      groups: [],
+      members: [{ userId: 'user-2', role: 'admin' }]
+    }
+  ]);
+
+  const result = model.orgsFor('user-1');
+
+  assert.deepEqual(result.map((org) => org.id), ['org-1']);
+  assert.equal(result[0].name, 'Member org');
+  assert.equal(result[0].members.length, 2);
+  assert.deepEqual(model.orgsFor('missing-user'), []);
+});

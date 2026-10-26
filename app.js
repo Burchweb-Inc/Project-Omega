@@ -1020,7 +1020,7 @@ app.get('/todo', requireUser, async (request, response) => {
     integrationStatus: String(request.query.integration || '')
   });
 });
-app.use('/calendar', require('./calendar/routes')({ requireUser, render, allItems }));
+app.use('/calendar', require('./calendar/routes')({ requireUser, render, orgsFor: orgModel.orgsFor}));
 app.get('/groups', requireUser, (request, response) => render(request, response, 'groups', { groups: orgs.filter((org) => membership(org, request.user) || pendingInvite(org, request.user)).map((org) => ({ ...org, pendingInvite: pendingInvite(org, request.user) })) }));
 app.get(['/org/new', '/group/new'], requireUser, (request, response) => render(request, response, 'new-org'));
 

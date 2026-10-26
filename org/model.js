@@ -27,18 +27,20 @@ function normalizeCourseItems(course) {
   });
 }
 
+function parseOrgPayload(row) {
+  const org = JSON.parse(row.payload);
+      org.courses = (org.courses || []).map((course) => { normalizeCourseItems(course); return { ...course, items: course.items.map((item) => ({ ...item, comments: item.comments || [], verifiedBy: item.verifiedBy || [], downvotedBy: item.downvotedBy || [] })), board: course.board || [], resources: course.resources || [] }; });
+      org.groups = (org.groups || []).map((group) => { const task = group.itemId ? org.courses.flatMap((course) => course.items).find((item) => item.id === group.itemId) : null; return { ...group, members: group.members || [], roles: group.roles || {}, itemId: group.itemId || null, taskSlug: group.taskSlug || (task ? breakoutTaskSlug(task) : null), shareCode: group.shareCode || crypto.randomBytes(12).toString('base64url'), createdBy: group.createdBy || group.members?.[0] || null, tasks: group.tasks || [], resources: group.resources || [], polls: group.polls || [], comments: (group.comments || []).map((comment) => ({ ...comment, parentId: comment.parentId || null })) }; });
+        org.members = (org.members || []).map((member) => ({ ...member, role: member.role === 'writer' ? 'editor' : member.role || 'viewer' }));
+        return { ...org, slug: org.slug || secureSlug(org.name), reports: org.reports || [], groups: org.groups || [], pendingInvites: org.pendingInvites || [], suspendedAt: org.suspendedAt || '', shareCode: org.shareCode || crypto.randomBytes(32).toString('base64url') };
+}
+
 function loadOrgsFromDatabase(db) {
   const rows = db.prepare('SELECT * FROM orgs WHERE is_active = 1 ORDER BY updated_at ASC').all();
-  const orgs = rows.map((row) => {
-    const org = JSON.parse(row.payload);
-    org.courses = (org.courses || []).map((course) => { normalizeCourseItems(course); return { ...course, items: course.items.map((item) => ({ ...item, comments: item.comments || [], verifiedBy: item.verifiedBy || [], downvotedBy: item.downvotedBy || [] })), board: course.board || [], resources: course.resources || [] }; });
-    org.groups = (org.groups || []).map((group) => { const task = group.itemId ? org.courses.flatMap((course) => course.items).find((item) => item.id === group.itemId) : null; return { ...group, members: group.members || [], roles: group.roles || {}, itemId: group.itemId || null, taskSlug: group.taskSlug || (task ? breakoutTaskSlug(task) : null), shareCode: group.shareCode || crypto.randomBytes(12).toString('base64url'), createdBy: group.createdBy || group.members?.[0] || null, tasks: group.tasks || [], resources: group.resources || [], polls: group.polls || [], comments: (group.comments || []).map((comment) => ({ ...comment, parentId: comment.parentId || null })) }; });
-      org.members = (org.members || []).map((member) => ({ ...member, role: member.role === 'writer' ? 'editor' : member.role || 'viewer' }));
-      return { ...org, slug: org.slug || secureSlug(org.name), reports: org.reports || [], groups: org.groups || [], pendingInvites: org.pendingInvites || [], suspendedAt: org.suspendedAt || '', shareCode: org.shareCode || crypto.randomBytes(32).toString('base64url') };
-  });
-
+  const orgs = rows.map((row) => parseOrgPayload(row));
   return orgs;
 }
+
 function persistState(db, orgs) {
   const orgWrite = db.prepare(`INSERT INTO orgs (id, payload, updated_at, is_active)
     VALUES (@id, @payload, CURRENT_TIMESTAMP, 1)
@@ -58,8 +60,25 @@ function persistState(db, orgs) {
   })();
 }
 
+function loadOrgsForUser(db, userId) {
+  const orgs = db.prepare(`
+    SELECT
+      orgs.*
+    FROM
+      orgs
+    WHERE EXISTS (
+      SELECT 1
+      FROM json_each(orgs.payload, '$.members') as members
+      WHERE json_extract(members.value, '$.userId') = ?
+    )
+  `).all(userId);
+
+  return orgs.map(parseOrgPayload);
+}
+
 module.exports = (db) => ({
   init: () => initialize(db),
   all: () => loadOrgsFromDatabase(db),
+  orgsFor: (userId) => loadOrgsForUser(db, userId),
   persistState: (orgs) => persistState(db, orgs)
 });
