@@ -1023,9 +1023,7 @@ app.get('/todo', requireUser, async (request, response) => {
   });
 });
 app.use('/calendar', require('./calendar/routes')({ requireUser, render, feedFor: orgModel.feedFor}));
-app.get('/groups', requireUser, (request, response) => render(request, response, 'groups', { groups: orgModel.all().filter((org) => membership(org, request.user) || pendingInvite(org, request.user)).map((org) => ({ ...org, pendingInvite: pendingInvite(org, request.user) })) }));
-app.get(['/org/new', '/group/new'], requireUser, (request, response) => render(request, response, 'new-org'));
-
+app.use(require('./org/routes')({ requireUser, orgModel, render }));
 app.post(['/orgs', '/groups/new'], requireUser, async (request, response) => {
   const name = String(request.body.name || '').trim();
   if (!name) return response.redirect('/group/new');
