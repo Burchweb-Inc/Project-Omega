@@ -7,12 +7,12 @@ function monthItems(items, year, month) {
   );
 }
 
-module.exports = function createCalendarRouter({ requireUser, render, allItems }) {
+module.exports = function createCalendarRouter({ requireUser, render, feedFor}) {
   const router = express.Router();
 
   function renderMonth(request, response, year, month) {
     return render(request, response, 'calendar', {
-      calendarItems: monthItems(allItems(), year, month),
+      calendarItems: monthItems(feedFor(request.user.id), year, month),
       calendarYear: year,
       calendarMonth: month
     });

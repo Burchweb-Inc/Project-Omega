@@ -555,9 +555,7 @@ async function contentPolicyError(input) {
   const hasBlockingFinding = result.findings?.some((finding) => blockingCategories.has(finding.category));
   return result.badScore >= 20 || hasBlockingFinding ? 'This content violates our content policy. Edit it, then try again.' : null;
 }
-function allItems() {
-  return orgs.flatMap((org) => org.courses.flatMap((course) => course.items.map((item) => ({ ...item, org, course }))));
-}
+
 function renderOrgPage(request, response, page, extra = {}) {
   const org = getOrg(request); const member = membership(org, request.user);
   if (!canAccess(org, request.user)) return response.redirect('/dashboard');
@@ -742,7 +740,7 @@ app.get('/dashboard', requireUser, (request, response) => {
   const dashboardGroups = request.user.isSiteAdmin ? orgs.slice().sort((left, right) => left.name.localeCompare(right.name)) : orgs.filter((org) => membership(org, request.user)).sort((left, right) => left.name.localeCompare(right.name));
   const dashboardModeration = (request.user.isSiteAdmin ? orgs : dashboardGroups).flatMap((org) => moderationComments(org).filter((comment) => !comment.reviewedAt).map((comment) => ({ ...comment, orgId: org.id, orgName: org.name })));
   render(request, response, 'dashboard', {
-    feedItems: allItems().filter((entry) => entry.org.members.some((member) => member.userId === request.user.id)).slice(0, 8),
+    feedItems: orgModel.feedFor(request.user.id).slice(0, 8),
     dashboardTab,
     dashboardGroups,
     dashboardModeration
@@ -1020,7 +1018,7 @@ app.get('/todo', requireUser, async (request, response) => {
     integrationStatus: String(request.query.integration || '')
   });
 });
-app.use('/calendar', require('./calendar/routes')({ requireUser, render, allItems }));
+app.use('/calendar', require('./calendar/routes')({ requireUser, render, feedFor: orgModel.feedFor}));
 app.get('/groups', requireUser, (request, response) => render(request, response, 'groups', { groups: orgs.filter((org) => membership(org, request.user) || pendingInvite(org, request.user)).map((org) => ({ ...org, pendingInvite: pendingInvite(org, request.user) })) }));
 app.get(['/org/new', '/group/new'], requireUser, (request, response) => render(request, response, 'new-org'));
 
