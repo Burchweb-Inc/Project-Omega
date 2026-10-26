@@ -73,3 +73,61 @@ test('orgsFor returns active orgs containing the requested member', (context) =>
   assert.equal(result[0].members.length, 2);
   assert.deepEqual(model.orgsFor('missing-user'), []);
 });
+
+test('feedFor returns items from courses in orgs where the user is a member', (context) => {
+  const db = new Database(':memory:');
+  context.after(() => db.close());
+
+  const model = createOrgModel(db);
+  model.init();
+
+  model.persistState([
+    {
+      id: 'org-1',
+      name: 'Member org',
+      slug: 'member-org',
+      courses: [
+        {
+          id: 'course-1',
+          name: 'Math',
+          items: [
+            { id: 'item-1', title: 'Algebra homework' },
+            { id: 'item-2', title: 'Geometry review' }
+          ]
+        },
+        {
+          id: 'course-2',
+          name: 'Science',
+          items: [{ id: 'item-3', title: 'Lab report' }]
+        }
+      ],
+      members: [{ userId: 'user-1', role: 'editor' }]
+    },
+    {
+      id: 'org-2',
+      name: 'Other org',
+      slug: 'other-org',
+      courses: [
+        {
+          id: 'course-3',
+          name: 'History',
+          items: [{ id: 'item-4', title: 'Essay' }]
+        }
+      ],
+      members: [{ userId: 'user-2', role: 'admin' }]
+    }
+  ]);
+
+  const feed = model.feedFor('user-1');
+
+  assert.deepEqual(feed.map(({ id }) => id), ['item-1', 'item-2', 'item-3']);
+  assert.deepEqual(
+    feed.map(({ org, course }) => [org.id, course.id]),
+    [
+      ['org-1', 'course-1'],
+      ['org-1', 'course-1'],
+      ['org-1', 'course-2']
+    ]
+  );
+  assert.deepEqual(model.feedFor('missing-user'), []);
+});

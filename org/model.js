@@ -80,5 +80,6 @@ module.exports = (db) => ({
   init: () => initialize(db),
   all: () => loadOrgsFromDatabase(db),
   orgsFor: (userId) => loadOrgsForUser(db, userId),
+  feedFor: (userId) => loadOrgsForUser(db, userId).flatMap((org) => org.courses.flatMap((course) => course.items.map((item) => ({ ...item, org, course })))),
   persistState: (orgs) => persistState(db, orgs)
 });

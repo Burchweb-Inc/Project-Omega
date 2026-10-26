@@ -7,15 +7,12 @@ function monthItems(items, year, month) {
   );
 }
 
-module.exports = function createCalendarRouter({ requireUser, render, orgsFor }) {
+module.exports = function createCalendarRouter({ requireUser, render, feedFor}) {
   const router = express.Router();
-
-  const orgTasks = (request) => orgsFor(request.user.id)
-    .flatMap((org) => org.courses.flatMap((course) => course.items.map((item) => ({ ...item, org, course }))));
 
   function renderMonth(request, response, year, month) {
     return render(request, response, 'calendar', {
-      calendarItems: monthItems(orgTasks(request), year, month),
+      calendarItems: monthItems(feedFor(request.user.id), year, month),
       calendarYear: year,
       calendarMonth: month
     });
