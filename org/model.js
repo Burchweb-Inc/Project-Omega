@@ -61,16 +61,21 @@ function persistState(db, orgs) {
 }
 
 function loadOrgsForUser(db, userId) {
+  if (!userId) return [];
+
   const orgs = db.prepare(`
-    SELECT
-      orgs.*
-    FROM
-      orgs
-    WHERE EXISTS (
-      SELECT 1
-      FROM json_each(orgs.payload, '$.members') as members
-      WHERE json_extract(members.value, '$.userId') = ?
-    )
+    SELECT orgs.*
+    FROM orgs
+    WHERE is_active = 1
+      AND (
+        json_extract(orgs.payload, '$.visibility') = 'public'
+        OR EXISTS (
+          SELECT 1
+          FROM json_each(orgs.payload, '$.members') AS members
+          WHERE json_extract(members.value, '$.userId') = ?
+        )
+      )
+    ORDER BY orgs.updated_at ASC
   `).all(userId);
 
   return orgs.map(parseOrgPayload);
