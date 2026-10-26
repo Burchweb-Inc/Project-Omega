@@ -41,23 +41,66 @@ function loadOrgsFromDatabase(db) {
   return orgs;
 }
 
-function persistState(db, orgs) {
-  const orgWrite = db.prepare(`INSERT INTO orgs (id, payload, updated_at, is_active)
+function saveOrg(db, org) {
+  db.prepare(`INSERT INTO orgs (id, payload, updated_at, is_active)
     VALUES (@id, @payload, CURRENT_TIMESTAMP, 1)
     ON CONFLICT(id) DO UPDATE SET
       payload = excluded.payload,
       updated_at = CURRENT_TIMESTAMP,
-      is_active = 1`);
-  const deactivateMissingOrgs = db.prepare('UPDATE orgs SET is_active = 0 WHERE id NOT IN (SELECT value FROM json_each(?))');
+      is_active = 1`).run({
+    id: org.id,
+    payload: JSON.stringify(org)
+  });
+}
 
-  db.transaction(() => {
-    const ids = JSON.stringify(orgs.map((org) => org.id));
-    deactivateMissingOrgs.run(ids);
-    orgs.forEach((org) => orgWrite.run({
-      id: org.id,
-      payload: JSON.stringify(org)
-    }));
-  })();
+function createOrg(db, { userId, name, description }) {
+  if (!userId || !name || description == null) {
+    throw new TypeError('userId, name, and description are required to create an org');
+  }
+
+  const org = {
+    id: crypto.randomBytes(4).toString('hex'),
+    slug: secureSlug(name),
+    name,
+    description,
+    theme: 'coral',
+    visibility: 'private',
+    shareCode: crypto.randomBytes(32).toString('base64url'),
+    shareUses: 1,
+    sharePermission: 'viewer',
+    courses: [],
+    groups: [],
+    members: [{ userId, role: 'admin' }],
+    pendingInvites: [],
+    reports: []
+  };
+  saveOrg(db, org);
+  return org;
+}
+
+function deleteOrg(db, orgId) {
+  return db.prepare('UPDATE orgs SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND is_active = 1').run(orgId).changes > 0;
+}
+
+function loadOrgByIdOrSlug(db, { id: orgId, slug: orgSlug } = {}) {
+  if (!orgId && !orgSlug) return null;
+  const row = db.prepare(`SELECT * FROM orgs WHERE is_active = 1 AND (id = ? OR json_extract(payload, '$.slug') = ?) LIMIT 1`).get(orgId || null, orgSlug || null);
+  return row ? parseOrgPayload(row) : null;
+}
+
+function loadOrgByShareCode(db, shareCode) {
+  if (!shareCode) return null;
+  const row = db.prepare(`SELECT * FROM orgs WHERE is_active = 1 AND EXISTS (
+    SELECT 1 FROM json_each(orgs.payload, '$.groups') AS groups
+    WHERE json_extract(groups.value, '$.shareCode') = ?
+  ) LIMIT 1`).get(shareCode);
+  return row ? parseOrgPayload(row) : null;
+}
+
+function loadOrgByOrgShareCode(db, shareCode) {
+  if (!shareCode) return null;
+  const row = db.prepare(`SELECT * FROM orgs WHERE is_active = 1 AND json_extract(payload, '$.shareCode') = ? LIMIT 1`).get(shareCode);
+  return row ? parseOrgPayload(row) : null;
 }
 
 function loadOrgsForUser(db, userId) {
@@ -81,10 +124,34 @@ function loadOrgsForUser(db, userId) {
   return orgs.map(parseOrgPayload);
 }
 
+function loadOrgsForUserOrInvite(db, userId) {
+  if (!userId) return [];
+  return loadOrgsFromDatabase(db).filter((org) =>
+    org.visibility === 'public' ||
+    org.members.some((member) => member.userId === userId) ||
+    org.pendingInvites.some((invite) => invite.userId === userId)
+  );
+}
+
+function loadCopyCandidatesForUser(db, userId) {
+  if (!userId) return [];
+  return loadOrgsFromDatabase(db).filter((org) =>
+    org.members.some((member) => member.userId === userId)
+  );
+}
+
 module.exports = (db) => ({
   init: () => initialize(db),
   all: () => loadOrgsFromDatabase(db),
+  get: (orgId) => loadOrgByIdOrSlug(db, { id: orgId }),
+  for: (search = {}) => loadOrgByIdOrSlug(db, search),
+  byShareCode: (shareCode) => loadOrgByShareCode(db, shareCode),
+  byOrgShareCode: (shareCode) => loadOrgByOrgShareCode(db, shareCode),
   orgsFor: (userId) => loadOrgsForUser(db, userId),
+  forUserOrInvite: (userId) => loadOrgsForUserOrInvite(db, userId),
+  copyCandidatesForUser: (userId) => loadCopyCandidatesForUser(db, userId),
   feedFor: (userId) => loadOrgsForUser(db, userId).flatMap((org) => org.courses.flatMap((course) => course.items.map((item) => ({ ...item, org, course })))),
-  persistState: (orgs) => persistState(db, orgs)
+  create: (data) => createOrg(db, data),
+  save: (org) => saveOrg(db, org),
+  delete: (orgId) => deleteOrg(db, orgId)
 });

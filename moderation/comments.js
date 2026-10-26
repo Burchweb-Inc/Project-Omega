@@ -44,7 +44,7 @@ function editComment(comment, text, user) {
   comment.editedBy = user.id;
 }
 
-function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse, emitGroup, emitOrg, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification, isUserOnBreakoutPage, appendRemovedTextForReview, appendAppealPhrase }) {
+function registerCommentRoutes({ app, users, id, saveOrg, emitCourse, emitGroup, emitOrg, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification, isUserOnBreakoutPage, appendRemovedTextForReview, appendAppealPhrase }) {
   app.post('/org/:id/items/:itemId/comments', requireUser, async (request, response) => {
     const org = getOrg(request);
     const item = canAccess(org, request.user) ? org.courses.flatMap((course) => course.items).find((entry) => entry.id === request.params.itemId) : null;
@@ -55,7 +55,7 @@ function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse,
     const comment = { id: id(), author: request.user.name, userId: request.user.id, text, createdAt: new Date().toISOString(), history: [] };
     item.comments ||= [];
     item.comments.push(comment);
-    persistState();
+    saveOrg(org);
     const course = org.courses.find((entry) => entry.items.includes(item));
     emitCourse(org, course, 'item:comment-added', { itemId: item.id, comment });
     return sendMutation(request, response, { itemId: item.id, comment }, `/org/${org.id}/course/${course.id}`);
@@ -71,7 +71,7 @@ function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse,
     const policyError = await contentPolicyError({ type: 'comment', text, previousMessages: item.comments });
     if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/course/${course.id}`);
     editComment(comment, text, request.user);
-    persistState();
+    saveOrg(org);
     emitCourse(org, course, 'item:comment-updated', { itemId: item.id, comment });
     return sendMutation(request, response, { itemId: item.id, comment }, `/org/${org.id}/course/${course.id}`);
   });
@@ -79,7 +79,7 @@ function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse,
   app.post('/org/:id/items/:itemId/comments/:commentId/delete', requireUser, (request, response) => {
     const org = getOrg(request); const course = org?.courses.find((entry) => entry.items.some((item) => item.id === request.params.itemId)); const item = course?.items.find((entry) => entry.id === request.params.itemId); const comment = item?.comments?.find((entry) => entry.id === request.params.commentId);
     if (!org || !item || !comment || (!canEditComment(comment, org, request.user) && !isOrgModerator(org, request.user))) return sendMutation(request, response, { error: 'You cannot delete this comment.' }, `/org/${org?.id || ''}`);
-    item.comments = item.comments.filter((entry) => entry.id !== comment.id); persistState(); emitCourse(org, course, 'item:comment-deleted', { itemId: item.id, commentId: comment.id });
+    item.comments = item.comments.filter((entry) => entry.id !== comment.id); saveOrg(org); emitCourse(org, course, 'item:comment-deleted', { itemId: item.id, commentId: comment.id });
     return sendMutation(request, response, { itemId: item.id, commentId: comment.id }, `/org/${org.id}/course/${course.id}`);
   });
 
@@ -92,7 +92,7 @@ function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse,
     if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/breakout/${group.id}`);
     group.comments ||= [];
     const comment = { id: id(), author: request.user.name, userId: request.user.id, text, parentId, createdAt: new Date().toISOString(), history: [] };
-    group.comments.push(comment); for (const memberId of group.members) if (memberId !== request.user.id) addNotification?.(users.find((user) => user.id === memberId), { type: 'breakout-comment', title: `${request.user.name} commented in ${group.name}`, message: text, href: `/org/${org.id}/breakout/${group.id}`, actionLabel: 'Open group' }); persistState(); emitGroup(org, 'breakout:comment-created', { groupId: group.id, comment });
+    group.comments.push(comment); for (const memberId of group.members) if (memberId !== request.user.id) addNotification?.(users.find((user) => user.id === memberId), { type: 'breakout-comment', title: `${request.user.name} commented in ${group.name}`, message: text, href: `/org/${org.id}/breakout/${group.id}`, actionLabel: 'Open group' }); saveOrg(org); emitGroup(org, 'breakout:comment-created', { groupId: group.id, comment });
     return sendMutation(request, response, { comment }, `/org/${org.id}/breakout/${group.id}`);
   });
 
@@ -101,14 +101,14 @@ function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse,
     if (!org || !group || !comment || !text || !canEditComment(comment, org, request.user, group)) return sendMutation(request, response, { error: 'You cannot edit this comment.' }, `/org/${request.params.id}`);
     const policyError = await contentPolicyError({ type: 'group-comment', text, previousMessages: group.comments });
     if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/breakout/${group.id}`);
-    editComment(comment, text, request.user); persistState(); emitGroup(org, 'breakout:comment-updated', { groupId: group.id, comment });
+    editComment(comment, text, request.user); saveOrg(org); emitGroup(org, 'breakout:comment-updated', { groupId: group.id, comment });
     return sendMutation(request, response, { comment }, `/org/${org.id}/breakout/${group.id}`);
   });
 
   app.post('/org/:id/breakout/:groupId/comments/:commentId/delete', requireUser, (request, response) => {
     const org = getOrg(request); const group = org?.groups?.find((entry) => entry.id === request.params.groupId); const comment = group?.comments?.find((entry) => entry.id === request.params.commentId);
     if (!group || !comment || (!canEditComment(comment, org, request.user, group) && !canManageBreakoutGroup(org, group, request.user))) return sendMutation(request, response, { error: 'You cannot delete this comment.' }, `/org/${request.params.id}`);
-    group.comments = (group.comments || []).filter((comment) => comment.id !== request.params.commentId); persistState(); emitGroup(org, 'breakout:comment-deleted', { groupId: group.id, commentId: request.params.commentId });
+    group.comments = (group.comments || []).filter((comment) => comment.id !== request.params.commentId); saveOrg(org); emitGroup(org, 'breakout:comment-deleted', { groupId: group.id, commentId: request.params.commentId });
     return sendMutation(request, response, { commentId: request.params.commentId }, `/org/${org.id}/breakout/${group.id}`);
   });
 
@@ -127,7 +127,7 @@ function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse,
     const contentText = target.comment?.text || `${target.item.type}: ${target.item.title}`;
     org.reports ||= []; org.reports.push({ id: id(), type: 'content', contentId: target.comment?.id || target.item.id, contentType: target.type, contentText, reporter: request.user.username, reporterRole: membershipRole(org, request.user), reason, detail, status: 'open', createdAt: new Date().toISOString() });
     for (const member of org.members || []) if (['admin', 'moderator'].includes(member.role) && member.userId !== request.user.id) addNotification?.(users.find((user) => user.id === member.userId), { type: 'content-report', title: `New report in ${org.name}`, message: `${request.user.name} reported ${reason.toLowerCase()}: ${detail || 'No additional details.'}`, href: `/org/${org.id}/admin/report`, actionLabel: 'Review report' });
-    persistState();
+    saveOrg(org);
     if (target.item && target.comment) emitCourse(org, target.course, 'item:comment-reported', { itemId: target.item.id, commentId: target.comment.id });
     if (target.group) emitGroup(org, 'breakout:comment-reported', { groupId: target.group.id, commentId: target.comment.id });
     return sendMutation(request, response, { reported: true, contentId: target.comment?.id || target.item.id, successMessage: 'Report submitted. Thanks for helping keep this group healthy.' }, `/org/${org.id}`);
@@ -143,7 +143,7 @@ function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse,
     if (item) { item.comments = item.comments.filter((comment) => comment.id !== request.params.commentId); const course = org.courses.find((entry) => entry.items.includes(item)); emitCourse(org, course, 'item:comment-deleted', { itemId: item.id, commentId: request.params.commentId }); }
     if (group) { group.comments = group.comments.filter((comment) => comment.id !== request.params.commentId); emitGroup(org, 'breakout:comment-deleted', { groupId: group.id, commentId: request.params.commentId }); }
     if (removedComment?.userId && removedComment.userId !== request.user.id) addNotification?.(users.find((user) => user.id === removedComment.userId), { type: 'comment-removed', title: `Comment removed in ${org.name}`, message: 'A group administrator removed one of your comments for review.' });
-    persistState();
+    saveOrg(org);
     emitOrg(org, 'org:moderation-updated', { orgId: org.id, commentId: request.params.commentId, action: 'comment-removed' });
     return sendMutation(request, response, { removed: Boolean(item || group), commentId: request.params.commentId }, `/org/${org.id}/admin/mod`);
   });
@@ -151,7 +151,7 @@ function registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse,
   app.post('/org/:id/admin/comments/:commentId/review', requireUser, (request, response) => {
     const org = getOrg(request); const target = findReportedComment(org, request.params.commentId);
     if (!org || !target || !isOrgModerator(org, request.user)) return sendMutation(request, response, { error: 'That comment is unavailable or you are not a moderator.' }, `/org/${request.params.id}/admin/mod`);
-    target.comment.reviewedAt = new Date().toISOString(); target.comment.reviewedBy = request.user.id; persistState();
+    target.comment.reviewedAt = new Date().toISOString(); target.comment.reviewedBy = request.user.id; saveOrg(org);
     emitOrg(org, 'org:moderation-updated', { orgId: org.id, commentId: target.comment.id, action: 'comment-reviewed' });
     return sendMutation(request, response, { reviewed: true, commentId: target.comment.id }, `/org/${org.id}/admin/mod`);
   });

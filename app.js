@@ -219,11 +219,13 @@ async function syncUserTaskIntegrations(user, providers = ['googleTasks', 'apple
 
 function persistState() {
   userModel.persistState(users);
-  orgModel.persistState(orgs);
+}
+
+function saveOrg(org) {
+  orgModel.save(org);
 }
 
 const users = userModel.all();
-const orgs = orgModel.all();
 if (userModel.needsEncryptionMigration()) userModel.persistState(users);
 
 
@@ -475,7 +477,7 @@ function authRedirect(path, error, next) {
 function requireUser(request, response, next) {
   request.user = currentUser(request);
   if (!request.user) return response.redirect(authRedirect('/login', null, request.originalUrl));
-  if (refreshModerationStatus(request.user) !== 'active') return response.status(403).render('index', { page: 'restricted', view: 'restricted', user: request.user, users, orgs, canEdit, selectedOrg: null, error: null });
+  if (refreshModerationStatus(request.user) !== 'active') return response.status(403).render('index', { page: 'restricted', view: 'restricted', user: request.user, users, orgs: orgModel.all(), canEdit, selectedOrg: null, error: null });
   next();
 }
 function membership(org, user) { return org && user ? org.members.find((member) => member.userId === user.id) : null; }
@@ -493,9 +495,9 @@ function renderLinkedText(text, links = []) {
   }
   return output + escapeHtmlServer(value.slice(cursor));
 }
-function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs, canEdit, canManageItem, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), renderLinkedText, buildInfo, ...extra }); }
-function renderPublicPage(request, response, page, extra = {}) { response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: null, canonicalUrl: canonicalUrl(request), buildInfo, ...extra }); }
-function getOrg(request) { return orgs.find((entry) => entry.id === request.params.id || entry.slug === request.params.slug); }
+function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs: orgModel.all(), canEdit, canManageItem, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), renderLinkedText, buildInfo, ...extra }); }
+function renderPublicPage(request, response, page, extra = {}) { response.render('index', { page, view: page, user: null, users, orgs: orgModel.all(), canEdit, selectedOrg: null, notifications: [], error: null, canonicalUrl: canonicalUrl(request), buildInfo, ...extra }); }
+function getOrg(request) { return orgModel.for({ id: request.params.id, slug: request.params.slug }); }
 function getCourse(org, courseId) { return org?.courses.find((course) => course.id === courseId); }
 function isSiteAdmin(user) { return Boolean(user?.isSiteAdmin); }
 function isOrgModerator(org, user) { return isSiteAdmin(user) || ['admin', 'moderator'].includes(membership(org, user)?.role); }
@@ -547,8 +549,8 @@ function renderAnnouncementMarkdown(markdown) {
 function announcementPayload(announcement) {
   return { id: announcement.id, type: 'announcement', title: announcement.title, message: 'A new announcement is waiting for you.', html: announcement.body_html, mediaUrl: announcement.media_url, mediaType: announcement.media_type, fontSize: announcement.font_size, createdAt: announcement.created_at, read: false };
 }
-function globalModerationComments() { return orgs.flatMap((org) => moderationComments(org).map((comment) => ({ ...comment, orgId: org.id, orgName: org.name }))); }
-function globalReports() { return orgs.flatMap((org) => (org.reports || []).map((report) => ({ ...report, orgId: org.id, orgName: org.name }))); }
+function globalModerationComments() { return orgModel.all().flatMap((org) => moderationComments(org).map((comment) => ({ ...comment, orgId: org.id, orgName: org.name }))); }
+function globalReports() { return orgModel.all().flatMap((org) => (org.reports || []).map((report) => ({ ...report, orgId: org.id, orgName: org.name }))); }
 async function contentPolicyError(input) {
   const result = scanContent(input);
   const blockingCategories = new Set(['profanity', 'heavy-profanity', 'insult', 'harassment', 'targeted-insult', 'targeted-profanity', 'targeted-abuse', 'bad-word-list', 'content-checker']);
@@ -562,7 +564,7 @@ function renderOrgPage(request, response, page, extra = {}) {
   render(request, response, page, { selectedOrg: org, member, ...extra });
 }
 function renderSuspendedGroup(request, response, org) {
-  return response.status(423).render('index', { page: 'suspended-group', view: 'suspended-group', user: request.user, users, orgs, canEdit, selectedOrg: org, notifications: request.user?.notifications || [], error: null });
+  return response.status(423).render('index', { page: 'suspended-group', view: 'suspended-group', user: request.user, users, orgs: orgModel.all(), canEdit, selectedOrg: org, notifications: request.user?.notifications || [], error: null });
 }
 
 io.use((socket, next) => {
@@ -575,19 +577,19 @@ io.on('connection', (socket) => {
   socket.on('notifications:join', () => socket.join(notificationRoom(socket.user.id)));
   socket.on('todo:join', () => socket.join(todoRoom(socket.user.id)));
   socket.on('org:join', ({ orgId } = {}) => {
-    const org = orgs.find((entry) => entry.id === orgId);
+    const org = orgModel.get(orgId);
     if (org && canAccess(org, socket.user)) socket.join(orgRoom(org.id));
   });
   socket.on('course:join', ({ orgId, courseId } = {}) => {
-    const org = orgs.find((entry) => entry.id === orgId); const course = getCourse(org, courseId);
+    const org = orgModel.get(orgId); const course = getCourse(org, courseId);
     if (canAccess(org, socket.user) && course) { socket.join(courseRoom(org.id, course.id)); if (isOrgAdmin(org, socket.user)) socket.join(courseAdminRoom(org.id, course.id)); }
   });
   socket.on('group:join', ({ orgId } = {}) => {
-    const org = orgs.find((entry) => entry.id === orgId);
+    const org = orgModel.get(orgId);
     if (canAccess(org, socket.user)) { socket.join(groupRoom(org.id)); breakoutPresence.set(socket.id, { userId: socket.user.id, orgId, groupId: null, lastSeen: Date.now() }); emitOrgPresence(org); }
   });
   socket.on('breakout:presence', ({ orgId, groupId } = {}) => {
-    const org = orgs.find((entry) => entry.id === orgId); const group = getBreakoutGroup(org, groupId);
+    const org = orgModel.get(orgId); const group = getBreakoutGroup(org, groupId);
     if (!org || !group || !canAccess(org, socket.user) || !group.members.includes(socket.user.id)) return;
     breakoutPresence.set(socket.id, { userId: socket.user.id, orgId, groupId, lastSeen: Date.now() });
     socket.emit('breakout:presence', { groupId, members: groupPresencePayload(org, groupId) });
@@ -596,15 +598,15 @@ io.on('connection', (socket) => {
   socket.on('breakout:presence-heartbeat', () => {
     const record = breakoutPresence.get(socket.id); if (!record) return;
     record.lastSeen = Date.now();
-    const org = orgs.find((entry) => entry.id === record.orgId); if (org) record.groupId ? emitGroupPresence(org, record.groupId) : emitOrgPresence(org);
+    const org = orgModel.get(record.orgId); if (org) record.groupId ? emitGroupPresence(org, record.groupId) : emitOrgPresence(org);
   });
   socket.on('disconnect', () => {
     const record = breakoutPresence.get(socket.id); breakoutPresence.delete(socket.id);
-    const org = record && orgs.find((entry) => entry.id === record.orgId); if (org) record.groupId ? emitGroupPresence(org, record.groupId) : emitOrgPresence(org);
+    const org = record && orgModel.get(record.orgId); if (org) record.groupId ? emitGroupPresence(org, record.groupId) : emitOrgPresence(org);
   });
 });
 
-registerCommentRoutes({ app, orgs, users, id, persistState, emitCourse, emitGroup, emitOrg, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification, appendRemovedTextForReview, appendAppealPhrase });
+registerCommentRoutes({ app, users, id, saveOrg, emitCourse, emitGroup, emitOrg, sendMutation, requireUser, getOrg, canAccess, isOrgAdmin, isOrgModerator, canManageBreakoutGroup, contentPolicyError, addNotification, appendRemovedTextForReview, appendAppealPhrase });
 
 app.get('/', (request, response) => {
   request.user = currentUser(request);
@@ -618,7 +620,7 @@ app.get(['/signup', '/login'], (request, response) => {
   request.user = currentUser(request);
   if (request.user) return response.redirect('/dashboard');
   const page = request.path.slice(1) === 'login' ? 'login' : 'signup';
-  response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: request.query.error, next: safeReturnTo(request.query.next), snarkyTypeConfigured: snarkyTypeConfigured(), snarkyTypePending: Boolean(request.query.snarky) });
+  response.render('index', { page, view: page, user: null, users, orgs: orgModel.all(), canEdit, selectedOrg: null, notifications: [], error: request.query.error, next: safeReturnTo(request.query.next), snarkyTypeConfigured: snarkyTypeConfigured(), snarkyTypePending: Boolean(request.query.snarky) });
 });
 
 app.get('/auth/snarkytype', (request, response) => {
@@ -737,6 +739,7 @@ app.post('/notifications/read-all', requireUser, (request, response) => {
 
 app.get('/dashboard', requireUser, (request, response) => {
   const dashboardTab = ['overview', 'groups', 'moderate'].includes(request.query.tab) ? request.query.tab : 'overview';
+  const orgs = orgModel.all();
   const dashboardGroups = request.user.isSiteAdmin ? orgs.slice().sort((left, right) => left.name.localeCompare(right.name)) : orgs.filter((org) => membership(org, request.user)).sort((left, right) => left.name.localeCompare(right.name));
   const dashboardModeration = (request.user.isSiteAdmin ? orgs : dashboardGroups).flatMap((org) => moderationComments(org).filter((comment) => !comment.reviewedAt).map((comment) => ({ ...comment, orgId: org.id, orgName: org.name })));
   render(request, response, 'dashboard', {
@@ -764,14 +767,14 @@ app.post('/site-admin/groups/:id/suspension', requireUser, requireSiteAdmin, (re
   const org = getOrg(request); const action = request.body.action;
   if (!org || !['suspend', 'unsuspend'].includes(action)) return sendMutation(request, response, { error: 'That group action is not available.' }, '/site-admin?tab=groups');
   org.suspendedAt = action === 'suspend' ? (org.suspendedAt || new Date().toISOString()) : '';
-  persistState();
+  saveOrg(org);
   return sendMutation(request, response, { successMessage: action === 'suspend' ? `${org.name} is suspended indefinitely.` : `${org.name} is active again.` }, '/site-admin?tab=groups');
 });
 
 app.post('/site-admin/groups/:id/delete', requireUser, requireSiteAdmin, (request, response) => {
-  const orgIndex = orgs.findIndex((entry) => entry.id === request.params.id); const org = orgs[orgIndex];
-  if (orgIndex === -1 || !org.suspendedAt) return sendMutation(request, response, { error: 'Only suspended groups can be deleted from site administration.' }, '/site-admin?tab=groups');
-  orgs.splice(orgIndex, 1); persistState();
+  const org = getOrg(request);
+  if (!org || !org.suspendedAt) return sendMutation(request, response, { error: 'Only suspended groups can be deleted from site administration.' }, '/site-admin?tab=groups');
+  orgModel.delete(org.id);
   return sendMutation(request, response, { deletedGroup: request.params.id, successMessage: `${org.name} was deleted.` }, '/site-admin?tab=groups');
 });
 app.use(['/org/:id', '/group/:slug'], (request, response, next) => {
@@ -784,7 +787,7 @@ app.get('/api/users/search', requireUser, (request, response) => {
   const query = String(request.query.q || '').trim().toLowerCase();
   if (query.length < 1) return response.json([]);
   const scopeGroupId = String(request.query.groupId || '');
-  const visibleUserIds = sharedGroupUserIds(orgs, request.user, scopeGroupId);
+  const visibleUserIds = sharedGroupUserIds(orgModel.all(), request.user, scopeGroupId);
   response.json(users.filter((candidate) => visibleUserIds.has(candidate.id) && (candidate.username.includes(query) || candidate.name.toLowerCase().includes(query))).slice(0, 8).map((candidate) => ({ id: candidate.id, name: candidate.name, username: candidate.username })));
 });
 app.post('/site-admin/users', requireUser, requireSiteAdmin, (request, response) => {
@@ -999,7 +1002,8 @@ app.post('/settings/password', requireUser, (request, response) => {
 app.post('/settings/delete', requireUser, (request, response) => {
   if (String(request.body.confirmation || '') !== 'DELETE' || !passwordMatches(request.body.password || '', request.user.passwordHash)) return sendMutation(request, response, { error: 'Type DELETE and enter your password to close your account.' }, '/settings');
   const deletedUserId = request.user.id;
-  orgs.forEach((org) => { org.members = (org.members || []).filter((member) => member.userId !== deletedUserId); org.pendingInvites = (org.pendingInvites || []).filter((invite) => invite.userId !== deletedUserId); org.groups = (org.groups || []).filter((group) => group.createdBy !== deletedUserId).map((group) => ({ ...group, members: (group.members || []).filter((memberId) => memberId !== deletedUserId) })); });
+  const orgs = orgModel.all();
+  orgs.forEach((org) => { org.members = (org.members || []).filter((member) => member.userId !== deletedUserId); org.pendingInvites = (org.pendingInvites || []).filter((invite) => invite.userId !== deletedUserId); org.groups = (org.groups || []).filter((group) => group.createdBy !== deletedUserId).map((group) => ({ ...group, members: (group.members || []).filter((memberId) => memberId !== deletedUserId) })); saveOrg(org); });
   for (const [token, userId] of sessions) if (userId === deletedUserId) sessions.delete(token);
   users.splice(users.findIndex((user) => user.id === deletedUserId), 1); persistState(); response.setHeader('Set-Cookie', 'session=; HttpOnly; Max-Age=0; Path=/'); return sendMutation(request, response, { deletedAccount: true, successMessage: 'Your account has been deleted.' }, '/');
 });
@@ -1019,7 +1023,7 @@ app.get('/todo', requireUser, async (request, response) => {
   });
 });
 app.use('/calendar', require('./calendar/routes')({ requireUser, render, feedFor: orgModel.feedFor}));
-app.get('/groups', requireUser, (request, response) => render(request, response, 'groups', { groups: orgs.filter((org) => membership(org, request.user) || pendingInvite(org, request.user)).map((org) => ({ ...org, pendingInvite: pendingInvite(org, request.user) })) }));
+app.get('/groups', requireUser, (request, response) => render(request, response, 'groups', { groups: orgModel.all().filter((org) => membership(org, request.user) || pendingInvite(org, request.user)).map((org) => ({ ...org, pendingInvite: pendingInvite(org, request.user) })) }));
 app.get(['/org/new', '/group/new'], requireUser, (request, response) => render(request, response, 'new-org'));
 
 app.post(['/orgs', '/groups/new'], requireUser, async (request, response) => {
@@ -1027,8 +1031,8 @@ app.post(['/orgs', '/groups/new'], requireUser, async (request, response) => {
   if (!name) return response.redirect('/group/new');
   const description = String(request.body.description || '').trim();
   if (await contentPolicyError({ type: 'text', text: `${name} ${description}` })) return response.redirect('/group/new?error=policy');
-  const org = { id: id(), slug: secureSlug(name), name, description, theme: 'coral', visibility: 'private', shareCode: crypto.randomBytes(32).toString('base64url'), shareUses: 1, sharePermission: 'viewer', courses: [], groups: [], members: [{ userId: request.user.id, role: 'admin' }], pendingInvites: [], reports: [] };
-  orgs.push(org); persistState(); response.redirect(`/group/${org.slug}`);
+  const org = orgModel.create({ userId: request.user.id, name, description });
+  response.redirect(`/group/${org.slug}`);
 });
 
 app.get('/group/:slug', requireUser, (request, response) => renderOrgPage(request, response, 'org'));
@@ -1056,12 +1060,12 @@ app.get('/org/:id/course/:courseId/task/:taskSlug/breakout-groups', requireUser,
 });
 
 app.get('/b/:code', requireUser, (request, response) => {
-  const org = orgs.find((entry) => entry.groups?.some((group) => group.shareCode === request.params.code));
+  const org = orgModel.byShareCode(request.params.code);
   const group = org?.groups?.find((entry) => entry.shareCode === request.params.code);
   if (!org || !group || !canAccess(org, request.user)) return response.status(404).send('This breakout group link is no longer available.');
   if (!group.members.includes(request.user.id)) {
     if (group.members.length >= group.limit) return response.status(409).send('This breakout group is full.');
-    group.members.push(request.user.id); group.roles ||= {}; group.roles[request.user.id] = 'Member'; persistState(); emitGroup(org, 'breakout:member-joined', { groupId: group.id, userId: request.user.id });
+    group.members.push(request.user.id); group.roles ||= {}; group.roles[request.user.id] = 'Member'; saveOrg(org); emitGroup(org, 'breakout:member-joined', { groupId: group.id, userId: request.user.id });
   }
   response.redirect(`/org/${org.id}/breakout/${group.id}`);
 });
@@ -1070,7 +1074,7 @@ app.get('/org/:id/course/:courseId', requireUser, async (request, response) => {
   const org = getOrg(request); const course = getCourse(org, request.params.courseId);
   if (!course || !canAccess(org, request.user)) return response.redirect(`/org/${request.params.id}`);
   normalizeCourseItems(course); const location = await userDateLocation(request.user, request);
-  const copyDestinations = orgs
+  const copyDestinations = orgModel.all()
     .filter((destinationOrg) => destinationOrg.id === org.id || org.allowCrossGroupTaskCopy !== false)
     .filter((destinationOrg) => canAccess(destinationOrg, request.user) && canEdit(membership(destinationOrg, request.user)))
     .map((destinationOrg) => ({
@@ -1126,20 +1130,20 @@ app.get('/org/:id/admin/:tab?', requireUser, (request, response) => {
 });
 
 app.post('/org/:id/courses', requireUser, async (request, response) => {
-  const org = orgs.find((entry) => entry.id === request.params.id); if (!org || !canEdit(membership(org, request.user))) return response.redirect(`/org/${request.params.id}`);
+  const org = getOrg(request); if (!org || !canEdit(membership(org, request.user))) return response.redirect(`/org/${request.params.id}`);
   const name = String(request.body.name || '').trim(); const code = String(request.body.code || '').trim().toUpperCase();
   if (await contentPolicyError({ type: 'course', text: `${name} ${code}` })) return response.redirect(`/org/${org.id}/courses/new?error=policy`);
-  org.courses.push({ id: id(), name, code, color: request.body.color || '#ef8354', items: [], board: [], resources: [] }); persistState(); response.redirect(`/org/${org.id}/course/${org.courses.at(-1).id}`);
+  org.courses.push({ id: id(), name, code, color: request.body.color || '#ef8354', items: [], board: [], resources: [] }); saveOrg(org); response.redirect(`/org/${org.id}/course/${org.courses.at(-1).id}`);
 });
 
 app.post('/org/:id/courses/:courseId/items', requireUser, async (request, response) => {
-  const org = orgs.find((entry) => entry.id === request.params.id); const course = org && org.courses.find((entry) => entry.id === request.params.courseId);
+  const org = getOrg(request); const course = org && org.courses.find((entry) => entry.id === request.params.courseId);
   if (!course || !canEdit(membership(org, request.user))) return sendMutation(request, response, { error: 'You cannot edit this course.' }, `/org/${request.params.id}/course/${request.params.courseId}`);
   const policyError = await contentPolicyError({ type: 'course-item', text: request.body.title });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${request.params.id}/course/${request.params.courseId}`);
   const item = { id: id(), title: String(request.body.title || '').trim(), details: String(request.body.details || '').trim(), links: await fetchLinkPreviews(`${request.body.title || ''}\n${request.body.details || ''}`), type: request.body.type, due: request.body.due || 'No date', done: request.body.type !== 'Event' ? false : null, comments: [], verifiedBy: [], downvotedBy: [], createdBy: request.user.id, position: course.items.length, past: dueImportance(request.body.due || 'No date') === 'Overdue' };
   if (!item.title) return sendMutation(request, response, { error: 'A title is required.' }, `/org/${org.id}/course/${course.id}`);
-  course.items.push(item); persistState(); emitCourse(org, course, 'course:item-created', { item });
+  course.items.push(item); saveOrg(org); emitCourse(org, course, 'course:item-created', { item });
   return sendMutation(request, response, { item }, `/org/${org.id}/course/${course.id}`);
 });
 
@@ -1152,7 +1156,7 @@ app.post('/org/:id/course/:courseId/items/reorder', requireUser, (request, respo
   const order = Array.isArray(request.body.order) ? request.body.order : String(request.body.order || '').split(','); const itemsById = new Map(course.items.map((item) => [item.id, item]));
   order.forEach((itemId, index) => { const item = itemsById.get(itemId); if (item) item.position = index; });
   course.items.forEach((item) => { if (order.includes(item.id)) { item.pastOverride = pastIds.has(item.id); item.past = item.pastOverride; } });
-  course.items.sort((left, right) => left.position - right.position); courseReorderWindows.set(key, now); persistState(); emitCourse(org, course, 'course:items-reordered', { items: course.items });
+  course.items.sort((left, right) => left.position - right.position); courseReorderWindows.set(key, now); saveOrg(org); emitCourse(org, course, 'course:items-reordered', { items: course.items });
   return sendMutation(request, response, { items: course.items }, `/org/${org.id}/course/${course.id}`);
 });
 
@@ -1166,7 +1170,7 @@ app.post('/groups', requireUser, async (request, response) => {
   if (await contentPolicyError({ type: 'group', text: groupName })) return sendMutation(request, response, { error: 'This content violates our content policy. Edit it, then try again.' }, `/org/${org.id}/course/${course.id}`);
   const group = { id: id(), name: groupName, taskSlug: item ? breakoutTaskSlug(item) : null, shareCode: crypto.randomBytes(12).toString('base64url'), courseId: course.id, courseName: course.name, itemId: item?.id || null, createdBy: request.user.id, limit: Math.min(50, Math.max(2, Number(request.body.limit) || 4)), members: [request.user.id], roles: { [request.user.id]: 'Organizer' }, tasks: [{ id: id(), title: 'Choose a direction', claimedBy: request.user.id, done: false }, { id: id(), title: 'Upload shared resources', claimedBy: null, done: false }], resources: [], polls: [{ question: 'When should we meet?', options: ['Today after school', 'Tomorrow at lunch', 'This weekend'], votes: {} }] };
   if (!group.name) return sendMutation(request, response, { error: 'A subgroup name is required.' }, '/groups');
-  org.groups.push(group); persistState(); emitCourse(org, course, 'subgroup:created', { group }); emitGroup(org, 'subgroup:created', { group });
+  org.groups.push(group); saveOrg(org); emitCourse(org, course, 'subgroup:created', { group }); emitGroup(org, 'subgroup:created', { group });
   const groupUrl = item ? breakoutGroupsUrl(org, course, item) : `/org/${org.id}/breakout/${group.id}`;
   return sendMutation(request, response, { group, groupUrl }, groupUrl);
 });
@@ -1175,7 +1179,7 @@ app.post('/org/:id/breakout/:groupId/settings', requireUser, (request, response)
   const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId);
   if (!group || !canManageBreakoutGroup(org, group, request.user)) return sendMutation(request, response, { error: 'You cannot edit this breakout group.' }, `/org/${request.params.id}`);
   const limit = Number(request.body.limit); if (!Number.isInteger(limit) || limit < group.members.length || limit < 2 || limit > 50) return sendMutation(request, response, { error: `Choose a capacity between ${Math.max(2, group.members.length)} and 50.` }, `/org/${org.id}/breakout/${group.id}`);
-  group.limit = limit; persistState(); emitGroup(org, 'breakout:updated', { group });
+  group.limit = limit; saveOrg(org); emitGroup(org, 'breakout:updated', { group });
   return sendMutation(request, response, { group }, `/org/${org.id}/breakout/${group.id}`);
 });
 
@@ -1185,13 +1189,13 @@ app.post('/org/:id/breakout/:groupId/members', requireUser, (request, response) 
   if (!target || !membership(org, target)) return sendMutation(request, response, { error: 'That username is not a member of this study space.' }, `/org/${org.id}/breakout/${group.id}`);
   if (group.members.includes(target.id)) return sendMutation(request, response, { error: 'That person is already in the breakout group.' }, `/org/${org.id}/breakout/${group.id}`);
   if (group.members.length >= group.limit) return sendMutation(request, response, { error: 'This breakout group is full.' }, `/org/${org.id}/breakout/${group.id}`);
-  group.members.push(target.id); group.roles ||= {}; group.roles[target.id] = 'Member'; persistState(); emitGroup(org, 'breakout:member-joined', { groupId: group.id, userId: target.id });
+  group.members.push(target.id); group.roles ||= {}; group.roles[target.id] = 'Member'; saveOrg(org); emitGroup(org, 'breakout:member-joined', { groupId: group.id, userId: target.id });
   return sendMutation(request, response, { member: target.id }, `/org/${org.id}/breakout/${group.id}`);
 });
 
 app.post('/org/:id/items/:itemId/verify', requireUser, (request, response) => {
   const org = getOrg(request); const item = canAccess(org, request.user) ? org.courses.flatMap((course) => course.items).find((entry) => entry.id === request.params.itemId) : null;
-  if (item) { item.verifiedBy ||= []; const index = item.verifiedBy.indexOf(request.user.id); if (index === -1) item.verifiedBy.push(request.user.id); else item.verifiedBy.splice(index, 1); persistState(); const course = org.courses.find((entry) => entry.items.includes(item)); emitCourse(org, course, 'item:verification-changed', { itemId: item.id, verifiedBy: item.verifiedBy }); }
+  if (item) { item.verifiedBy ||= []; const index = item.verifiedBy.indexOf(request.user.id); if (index === -1) item.verifiedBy.push(request.user.id); else item.verifiedBy.splice(index, 1); saveOrg(org); const course = org.courses.find((entry) => entry.items.includes(item)); emitCourse(org, course, 'item:verification-changed', { itemId: item.id, verifiedBy: item.verifiedBy }); }
   const course = org?.courses.find((entry) => entry.items.some((entryItem) => entryItem.id === request.params.itemId));
   return sendMutation(request, response, { itemId: item?.id, verifiedBy: item?.verifiedBy || [] }, `/org/${org?.id || ''}/course/${course?.id || ''}`);
 });
@@ -1200,7 +1204,7 @@ app.post('/org/:id/items/:itemId/downvote', requireUser, (request, response) => 
   const org = getOrg(request); const item = canAccess(org, request.user) ? org.courses.flatMap((course) => course.items).find((entry) => entry.id === request.params.itemId) : null;
   if (!item) return sendMutation(request, response, { error: 'You cannot dislike this feed item.' }, `/org/${org?.id || ''}`);
   item.downvotedBy ||= []; const index = item.downvotedBy.indexOf(request.user.id); if (index === -1) item.downvotedBy.push(request.user.id); else item.downvotedBy.splice(index, 1);
-  persistState(); const course = org.courses.find((entry) => entry.items.includes(item)); emitCourse(org, course, 'item:downvote-changed', { itemId: item.id, downvoteCount: item.downvotedBy.length });
+  saveOrg(org); const course = org.courses.find((entry) => entry.items.includes(item)); emitCourse(org, course, 'item:downvote-changed', { itemId: item.id, downvoteCount: item.downvotedBy.length });
   return sendMutation(request, response, { itemId: item.id, downvoteCount: item.downvotedBy.length }, `/org/${org.id}/course/${course.id}`);
 });
 
@@ -1212,7 +1216,7 @@ app.post('/org/:id/items/:itemId/update', requireUser, async (request, response)
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/course/${course.id}`);
   item.title = title; item.details = String(request.body.details || '').trim(); item.links = await fetchLinkPreviews(`${title}\n${item.details}`); item.type = nextType; item.due = request.body.due || 'No date'; item.past = typeof item.pastOverride === 'boolean' ? item.pastOverride : dueImportance(item.due) === 'Overdue';
   users.forEach((user) => { const task = (user.tasks || []).find((entry) => entry.sourceId === item.id && entry.linked !== false); if (task) { task.title = item.title; task.details = item.details; task.links = item.links; task.due = item.due; task.source = `${course.name} · ${org.name}`; task.importance = dueImportance(task.due); emitTodo(user.id, 'todo:task-updated', { task: normalizeTask(task) }); } });
-  persistState(); emitCourse(org, course, 'item:updated', { item });
+  saveOrg(org); emitCourse(org, course, 'item:updated', { item });
   return sendMutation(request, response, { item }, `/org/${org.id}/course/${course.id}`);
 });
 
@@ -1220,7 +1224,7 @@ app.post('/org/:id/items/:itemId/copy', requireUser, async (request, response) =
   const sourceOrg = getOrg(request);
   const sourceCourse = sourceOrg?.courses.find((entry) => entry.items.some((item) => item.id === request.params.itemId));
   const sourceItem = sourceCourse?.items.find((entry) => entry.id === request.params.itemId);
-  const destinationOrg = orgs.find((entry) => entry.id === request.body.destinationOrgId);
+  const destinationOrg = orgModel.get(request.body.destinationOrgId);
   const destinationCourse = getCourse(destinationOrg, String(request.body.destinationCourseId || ''));
   const sourceFallback = `/org/${sourceOrg?.id || ''}/course/${sourceCourse?.id || ''}`;
   if (!sourceOrg || !sourceItem || !canAccess(sourceOrg, request.user) || !canManageItem(sourceOrg, sourceItem, request.user) || sourceItem.type === 'Event') {
@@ -1255,7 +1259,7 @@ app.post('/org/:id/items/:itemId/copy', requireUser, async (request, response) =
     past: dueImportance(sourceItem.due || 'No date') === 'Overdue'
   };
   destinationCourse.items.push(copiedItem);
-  persistState();
+  saveOrg(destinationOrg);
   emitCourse(destinationOrg, destinationCourse, 'course:item-created', { item: copiedItem });
   const copiedUrl = `/org/${destinationOrg.id}/course/${destinationCourse.id}#item-${copiedItem.id}`;
   return sendMutation(request, response, { copiedItemId: copiedItem.id, copiedUrl, successMessage: 'Task copied.' }, sourceFallback);
@@ -1267,7 +1271,7 @@ app.post('/org/:id/items/:itemId/delete', requireUser, (request, response) => {
   appendRemovedTextForReview(item.title || '');
   course.items = course.items.filter((entry) => entry.id !== item.id); org.groups = (org.groups || []).filter((group) => group.itemId !== item.id);
   users.forEach((user) => { const task = (user.tasks || []).find((entry) => entry.sourceId === item.id); if (task) { task.sourceId = null; task.linked = false; task.source = 'Unlinked course task'; emitTodo(user.id, 'todo:task-updated', { task: normalizeTask(task) }); } });
-  persistState(); emitCourse(org, course, 'item:deleted', { itemId: item.id });
+  saveOrg(org); emitCourse(org, course, 'item:deleted', { itemId: item.id });
   return sendMutation(request, response, { deleted: true, itemId: item.id }, `/org/${org.id}/course/${course.id}`);
 });
 
@@ -1327,7 +1331,7 @@ app.post('/tasks/:taskId/reorder', requireUser, (request, response) => {
 
 app.post('/org/:id/items/:itemId/toggle', requireUser, (request, response) => {
   const org = getOrg(request); const item = canAccess(org, request.user) ? org.courses.flatMap((course) => course.items).find((entry) => entry.id === request.params.itemId) : null;
-  if (item && item.type !== 'Event') { item.done = !item.done; persistState(); const course = org.courses.find((entry) => entry.items.includes(item)); emitCourse(org, course, 'item:updated', { item }); }
+  if (item && item.type !== 'Event') { item.done = !item.done; saveOrg(org); const course = org.courses.find((entry) => entry.items.includes(item)); emitCourse(org, course, 'item:updated', { item });}
   return sendMutation(request, response, { item }, `/org/${org?.id || ''}/course/${org?.courses.find((entry) => entry.items.some((entry) => entry.id === request.params.itemId))?.id || ''}`);
 });
 
@@ -1337,7 +1341,7 @@ app.post('/org/:id/breakout/:groupId/tasks', requireUser, async (request, respon
   const title = String(request.body.title || '').trim(); if (!title) return sendMutation(request, response, { error: 'A task title is required.' }, `/org/${org.id}/breakout/${group.id}`);
   const policyError = await contentPolicyError({ type: 'group-task', text: title });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/breakout/${group.id}`);
-  group.tasks ||= []; const task = { id: id(), title, claimedBy: null, done: false, createdBy: request.user.id }; group.tasks.push(task); persistState(); emitGroup(org, 'breakout:task-created', { groupId: group.id, task });
+  group.tasks ||= []; const task = { id: id(), title, claimedBy: null, done: false, createdBy: request.user.id }; group.tasks.push(task); saveOrg(org); emitGroup(org, 'breakout:task-created', { groupId: group.id, task });
   return sendMutation(request, response, { task }, `/org/${org.id}/breakout/${group.id}`);
 });
 
@@ -1346,28 +1350,28 @@ app.post('/org/:id/breakout/:groupId/tasks/:taskId/update', requireUser, async (
   if (!group || !task || !canManageBreakoutGroup(org, group, request.user)) return sendMutation(request, response, { error: 'You cannot edit this task.' }, `/org/${request.params.id}`);
   const nextTitle = String(request.body.title || '').trim() || task.title; const policyError = await contentPolicyError({ type: 'group-task', text: nextTitle });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/breakout/${group.id}`);
-  task.title = nextTitle; task.done = request.body.done === 'true' || request.body.done === 'on'; persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
+  task.title = nextTitle; task.done = request.body.done === 'true' || request.body.done === 'on'; saveOrg(org); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
   return sendMutation(request, response, { task }, `/org/${org.id}/breakout/${group.id}`);
 });
 
 app.post('/org/:id/breakout/:groupId/tasks/:taskId/claim', requireUser, (request, response) => {
   const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId); const task = group?.tasks?.find((entry) => entry.id === request.params.taskId);
   if (!group || !task || !group.members.includes(request.user.id)) return sendMutation(request, response, { error: 'You must be in this breakout group to claim a task.' }, `/org/${request.params.id}`);
-  task.claimedBy = request.user.id; persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
+  task.claimedBy = request.user.id; saveOrg(org); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
   return sendMutation(request, response, { task }, `/org/${org.id}/breakout/${group.id}`);
 });
 
 app.post('/org/:id/breakout/:groupId/tasks/:taskId/unclaim', requireUser, (request, response) => {
   const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId); const task = group?.tasks?.find((entry) => entry.id === request.params.taskId);
   if (!group || !task || (task.claimedBy !== request.user.id && !canManageBreakoutGroup(org, group, request.user))) return sendMutation(request, response, { error: 'You cannot unclaim this task.' }, `/org/${request.params.id}`);
-  task.claimedBy = null; persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
+  task.claimedBy = null; saveOrg(org); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
   return sendMutation(request, response, { task }, `/org/${org.id}/breakout/${group.id}`);
 });
 
 app.post('/org/:id/breakout/:groupId/tasks/:taskId/toggle', requireUser, (request, response) => {
   const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId); const task = group?.tasks?.find((entry) => entry.id === request.params.taskId);
   if (!group || !task || !group.members.includes(request.user.id)) return sendMutation(request, response, { error: 'You must be in this breakout group to update a task.' }, `/org/${request.params.id}`);
-  task.done = !task.done; persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
+  task.done = !task.done; saveOrg(org); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
   return sendMutation(request, response, { task }, `/org/${org.id}/breakout/${group.id}`);
 });
 
@@ -1378,6 +1382,7 @@ app.post('/org/:id/breakout/:groupId/ping/:userId', requireUser, (request, respo
   if (remaining > 0) return sendMutation(request, response, { error: `Please wait ${Math.ceil(remaining / 1000)} seconds before pinging ${target.name}.` }, `/org/${request.params.id}/breakout/${request.params.groupId}`);
   breakoutPingWindows.set(key, Date.now());
   addNotification(target, { type: 'breakout-ping', title: `${request.user.name} is looking for you`, message: `Come back to ${group.name} for a quick check-in.`, href: `/org/${org.id}/breakout/${group.id}`, actionLabel: 'Open group' });
+  saveOrg(org);
   persistState();
   return sendMutation(request, response, { pinged: true, successMessage: `Ping sent to ${target.name}.` }, `/org/${org.id}/breakout/${group.id}`);
 });
@@ -1385,21 +1390,21 @@ app.post('/org/:id/breakout/:groupId/ping/:userId', requireUser, (request, respo
 app.post('/org/:id/breakout/:groupId/tasks/:taskId/delegate', requireUser, (request, response) => {
   const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId); const task = group?.tasks?.find((entry) => entry.id === request.params.taskId); const targetId = String(request.body.userId || '');
   if (!group || !task || !canManageBreakoutGroup(org, group, request.user) || !group.members.includes(targetId)) return sendMutation(request, response, { error: 'Only group admins can delegate tasks to group members.' }, `/org/${request.params.id}`);
-  task.claimedBy = targetId; const target = users.find((user) => user.id === targetId); if (target && target.id !== request.user.id && !isUserOnBreakoutPage(org.id, group.id, target.id)) addNotification(target, { type: 'breakout-task', title: `A task was assigned to you in ${group.name}`, message: task.title, href: `/org/${org.id}/breakout/${group.id}`, actionLabel: 'Open group' }); persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
+  task.claimedBy = targetId; const target = users.find((user) => user.id === targetId); if (target && target.id !== request.user.id && !isUserOnBreakoutPage(org.id, group.id, target.id)) addNotification(target, { type: 'breakout-task', title: `A task was assigned to you in ${group.name}`, message: task.title, href: `/org/${org.id}/breakout/${group.id}`, actionLabel: 'Open group' }); saveOrg(org); persistState(); emitGroup(org, 'breakout:task-updated', { groupId: group.id, task });
   return sendMutation(request, response, { task }, `/org/${org.id}/breakout/${group.id}`);
 });
 
 app.post('/org/:id/breakout/:groupId/tasks/:taskId/delete', requireUser, (request, response) => {
   const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId);
   if (!group || !canManageBreakoutGroup(org, group, request.user)) return sendMutation(request, response, { error: 'You cannot delete this task.' }, `/org/${request.params.id}`);
-  group.tasks = (group.tasks || []).filter((task) => task.id !== request.params.taskId); persistState(); emitGroup(org, 'breakout:task-deleted', { groupId: group.id, taskId: request.params.taskId });
+  group.tasks = (group.tasks || []).filter((task) => task.id !== request.params.taskId); saveOrg(org); emitGroup(org, 'breakout:task-deleted', { groupId: group.id, taskId: request.params.taskId });
   return sendMutation(request, response, { taskId: request.params.taskId }, `/org/${org.id}/breakout/${group.id}`);
 });
 
 app.post('/org/:id/breakout/:groupId/board/delete', requireUser, (request, response) => {
   const org = getOrg(request); const group = getBreakoutGroup(org, request.params.groupId);
   if (!group || !canManageBreakoutGroup(org, group, request.user)) return sendMutation(request, response, { error: 'You cannot delete this board.' }, `/org/${request.params.id}`);
-  group.tasks = []; persistState(); emitGroup(org, 'breakout:board-deleted', { groupId: group.id });
+  group.tasks = []; saveOrg(org); emitGroup(org, 'breakout:board-deleted', { groupId: group.id });
   return sendMutation(request, response, { groupId: group.id }, `/org/${org.id}/breakout/${group.id}`);
 });
 
@@ -1410,14 +1415,14 @@ app.post('/org/:id/course/:courseId/board', requireUser, async (request, respons
   if (!card.title) return sendMutation(request, response, { error: 'A task title is required.' }, `/org/${org.id}/course/${course.id}`);
   const policyError = await contentPolicyError({ type: 'board-task', text: card.title });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/course/${course.id}#board`);
-  course.board.push(card); persistState(); emitCourse(org, course, 'board:card-created', { card });
+  course.board.push(card); saveOrg(org); emitCourse(org, course, 'board:card-created', { card });
   return sendMutation(request, response, { card }, `/org/${org.id}/course/${course.id}#board`);
 });
 
 app.post('/org/:id/course/:courseId/board/:cardId/delete', requireUser, (request, response) => {
   const org = getOrg(request); const course = getCourse(org, request.params.courseId);
   if (!course || !isOrgModerator(org, request.user)) return sendMutation(request, response, { error: 'Only moderators and admins can delete board cards.' }, `/org/${request.params.id}/course/${request.params.courseId}#board`);
-  course.board = (course.board || []).filter((card) => card.id !== request.params.cardId); persistState(); emitCourse(org, course, 'board:card-deleted', { cardId: request.params.cardId });
+  course.board = (course.board || []).filter((card) => card.id !== request.params.cardId); saveOrg(org); emitCourse(org, course, 'board:card-deleted', { cardId: request.params.cardId });
   return sendMutation(request, response, { deleted: true, cardId: request.params.cardId }, `/org/${org.id}/course/${course.id}#board`);
 });
 
@@ -1428,7 +1433,7 @@ app.post('/org/:id/course/:courseId/resources', requireUser, async (request, res
   if (!resource.title || !resource.url) return sendMutation(request, response, { error: 'A resource title and link are required.' }, `/org/${org.id}/course/${course.id}#resources`);
   const policyError = await contentPolicyError({ type: 'website', text: `${resource.title} ${resource.url}` });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/course/${course.id}#resources`);
-  course.resources.push(resource); persistState(); emitCourse(org, course, 'resource:created', { resource });
+  course.resources.push(resource); saveOrg(org); emitCourse(org, course, 'resource:created', { resource });
   return sendMutation(request, response, { resource }, `/org/${org.id}/course/${course.id}#resources`);
 });
 
@@ -1437,43 +1442,43 @@ app.post('/org/:id/course/:courseId/resources/:resourceId/delete', requireUser, 
   if (!course || !isOrgModerator(org, request.user)) return sendMutation(request, response, { error: 'Only moderators and admins can delete resources.' }, `/org/${request.params.id}/course/${request.params.courseId}#resources`);
   const resource = (course.resources || []).find((entry) => entry.id === request.params.resourceId);
   if (!resource) return sendMutation(request, response, { error: 'Resource not found.' }, `/org/${request.params.id}/course/${request.params.courseId}#resources`);
-  course.resources = course.resources.filter((entry) => entry.id !== resource.id); persistState(); emitCourse(org, course, 'resource:deleted', { resourceId: resource.id });
+  course.resources = course.resources.filter((entry) => entry.id !== resource.id); saveOrg(org); emitCourse(org, course, 'resource:deleted', { resourceId: resource.id });
   return sendMutation(request, response, { deleted: true, resourceId: resource.id }, `/org/${org.id}/course/${course.id}#resources`);
 });
 
 app.post('/org/:id/admin/settings', requireUser, async (request, response) => {
-  const org = orgs.find((entry) => entry.id === request.params.id); const member = membership(org, request.user);
+  const org = getOrg(request); const member = membership(org, request.user);
   if (!org || member?.role !== 'admin') return response.redirect(`/org/${request.params.id}`);
   const name = String(request.body.name || '').trim(); const description = String(request.body.description || '').trim();
   if (!name || await contentPolicyError({ type: 'text', text: `${name} ${description}` })) return response.redirect(`/org/${request.params.id}/admin/settings?error=policy`);
-  org.name = name; org.description = description; org.theme = ['coral', 'green', 'blue', 'gold'].includes(request.body.theme) ? request.body.theme : 'coral'; org.allowCrossGroupTaskCopy = request.body.allowCrossGroupTaskCopy === 'on'; persistState(); response.redirect(`/org/${org.id}/admin/settings?saved=settings`);
+  org.name = name; org.description = description; org.theme = ['coral', 'green', 'blue', 'gold'].includes(request.body.theme) ? request.body.theme : 'coral'; org.allowCrossGroupTaskCopy = request.body.allowCrossGroupTaskCopy === 'on'; saveOrg(org); response.redirect(`/org/${org.id}/admin/settings?saved=settings`);
 });
 
 app.post('/org/:id/admin/share', requireUser, (request, response) => {
-  const org = orgs.find((entry) => entry.id === request.params.id); const member = membership(org, request.user);
+  const org = getOrg(request); const member = membership(org, request.user);
   if (!org || member?.role !== 'admin') return response.redirect(`/org/${request.params.id}`);
   if (request.body.visibility === 'public' && request.user.age <= 13) return response.redirect(`/org/${org.id}?error=age`);
-  org.visibility = request.body.visibility; org.sharePermission = request.body.sharePermission || org.sharePermission; org.shareUses = Math.max(1, Number(request.body.shareUses) || 1); persistState(); response.redirect(`/org/${org.id}/admin/share?saved=settings`);
+  org.visibility = request.body.visibility; org.sharePermission = request.body.sharePermission || org.sharePermission; org.shareUses = Math.max(1, Number(request.body.shareUses) || 1); saveOrg(org); response.redirect(`/org/${org.id}/admin/share?saved=settings`);
 });
 
 app.post('/org/:id/delete', requireUser, (request, response) => {
-  const orgIndex = orgs.findIndex((entry) => entry.id === request.params.id); const org = orgs[orgIndex];
-  if (orgIndex === -1 || !isOrgAdmin(org, request.user)) return sendMutation(request, response, { error: 'Only group admins can delete this group.' }, '/groups');
-  orgs.splice(orgIndex, 1); persistState();
+  const org = getOrg(request);
+  if (!org || !isOrgAdmin(org, request.user)) return sendMutation(request, response, { error: 'Only group admins can delete this group.' }, '/groups');
+  orgModel.delete(org.id);
   return sendMutation(request, response, { deletedGroup: request.params.id, successMessage: `${org.name} was deleted.` }, '/groups');
 });
 
 app.post('/org/:id/settings', requireUser, (request, response) => response.redirect(`/org/${request.params.id}/admin/share`));
 
 app.post('/org/:id/members', requireUser, (request, response) => {
-  const org = orgs.find((entry) => entry.id === request.params.id); const member = membership(org, request.user); const target = users.find((user) => user.username === String(request.body.username || '').trim().toLowerCase());
+  const org = getOrg(request); const member = membership(org, request.user); const target = users.find((user) => user.username === String(request.body.username || '').trim().toLowerCase());
   const role = ['viewer', 'editor', 'moderator'].includes(request.body.role) ? request.body.role : 'viewer';
   if (org && member?.role === 'admin' && target && target.id !== request.user.id && !membership(org, target)) {
     org.pendingInvites ||= [];
     if (!pendingInvite(org, target)) {
       org.pendingInvites.push({ id: id(), userId: target.id, role, invitedBy: request.user.id, createdAt: new Date().toISOString() });
       addNotification(target, { type: 'group-invite', title: `Invitation to ${org.name}`, message: `${request.user.name} invited you to join ${org.name}.`, href: '/groups', actionLabel: 'Review invitation' });
-      persistState();
+      saveOrg(org);
     }
   }
   response.redirect(`/org/${org?.id || request.params.id}/people`);
@@ -1485,7 +1490,7 @@ app.post('/org/:id/leave', requireUser, (request, response) => {
   if (!org || !member) return sendMutation(request, response, { error: 'You are not a member of this group.' }, '/groups');
   if (member.role === 'admin' && adminCount <= 1) return sendMutation(request, response, { error: 'Transfer group administration to another member before leaving.' }, `/org/${org.id}`);
   org.members = org.members.filter((entry) => entry.userId !== request.user.id);
-  persistState();
+  saveOrg(org);
   return sendMutation(request, response, { leftGroup: true, successMessage: `You left ${org.name}.` }, '/groups');
 });
 
@@ -1495,10 +1500,10 @@ app.post('/groups/:id/invitation/:action', requireUser, (request, response) => {
   org.pendingInvites = (org.pendingInvites || []).filter((entry) => entry.id !== invite.id);
   if (request.params.action === 'accept') {
     if (!membership(org, request.user)) org.members.push({ userId: request.user.id, role: invite.role });
-    persistState();
+    saveOrg(org);
     return sendMutation(request, response, { invitationAction: 'accepted', successMessage: `You joined ${org.name}.` }, `/group/${org.slug || org.id}`);
   }
-  persistState();
+  saveOrg(org);
   return sendMutation(request, response, { invitationAction: 'denied', successMessage: `Invitation to ${org.name} declined.` }, '/groups');
 });
 
@@ -1507,15 +1512,15 @@ app.post('/org/:id/members/:userId/access', requireUser, (request, response) => 
   const role = ['viewer', 'editor', 'moderator', 'admin'].includes(request.body.role) ? request.body.role : null;
   if (!org || actor?.role !== 'admin' || !target || !role || target.userId === request.user.id) return sendMutation(request, response, { error: 'You cannot change this member access.' }, `/org/${request.params.id}/people`);
   if (target.role === 'admin' && role !== 'admin' && org.members.filter((entry) => entry.role === 'admin').length < 2) return sendMutation(request, response, { error: 'The group must keep at least one admin.' }, `/org/${request.params.id}/people`);
-  target.role = role; persistState();
+  target.role = role; saveOrg(org);
   return sendMutation(request, response, { role, userId: target.userId }, `/org/${org.id}/people`);
 });
 
 app.post('/org/:id/members/:userId/remove', requireUser, (request, response) => {
   const org = getOrg(request); const member = membership(org, request.user); const target = membership(org, users.find((user) => user.id === request.params.userId));
   const adminCount = org?.members.filter((entry) => entry.role === 'admin').length || 0;
-  if (org && member?.role === 'admin' && target && (target.role !== 'admin' || adminCount > 1)) org.members = org.members.filter((entry) => entry.userId !== request.params.userId);
-  persistState(); response.redirect(`/org/${request.params.id}/people`);
+  if (org && member?.role === 'admin' && target && (target.role !== 'admin' || adminCount > 1)) { org.members = org.members.filter((entry) => entry.userId !== request.params.userId); saveOrg(org); }
+  response.redirect(`/org/${request.params.id}/people`);
 });
 
 app.post('/org/:id/members/:userId/repercussion', requireUser, async (request, response) => {
@@ -1536,17 +1541,18 @@ app.post('/org/:id/members/:userId/repercussion', requireUser, async (request, r
     target.moderationStatus = 'active'; target.moderationUntil = ''; target.moderationMessage = ''; addNotification(target, { type: 'unban', title: `Access restored to ${org.name}`, message: message || 'An administrator restored your access.' });
   }
   persistState();
+  saveOrg(org);
   return sendMutation(request, response, { action, userId: target.id, successMessage: action === 'warning' ? 'Warning sent.' : action === 'unban' ? 'Access restored.' : action === 'ban' ? 'Permanent ban applied.' : 'Suspension applied.' }, `/org/${org.id}/people`);
 });
 
 app.post('/org/:id/reports', requireUser, (request, response) => {
-  const org = orgs.find((entry) => entry.id === request.params.id); if (org && canAccess(org, request.user)) { org.reports ||= []; org.reports.push({ id: id(), reporter: request.user.username, reason: request.body.reason, detail: String(request.body.detail || '').trim(), status: 'open', createdAt: new Date().toISOString() }); persistState(); }
+  const org = getOrg(request); if (org && canAccess(org, request.user)) { org.reports ||= []; org.reports.push({ id: id(), reporter: request.user.username, reason: request.body.reason, detail: String(request.body.detail || '').trim(), status: 'open', createdAt: new Date().toISOString() }); saveOrg(org); }
   response.redirect(`/org/${org?.id || ''}?reported=1`);
 });
 
 app.post('/org/:id/reports/:reportId/close', requireUser, (request, response) => {
   const org = getOrg(request); const member = membership(org, request.user);
-  if (org && member?.role === 'admin') { const report = (org.reports || []).find((entry) => entry.id === request.params.reportId); if (report) report.status = 'closed'; persistState(); }
+  if (org && member?.role === 'admin') { const report = (org.reports || []).find((entry) => entry.id === request.params.reportId); if (report) { report.status = 'closed'; saveOrg(org); } }
   response.redirect(`/org/${org?.id || ''}/admin/report`);
 });
 
@@ -1576,16 +1582,16 @@ app.post('/org/:id/admin/reports/:reportId/action', requireUser, async (request,
     if (action === 'warn') addNotification(affectedUser, { type: 'warning', title: `Conduct warning from ${org.name}`, message });
     else { affectedUser.moderationStatus = action === 'ban' ? 'banned' : 'suspended'; affectedUser.moderationUntil = action === 'ban' ? '' : new Date(Date.now() + days * 86400000).toISOString(); affectedUser.moderationMessage = message || (action === 'ban' ? 'Your access is permanently suspended until an administrator lifts the ban.' : `Your access is suspended for ${days} days after a content moderation action.`); addNotification(affectedUser, { type: action === 'ban' ? 'ban' : 'suspension', title: `Moderation action in ${org.name}`, message: affectedUser.moderationMessage }); sessions.forEach((userId, token) => { if (userId === affectedUser.id) sessions.delete(token); }); }
   }
-  report.status = 'closed'; report.action = action; report.actionBy = request.user.username; report.actionAt = new Date().toISOString(); persistState();
+  report.status = 'closed'; report.action = action; report.actionBy = request.user.username; report.actionAt = new Date().toISOString(); saveOrg(org);
   emitOrg(org, 'org:moderation-updated', { orgId: org.id, reportId: report.id, commentId: report.contentId, action });
   return sendMutation(request, response, { action, reportId: report.id, successMessage: action === 'close' ? 'Report closed.' : action === 'warn' ? 'Warning sent.' : action === 'remove-moderate' ? 'Content removed and temporary suspension applied.' : action === 'ban' ? 'Content removed and permanent ban applied.' : 'Reported content removed.' }, `/org/${org.id}/admin/report`);
 });
 
 app.get('/share/:code', (request, response) => {
-  const org = orgs.find((entry) => entry.shareCode === request.params.code);
+  const org = orgModel.byOrgShareCode(request.params.code);
   if (!org || org.shareUses < 1) return response.status(404).send('This share link is no longer active.');
   const user = currentUser(request); if (!user) return response.redirect(authRedirect('/login', null, request.originalUrl));
-  if (!membership(org, user)) org.members.push({ userId: user.id, role: org.sharePermission }); org.shareUses -= 1; persistState(); response.redirect(`/org/${org.id}`);
+  if (!membership(org, user)) org.members.push({ userId: user.id, role: org.sharePermission }); org.shareUses -= 1; saveOrg(org); response.redirect(`/org/${org.id}`);
 });
 
 app.use((request, response) => {
