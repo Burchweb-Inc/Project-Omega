@@ -66,19 +66,39 @@ function loadOrgsForUser(db, userId) {
       orgs.*
     FROM
       orgs
-    WHERE EXISTS (
-      SELECT 1
-      FROM json_each(orgs.payload, '$.members') as members
-      WHERE json_extract(members.value, '$.userId') = ?
-    )
+    WHERE
+      is_active = 1
+      AND EXISTS (
+        SELECT 1
+        FROM json_each(orgs.payload, '$.members') as members
+        WHERE json_extract(members.value, '$.userId') = ?
+      )
   `).all(userId);
 
   return orgs.map(parseOrgPayload);
 }
 
+function loadOrgByIdOrSlug(db, { id, slug } = {}) {
+  if (!id && !slug) return null;
+
+  const row = db.prepare(`
+    SELECT *
+    FROM orgs
+    WHERE is_active = 1
+      AND (
+        (? IS NOT NULL AND id = ?)
+        OR (? IS NOT NULL AND json_extract(payload, '$.slug') = ?)
+      )
+    LIMIT 1
+  `).get(id || null, id || null, slug || null, slug || null);
+
+  return row ? parseOrgPayload(row) : null;
+}
+
 module.exports = (db) => ({
   init: () => initialize(db),
   all: () => loadOrgsFromDatabase(db),
+  for: (search = {}) => loadOrgByIdOrSlug(db, search),
   orgsFor: (userId) => loadOrgsForUser(db, userId),
   feedFor: (userId) => loadOrgsForUser(db, userId).flatMap((org) => org.courses.flatMap((course) => course.items.map((item) => ({ ...item, org, course })))),
   persistState: (orgs) => persistState(db, orgs)

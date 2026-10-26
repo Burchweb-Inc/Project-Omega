@@ -131,3 +131,28 @@ test('feedFor returns items from courses in orgs where the user is a member', (c
   );
   assert.deepEqual(model.feedFor('missing-user'), []);
 });
+
+test('for finds an active org by id or payload slug', (context) => {
+  const db = new Database(':memory:');
+  context.after(() => db.close());
+
+  const model = createOrgModel(db);
+  model.init();
+
+  model.persistState([
+    {
+      id: 'org-1',
+      name: 'Study Group',
+      slug: 'study-group',
+      courses: [],
+      groups: [],
+      members: []
+    }
+  ]);
+
+  assert.equal(model.for({ id: 'org-1' }).name, 'Study Group');
+  assert.equal(model.for({ slug: 'study-group' }).id, 'org-1');
+  assert.equal(model.for({ id: 'missing-org' }), null);
+  assert.equal(model.for({ slug: 'missing-slug' }), null);
+  assert.equal(model.for(), null);
+});

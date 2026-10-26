@@ -495,7 +495,7 @@ function renderLinkedText(text, links = []) {
 }
 function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs, canEdit, canManageItem, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), renderLinkedText, buildInfo, ...extra }); }
 function renderPublicPage(request, response, page, extra = {}) { response.render('index', { page, view: page, user: null, users, orgs, canEdit, selectedOrg: null, notifications: [], error: null, canonicalUrl: canonicalUrl(request), buildInfo, ...extra }); }
-function getOrg(request) { return orgs.find((entry) => entry.id === request.params.id || entry.slug === request.params.slug); }
+function getOrg(request) { return orgModel.for({ id: request.params.id, slug: request.params.slug }); }
 function getCourse(org, courseId) { return org?.courses.find((course) => course.id === courseId); }
 function isSiteAdmin(user) { return Boolean(user?.isSiteAdmin); }
 function isOrgModerator(org, user) { return isSiteAdmin(user) || ['admin', 'moderator'].includes(membership(org, user)?.role); }
