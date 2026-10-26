@@ -1023,16 +1023,7 @@ app.get('/todo', requireUser, async (request, response) => {
   });
 });
 app.use('/calendar', require('./calendar/routes')({ requireUser, render, feedFor: orgModel.feedFor}));
-app.use(require('./org/routes')({ requireUser, orgModel, render }));
-app.post(['/orgs', '/groups/new'], requireUser, async (request, response) => {
-  const name = String(request.body.name || '').trim();
-  if (!name) return response.redirect('/group/new');
-  const description = String(request.body.description || '').trim();
-  if (await contentPolicyError({ type: 'text', text: `${name} ${description}` })) return response.redirect('/group/new?error=policy');
-  const org = orgModel.create({ userId: request.user.id, name, description });
-  response.redirect(`/group/${org.slug}`);
-});
-
+app.use(require('./org/routes')({ contentPolicyError, requireUser, orgModel, render }));
 app.get('/group/:slug', requireUser, (request, response) => renderOrgPage(request, response, 'org'));
 
 app.get('/group/:slug/admin', requireUser, (request, response) => {

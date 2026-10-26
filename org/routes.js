@@ -1,5 +1,5 @@
 const express = require("express");
-module.exports = ({requireUser, orgModel, render}) => {
+module.exports = ({requireUser, contentPolicyError, orgModel, render}) => {
   const router = express.Router();
   const newOrgPage = (request, response) => render(request, response, "new-org");
   const groupsPage = (request, response) => render(request, response, "groups", {
@@ -8,7 +8,17 @@ module.exports = ({requireUser, orgModel, render}) => {
 
   router.get(["/org/new", "/group/new"], requireUser, newOrgPage);
   router.get("/groups", requireUser, groupsPage);
+  const createOrg = async (request, response) => {
+    const name = String(request.body.name || '').trim();
+    if (!name) return response.redirect('/group/new');
+    const description = String(request.body.description || '').trim();
+    if (await contentPolicyError({ type: 'text', text: `${name} ${description}` })) return response.redirect('/group/new?error=policy');
+    const org = orgModel.create({ userId: request.user.id, name, description });
+    response.redirect(`/group/${org.slug}`);
+  };
 
-  router.handlers = { newOrgPage, groupsPage };
+  router.post(['/orgs', '/groups/new'], requireUser, createOrg);
+
+  router.handlers = { newOrgPage, groupsPage, createOrg };
   return router;
 };
