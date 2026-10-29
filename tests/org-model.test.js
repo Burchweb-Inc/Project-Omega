@@ -51,15 +51,71 @@ test('create persists an org with its owner as admin and preserves unrelated row
   const existing = orgData('existing-org', 'Existing org');
   model.save(existing);
 
-  const created = model.create({ userId: 'user-1', name: 'Study Group', description: 'A place to study' });
+  const created = model.create({ userId: 'user-1', name: 'Study Group', description: 'A place to study', timezone: 'Asia/Tokyo' });
 
   assert.equal(created.name, 'Study Group');
   assert.equal(created.description, 'A place to study');
+  assert.equal(created.createdBy, 'user-1');
+  assert.equal(created.timezone, 'Asia/Tokyo');
+  assert.equal(created.autoMovePastAssignments, true);
   assert.equal(created.members[0].userId, 'user-1');
   assert.equal(created.members[0].role, 'admin');
   assert.equal(model.get(created.id).name, 'Study Group');
   assert.deepEqual(model.all().map((org) => org.id).sort(), ['existing-org', created.id].sort());
   assert.equal(JSON.parse(db.prepare('SELECT payload FROM orgs WHERE id = ?').get('existing-org').payload).name, 'Existing org');
+});
+
+test('assignment past status uses the group date and automatic-move preference', (context) => {
+  const { model } = createModel(context);
+  const assignment = { due: '2025-01-31' };
+  const afterMidnightUtc = new Date('2025-02-01T00:30:00Z');
+
+  assert.equal(model.isPastAssignment({ timezone: 'UTC' }, assignment, afterMidnightUtc), true);
+  assert.equal(model.isPastAssignment({ timezone: 'America/New_York' }, assignment, afterMidnightUtc), false);
+  assert.equal(model.isPastAssignment({ timezone: 'UTC', autoMovePastAssignments: false }, assignment, afterMidnightUtc), false);
+  assert.equal(model.isPastAssignment({ timezone: 'UTC', autoMovePastAssignments: false }, { ...assignment, past: true }, afterMidnightUtc), true);
+  assert.equal(model.isPastAssignment({ timezone: 'UTC', autoMovePastAssignments: false }, { ...assignment, pastOverride: true }, afterMidnightUtc), true);
+  assert.equal(model.isPastAssignment({ timezone: 'UTC' }, { due: 'No date' }, afterMidnightUtc), false);
+});
+
+test('org settings persist and past assignments stay put when automatic moving is disabled', (context) => {
+  const { model } = createModel(context);
+  model.save(orgData('auto-org', 'Automatic', {
+    timezone: 'UTC',
+    autoMovePastAssignments: true,
+    courses: [{ id: 'course-1', items: [{ id: 'past-item', due: '2000-01-01' }] }]
+  }));
+  model.save(orgData('manual-org', 'Manual', {
+    timezone: 'America/Los_Angeles',
+    autoMovePastAssignments: false,
+    courses: [{ id: 'course-2', items: [
+      { id: 'kept-current', due: '2000-01-01' },
+      { id: 'kept-past', due: '2000-01-01', past: true }
+    ] }]
+  }));
+
+  const automatic = model.get('auto-org');
+  const manual = model.get('manual-org');
+  assert.equal(automatic.timezone, 'UTC');
+  assert.equal(automatic.autoMovePastAssignments, true);
+  assert.equal(automatic.courses[0].items[0].past, true);
+  assert.equal(manual.timezone, 'America/Los_Angeles');
+  assert.equal(manual.autoMovePastAssignments, false);
+  assert.deepEqual(manual.courses[0].items.map((item) => item.past), [false, true]);
+});
+
+test('create rejects invalid time zones', (context) => {
+  const { model } = createModel(context);
+
+  assert.throws(() => model.create({
+    userId: 'user-1',
+    name: 'Study Group',
+    description: 'A place to study',
+    timezone: 'Not/A_Timezone'
+  }), {
+    name: 'TypeError',
+    message: 'timezone must be a valid IANA time zone'
+  });
 });
 
 test('create throws a TypeError when any required field is null or missing', (context) => {

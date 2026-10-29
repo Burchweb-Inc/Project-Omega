@@ -45,6 +45,109 @@ function bindLinkComposers(scope = document) {
     title.addEventListener('input', render); details.addEventListener('input', render); form.dataset.linkComposerBound = 'true'; render();
   });
 }
+function bindTimezoneSearch(scope = document) {
+  scope.querySelectorAll('[data-timezone-picker]').forEach((picker) => {
+    if (picker.dataset.bound === 'true') return;
+    const trigger = picker.querySelector('[data-timezone-trigger]');
+    const value = picker.querySelector('[data-timezone-value]');
+    const selectedLabel = picker.querySelector('[data-timezone-selected]');
+    const panel = picker.querySelector('[data-timezone-panel]');
+    const search = picker.querySelector('[data-timezone-search]');
+    const options = [...picker.querySelectorAll('[data-timezone-option]')];
+    const empty = picker.querySelector('[data-timezone-empty]');
+    const count = picker.querySelector('[data-timezone-count]');
+    if (!trigger || !value || !selectedLabel || !panel || !search) return;
+
+    const visibleOptions = () => options.filter((option) => !option.hidden);
+    const focusOption = (option) => {
+      if (!option) return;
+      options.forEach((entry) => { entry.tabIndex = entry === option ? 0 : -1; });
+      option.focus();
+    };
+    const close = (restoreFocus = false) => {
+      panel.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+      if (restoreFocus) trigger.focus();
+    };
+    const open = () => {
+      panel.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+      search.focus();
+    };
+    const filter = () => {
+      const query = search.value.trim().toLocaleLowerCase();
+      let matches = 0;
+      options.forEach((option) => {
+        const searchable = `${option.dataset.searchValue} ${option.dataset.timezoneOption}`.toLocaleLowerCase();
+        option.hidden = Boolean(query) && !searchable.includes(query);
+        if (!option.hidden) matches += 1;
+      });
+      if (empty) empty.hidden = matches > 0;
+      if (count) count.textContent = query ? `${matches} of ${options.length} time zones` : `${options.length} time zones`;
+    };
+    const choose = (option) => {
+      value.value = option.dataset.timezoneOption;
+      selectedLabel.textContent = option.dataset.searchValue;
+      options.forEach((entry) => {
+        const selected = entry === option;
+        entry.setAttribute('aria-selected', String(selected));
+        entry.tabIndex = selected ? 0 : -1;
+        const check = entry.querySelector('[data-lucide="check"]');
+        if (selected && !check) {
+          option.insertAdjacentHTML('beforeend', '<i data-lucide="check" aria-hidden="true"></i>');
+          lucide.createIcons();
+        }
+        if (!selected) check?.remove();
+      });
+      search.value = '';
+      filter();
+      close(true);
+    };
+
+    trigger.addEventListener('click', () => panel.hidden ? open() : close());
+    search.addEventListener('input', filter);
+    search.addEventListener('keydown', (event) => {
+      const available = visibleOptions();
+      if (event.key === 'ArrowDown' && available.length) {
+        event.preventDefault();
+        focusOption(available.find((option) => option.dataset.timezoneOption === value.value) || available[0]);
+      } else if (event.key === 'ArrowUp' && available.length) {
+        event.preventDefault();
+        focusOption(available.at(-1));
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        close(true);
+      }
+    });
+    options.forEach((option) => {
+      option.addEventListener('click', () => choose(option));
+      option.addEventListener('keydown', (event) => {
+        const available = visibleOptions();
+        const index = available.indexOf(option);
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          focusOption(available[(index + (event.key === 'ArrowDown' ? 1 : -1) + available.length) % available.length]);
+        } else if (event.key === 'Home' || event.key === 'End') {
+          event.preventDefault();
+          focusOption(event.key === 'Home' ? available[0] : available.at(-1));
+        } else if (event.key === 'Escape') {
+          event.preventDefault();
+          close(true);
+        } else if (event.key === 'Tab' && !event.shiftKey && index === available.length - 1) {
+          close();
+        } else if (event.key === 'Tab' && event.shiftKey && index === 0) {
+          event.preventDefault();
+          search.focus();
+        }
+      });
+    });
+    document.addEventListener('click', (event) => {
+      if (!picker.contains(event.target) && !panel.hidden) close();
+    });
+    filter();
+    picker.dataset.bound = 'true';
+  });
+}
 function bindCourseItemEditing(scope = document) {
   if (!scope) return;
   scope.querySelectorAll('[data-item-title]').forEach((title) => {
@@ -954,6 +1057,7 @@ function bindDashboardInteractions() {
 function bindInteractions() {
   document.querySelectorAll('[data-tab]').forEach((tab) => tab.addEventListener('click', () => { document.querySelectorAll('.tab').forEach((item) => item.classList.remove('active')); document.querySelectorAll('.auth-form').forEach((form) => form.classList.add('hidden')); tab.classList.add('active'); document.getElementById(tab.dataset.tab).classList.remove('hidden'); }));
   bindLiveForms();
+  bindTimezoneSearch();
   document.querySelectorAll('[data-auth-form]').forEach((form) => form.addEventListener('submit', (event) => {
     if (!form.reportValidity() || form.dataset.submitting === 'true') return;
     event.preventDefault();

@@ -1,0 +1,18 @@
+<div class="timezone-picker" data-timezone-picker>
+  <input type="hidden" name="<%= name %>" value="<%= value %>" data-timezone-value required>
+  <button class="timezone-picker-trigger" id="<%= id %>" type="button" data-timezone-trigger aria-haspopup="listbox" aria-expanded="false" aria-controls="<%= id %>-panel">
+    <span data-timezone-selected><%= value.replace(/_/g, ' ') %></span>
+    <i data-lucide="chevron-down" aria-hidden="true"></i>
+  </button>
+  <div class="timezone-picker-panel" id="<%= id %>-panel" data-timezone-panel hidden>
+    <label class="timezone-picker-search">
+      <i data-lucide="search" aria-hidden="true"></i>
+      <input type="search" data-timezone-search placeholder="Search city or time zone" autocomplete="off" aria-label="Search time zones" aria-controls="<%= id %>-options">
+    </label>
+    <div class="timezone-picker-options" id="<%= id %>-options" role="listbox" aria-label="Time zones">
+      <% timezones.forEach((timezone) => { %><button class="timezone-picker-option" type="button" role="option" tabindex="<%= timezone === value ? '0' : '-1' %>" aria-selected="<%= timezone === value ? 'true' : 'false' %>" data-timezone-option="<%= timezone %>" data-search-value="<%= timezone.replace(/[_/]/g, ' ') %>"><span><%= timezone.replace(/_/g, ' ') %></span><% if (timezone === value) { %><i data-lucide="check" aria-hidden="true"></i><% } %></button><% }) %>
+      <p class="timezone-picker-empty" data-timezone-empty hidden>No time zones match that search.</p>
+    </div>
+    <p class="timezone-picker-count" data-timezone-count aria-live="polite"><%= timezones.length %> time zones</p>
+  </div>
+</div>

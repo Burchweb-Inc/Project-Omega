@@ -27,6 +27,11 @@ function createRouter({ policyError = null } = {}) {
         return { id: 'new-org', slug: 'new-study-space' };
       }
     },
+    creatorTimezone: async (createdBy, request) => {
+      assert.equal(createdBy, user);
+      assert.equal(request.user, user);
+      return 'America/Los_Angeles';
+    },
     render(request, response, page, data) {
       renders.push({ page, data });
     }
@@ -89,7 +94,7 @@ test('POST /orgs creates the org with trimmed fields and redirects to it', async
     }
   });
 
-  assert.deepEqual(creates, [{ userId: 'user-1', name: 'Study space', description: 'Description' }]);
+  assert.deepEqual(creates, [{ userId: 'user-1', name: 'Study space', description: 'Description', timezone: 'America/Los_Angeles' }]);
   assert.deepEqual(redirects, ['/group/new-study-space']);
 });
 

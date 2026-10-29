@@ -467,12 +467,6 @@ async function fetchLinkPreviews(value) {
 }
 function normalizeTask(task, index = 0) { return { ...task, details: task.details || '', links: normalizeLinks(task.links), position: Number.isFinite(Number(task.position)) ? Number(task.position) : index, linked: task.sourceId ? task.linked !== false : false, importance: dueImportance(task.due) }; }
 function normalizeUserTasks(user) { if (!user) return; user.tasks = (user.tasks || []).map(normalizeTask); }
-function normalizeCourseItems(course) {
-  course.items = (course.items || []).map((item, index) => {
-    const past = typeof item.pastOverride === 'boolean' ? item.pastOverride : dueImportance(item.due) === 'Overdue';
-    return { ...item, position: Number.isFinite(Number(item.position)) ? Number(item.position) : index, past };
-  });
-}
 function pushNotificationSettings(user) {
   return { enabled: false, breakoutComments: true, breakoutTasks: true, mentions: true, announcements: true, ...(user?.settings?.pushNotifications || {}) };
 }
@@ -1140,7 +1134,7 @@ app.get('/todo', requireUser, async (request, response) => {
   });
 });
 app.use('/calendar', require('./calendar/routes')({ requireUser, render, feedFor: orgModel.feedFor}));
-app.use(require('./org/routes')({ contentPolicyError, requireUser, orgModel, render }));
+app.use(require('./org/routes')({ contentPolicyError, requireUser, orgModel, render, creatorTimezone: async (user, request) => (await userDateLocation(user, request)).timezone }));
 app.get('/group/:slug', requireUser, (request, response) => renderOrgPage(request, response, 'org'));
 
 app.get('/group/:slug/admin', requireUser, (request, response) => {
@@ -1179,7 +1173,7 @@ app.get('/b/:code', requireUser, (request, response) => {
 app.get('/org/:id/course/:courseId', requireUser, async (request, response) => {
   const org = getOrg(request); const course = getCourse(org, request.params.courseId);
   if (!course || !canAccess(org, request.user)) return response.redirect(`/org/${request.params.id}`);
-  normalizeCourseItems(course); const location = await userDateLocation(request.user, request);
+  const location = await userDateLocation(request.user, request);
   const copyDestinations = orgModel.all()
     .filter((destinationOrg) => destinationOrg.id === org.id || org.allowCrossGroupTaskCopy !== false)
     .filter((destinationOrg) => canAccess(destinationOrg, request.user) && canEdit(membership(destinationOrg, request.user)))
@@ -1221,10 +1215,13 @@ app.get('/org/:id/admin/:tab?', requireUser, (request, response) => {
   const requestedTab = ['mod', 'report', 'settings', 'share'].includes(request.params.tab) ? request.params.tab : 'mod';
   const adminTab = member && member.role === 'moderator' && !['mod', 'report'].includes(requestedTab) ? 'mod' : requestedTab;
   const comments = moderationComments(org || { courses: [], groups: [] });
+  const timezones = adminTab === 'settings' ? ['UTC', ...Intl.supportedValuesOf('timeZone')] : [];
+  if (adminTab === 'settings' && org && orgModel.isValidTimezone(org.timezone) && !timezones.includes(org.timezone)) timezones.push(org.timezone);
   render(request, response, 'admin', {
     selectedOrg: org,
     member,
     adminTab,
+    timezones,
     moderationComments: adminTab === 'mod' ? comments.filter((comment) => !comment.reviewedAt) : comments,
     adminStats: {
       members: org.members?.length || 0,
@@ -1247,7 +1244,8 @@ app.post('/org/:id/courses/:courseId/items', requireUser, async (request, respon
   if (!course || !canEdit(membership(org, request.user))) return sendMutation(request, response, { error: 'You cannot edit this course.' }, `/org/${request.params.id}/course/${request.params.courseId}`);
   const policyError = await contentPolicyError({ type: 'course-item', text: request.body.title });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${request.params.id}/course/${request.params.courseId}`);
-  const item = { id: id(), title: String(request.body.title || '').trim(), details: String(request.body.details || '').trim(), links: await fetchLinkPreviews(`${request.body.title || ''}\n${request.body.details || ''}`), type: request.body.type, due: request.body.due || 'No date', done: request.body.type !== 'Event' ? false : null, comments: [], verifiedBy: [], downvotedBy: [], createdBy: request.user.id, position: course.items.length, past: dueImportance(request.body.due || 'No date') === 'Overdue' };
+  const item = { id: id(), title: String(request.body.title || '').trim(), details: String(request.body.details || '').trim(), links: await fetchLinkPreviews(`${request.body.title || ''}\n${request.body.details || ''}`), type: request.body.type, due: request.body.due || 'No date', done: request.body.type !== 'Event' ? false : null, comments: [], verifiedBy: [], downvotedBy: [], createdBy: request.user.id, position: course.items.length, past: false };
+  item.past = orgModel.isPastAssignment(org, item);
   if (!item.title) return sendMutation(request, response, { error: 'A title is required.' }, `/org/${org.id}/course/${course.id}`);
   course.items.push(item); saveOrg(org); emitCourse(org, course, 'course:item-created', { item });
   return sendMutation(request, response, { item }, `/org/${org.id}/course/${course.id}`);
@@ -1320,7 +1318,7 @@ app.post('/org/:id/items/:itemId/update', requireUser, async (request, response)
   const title = String(request.body.title || '').trim(); const course = org.courses.find((entry) => entry.items.includes(item)); if (!title) return sendMutation(request, response, { error: 'A title is required.' }, `/org/${org.id}`);
   const nextType = request.body.type || item.type; const policyError = nextType === 'Event' ? null : await contentPolicyError({ type: 'course-item', text: title });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/course/${course.id}`);
-  item.title = title; item.details = String(request.body.details || '').trim(); item.links = await fetchLinkPreviews(`${title}\n${item.details}`); item.type = nextType; item.due = request.body.due || 'No date'; item.past = typeof item.pastOverride === 'boolean' ? item.pastOverride : dueImportance(item.due) === 'Overdue';
+  item.title = title; item.details = String(request.body.details || '').trim(); item.links = await fetchLinkPreviews(`${title}\n${item.details}`); item.type = nextType; item.due = request.body.due || 'No date'; item.past = orgModel.isPastAssignment(org, item);
   users.forEach((user) => { const task = (user.tasks || []).find((entry) => entry.sourceId === item.id && entry.linked !== false); if (task) { task.title = item.title; task.details = item.details; task.links = item.links; task.due = item.due; task.source = `${course.name} · ${org.name}`; task.importance = dueImportance(task.due); emitTodo(user.id, 'todo:task-updated', { task: normalizeTask(task) }); } });
   saveOrg(org); emitCourse(org, course, 'item:updated', { item });
   return sendMutation(request, response, { item }, `/org/${org.id}/course/${course.id}`);
@@ -1348,7 +1346,6 @@ app.post('/org/:id/items/:itemId/copy', requireUser, async (request, response) =
   const policyError = await contentPolicyError({ type: 'course-item', text: `${sourceItem.title}\n${sourceItem.details || ''}` });
   if (policyError) return sendMutation(request, response, { error: policyError }, sourceFallback);
 
-  normalizeCourseItems(destinationCourse);
   const copiedItem = {
     id: id(),
     title: sourceItem.title,
@@ -1362,8 +1359,9 @@ app.post('/org/:id/items/:itemId/copy', requireUser, async (request, response) =
     downvotedBy: [],
     createdBy: request.user.id,
     position: destinationCourse.items.length,
-    past: dueImportance(sourceItem.due || 'No date') === 'Overdue'
+    past: false
   };
+  copiedItem.past = orgModel.isPastAssignment(destinationOrg, copiedItem);
   destinationCourse.items.push(copiedItem);
   saveOrg(destinationOrg);
   emitCourse(destinationOrg, destinationCourse, 'course:item-created', { item: copiedItem });
@@ -1557,7 +1555,9 @@ app.post('/org/:id/admin/settings', requireUser, async (request, response) => {
   if (!org || member?.role !== 'admin') return response.redirect(`/org/${request.params.id}`);
   const name = String(request.body.name || '').trim(); const description = String(request.body.description || '').trim();
   if (!name || await contentPolicyError({ type: 'text', text: `${name} ${description}` })) return response.redirect(`/org/${request.params.id}/admin/settings?error=policy`);
-  org.name = name; org.description = description; org.theme = ['coral', 'green', 'blue', 'gold'].includes(request.body.theme) ? request.body.theme : 'coral'; org.allowCrossGroupTaskCopy = request.body.allowCrossGroupTaskCopy === 'on'; saveOrg(org); response.redirect(`/org/${org.id}/admin/settings?saved=settings`);
+  const timezone = String(request.body.timezone || '');
+  if (!orgModel.isValidTimezone(timezone)) return response.redirect(`/org/${org.id}/admin/settings?error=timezone`);
+  org.name = name; org.description = description; org.theme = ['coral', 'green', 'blue', 'gold'].includes(request.body.theme) ? request.body.theme : 'coral'; org.allowCrossGroupTaskCopy = request.body.allowCrossGroupTaskCopy === 'on'; org.timezone = timezone; org.autoMovePastAssignments = request.body.autoMovePastAssignments === 'on'; saveOrg(org); response.redirect(`/org/${org.id}/admin/settings?saved=settings`);
 });
 
 app.post('/org/:id/admin/share', requireUser, (request, response) => {

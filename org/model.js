@@ -20,16 +20,49 @@ function dueImportance(due) {
   if (days < 0) return 'Overdue'; if (days === 0) return 'Today'; if (days <= 3) return 'Soon'; return 'Later';
 }
 
-function normalizeCourseItems(course) {
+function isValidTimezone(timezone) {
+  if (typeof timezone !== 'string' || !timezone) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+    return true;
+  } catch (error) {
+    if (error instanceof RangeError) return false;
+    throw error;
+  }
+}
+
+function currentDateInTimezone(timezone, now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: isValidTimezone(timezone) ? timezone : 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(now);
+  const date = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${date.year}-${date.month}-${date.day}`;
+}
+
+function isPastAssignment(org, item, now = new Date()) {
+  if (typeof item.pastOverride === 'boolean') return item.pastOverride;
+  if (org.autoMovePastAssignments === false) return item.past === true;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(item.due || '')) return false;
+  const dueDate = new Date(`${item.due}T00:00:00.000Z`);
+  if (Number.isNaN(dueDate.getTime()) || dueDate.toISOString().slice(0, 10) !== item.due) return false;
+  return item.due < currentDateInTimezone(org.timezone, now);
+}
+
+function normalizeCourseItems(org, course) {
   course.items = (course.items || []).map((item, index) => {
-    const past = typeof item.pastOverride === 'boolean' ? item.pastOverride : dueImportance(item.due) === 'Overdue';
+    const past = isPastAssignment(org, item);
     return { ...item, position: Number.isFinite(Number(item.position)) ? Number(item.position) : index, past };
   });
 }
 
 function parseOrgPayload(row) {
   const org = JSON.parse(row.payload);
-      org.courses = (org.courses || []).map((course) => { normalizeCourseItems(course); return { ...course, items: course.items.map((item) => ({ ...item, comments: item.comments || [], verifiedBy: item.verifiedBy || [], downvotedBy: item.downvotedBy || [] })), board: course.board || [], resources: course.resources || [] }; });
+      org.timezone = isValidTimezone(org.timezone) ? org.timezone : 'UTC';
+      org.autoMovePastAssignments = org.autoMovePastAssignments !== false;
+      org.courses = (org.courses || []).map((course) => { normalizeCourseItems(org, course); return { ...course, items: course.items.map((item) => ({ ...item, comments: item.comments || [], verifiedBy: item.verifiedBy || [], downvotedBy: item.downvotedBy || [] })), board: course.board || [], resources: course.resources || [] }; });
       org.groups = (org.groups || []).map((group) => { const task = group.itemId ? org.courses.flatMap((course) => course.items).find((item) => item.id === group.itemId) : null; return { ...group, members: group.members || [], roles: group.roles || {}, itemId: group.itemId || null, taskSlug: group.taskSlug || (task ? breakoutTaskSlug(task) : null), shareCode: group.shareCode || crypto.randomBytes(12).toString('base64url'), createdBy: group.createdBy || group.members?.[0] || null, tasks: group.tasks || [], resources: group.resources || [], polls: group.polls || [], comments: (group.comments || []).map((comment) => ({ ...comment, parentId: comment.parentId || null })) }; });
         org.members = (org.members || []).map((member) => ({ ...member, role: member.role === 'writer' ? 'editor' : member.role || 'viewer' }));
         return { ...org, slug: org.slug || secureSlug(org.name), reports: org.reports || [], groups: org.groups || [], pendingInvites: org.pendingInvites || [], suspendedAt: org.suspendedAt || '', shareCode: org.shareCode || crypto.randomBytes(32).toString('base64url') };
@@ -53,16 +86,20 @@ function saveOrg(db, org) {
   });
 }
 
-function createOrg(db, { userId, name, description }) {
+function createOrg(db, { userId, name, description, timezone = 'UTC' }) {
   if (!userId || !name || description == null) {
     throw new TypeError('userId, name, and description are required to create an org');
   }
+  if (!isValidTimezone(timezone)) throw new TypeError('timezone must be a valid IANA time zone');
 
   const org = {
     id: crypto.randomBytes(4).toString('hex'),
     slug: secureSlug(name),
     name,
     description,
+    createdBy: userId,
+    timezone,
+    autoMovePastAssignments: true,
     theme: 'coral',
     visibility: 'private',
     shareCode: crypto.randomBytes(32).toString('base64url'),
@@ -151,6 +188,8 @@ module.exports = (db) => ({
   forUserOrInvite: (userId) => loadOrgsForUserOrInvite(db, userId),
   copyCandidatesForUser: (userId) => loadCopyCandidatesForUser(db, userId),
   feedFor: (userId) => loadOrgsForUser(db, userId).flatMap((org) => org.courses.flatMap((course) => course.items.map((item) => ({ ...item, org, course })))),
+  isValidTimezone,
+  isPastAssignment,
   create: (data) => createOrg(db, data),
   save: (org) => saveOrg(db, org),
   delete: (orgId) => deleteOrg(db, orgId)

@@ -3558,3 +3558,42 @@ body.page-ready .page-loader {
 @keyframes auth-label-rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
 @media (max-width: 800px) { .auth-page { grid-template-columns: 1fr }.auth-visual { min-height: 330px }.auth-visual-copy { right: 24px; bottom: 30px; left: 62px }.auth-visual-copy strong { font-size: clamp(38px, 12vw, 60px) }.auth-visual-copy>span:last-child { display: none }.auth-visual-stamp { top: 28px; left: 24px }.auth-orbit-one { right: -260px; bottom: -350px }.auth-orbit-two { right: -125px; bottom: -210px }.auth-signal { top: 45%; left: 74%; transform: translate(-50%, -50%) scale(.7) }.auth-page-panel { min-height: calc(100vh - 330px); padding: 25px 22px 36px }.auth-page-content { padding-top: 55px }.auth-page-note { margin-top: 38px } }
 @media (prefers-reduced-motion: reduce) { .auth-visual-grid, .auth-orbit, .auth-signal, .auth-visual-copy, .auth-page-content, .auth-transition-light, .auth-transition-line, .auth-transition p { animation: none } }
+
+.group-settings-heading { margin: 0 0 18px }
+.group-settings-heading h2 { font-size: 20px }
+.group-settings-heading p { margin-top: 5px }
+.group-settings-form { display: grid; gap: 12px; max-width: 850px }
+.group-setting-block { display: grid; grid-template-columns: minmax(180px, .75fr) minmax(260px, 1fr); gap: 28px; padding: 22px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius) }
+.group-setting-intro h3 { font-size: 15px }
+.group-setting-intro p { margin-top: 6px; font-size: 11px; line-height: 1.5 }
+.group-setting-fields { display: grid; align-content: start; gap: 14px }
+.group-setting-fields textarea { min-height: 88px; resize: vertical }
+.group-setting-help { margin-top: -7px; color: var(--muted); font-size: 11px; line-height: 1.45 }
+.timezone-picker { position: relative; z-index: 4; width: 100% }
+.timezone-picker-trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 7px; background: #fbfdff; color: var(--ink); font: inherit; font-size: 12px; text-align: left; cursor: pointer }
+.timezone-picker-trigger:hover, .timezone-picker-trigger[aria-expanded="true"] { border-color: #9eb8c7; background: #fff }
+.timezone-picker-trigger:focus-visible, .timezone-picker-option:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px }
+.timezone-picker-trigger svg { width: 16px; height: 16px; flex: none; color: var(--muted); transition: transform .18s ease }
+.timezone-picker-trigger[aria-expanded="true"] svg { transform: rotate(180deg) }
+.timezone-picker-panel[hidden], .timezone-picker-option[hidden], .timezone-picker-empty[hidden] { display: none }
+.timezone-picker-panel { position: absolute; z-index: 20; top: calc(100% + 6px); right: 0; left: 0; display: flex; flex-direction: column; max-height: min(390px, calc(100dvh - 120px)); overflow: hidden; border: 1px solid #d9e3e8; border-radius: 10px; background: #fff; box-shadow: 0 16px 38px rgba(29,48,61,.18) }
+.timezone-picker-search { position: sticky; z-index: 1; top: 0; display: flex; flex: none; align-items: center; gap: 9px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: #fff }
+.timezone-picker-search svg { width: 16px; height: 16px; flex: none; color: var(--muted) }
+.timezone-picker-search input { min-width: 0; min-height: 34px; padding: 6px 3px; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 12px }
+.timezone-picker-search input:focus { box-shadow: none }
+.timezone-picker-options { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 5px; scrollbar-color: #b8ccd5 transparent; scrollbar-width: thin }
+.timezone-picker-option { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 9px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-soft); font: inherit; font-size: 11px; text-align: left; cursor: pointer }
+.timezone-picker-option:hover, .timezone-picker-option[aria-selected="true"] { background: #f1f6f8; color: var(--ink) }
+.timezone-picker-option[aria-selected="true"] { font-weight: 700 }
+.timezone-picker-option svg { width: 15px; height: 15px; flex: none; color: var(--blue) }
+.timezone-picker-empty { margin: 0; padding: 18px 10px; color: var(--muted); font-size: 11px; text-align: center }
+.timezone-picker-count { flex: none; margin: 0; padding: 8px 12px; border-top: 1px solid var(--line); background: #fbfdff; color: var(--muted); font-size: 10px }
+.group-setting-fields .toggle-row { margin: 0; padding: 12px 0; border-top: 1px solid #edf1f4; border-bottom: 0 }
+.group-settings-actions { display: flex; justify-content: flex-end; padding: 4px 0 }
+.group-settings-error { max-width: 850px; margin: 0 0 12px; padding: 11px 13px; border-left: 3px solid #b95647; background: #fff5f1; color: #8e4138; font-size: 12px }
+@media (max-width: 700px) {
+    .group-setting-block { grid-template-columns: 1fr; gap: 14px; padding: 18px }
+    .group-settings-actions { justify-content: stretch }
+    .group-settings-actions .button { width: 100% }
+    .timezone-picker-panel { max-height: min(360px, calc(100dvh - 110px)) }
+}

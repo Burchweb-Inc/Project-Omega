@@ -34,13 +34,33 @@
       <% }) } else { %><div class="empty-panel"><i data-lucide="flag"></i><h3>No open reports</h3><p>Reports from your group will appear here.</p></div><% } %>
     </section>
   <% } else if (adminTab === 'settings') { %>
-    <div class="admin-section-heading"><div><h2>Group settings</h2><p class="muted">Give this group a clear identity for everyone who uses it.</p></div></div>
-    <form action="/org/<%= adminOrg.id || '' %>/admin/settings" method="post" class="admin-panel page-form admin-form">
-      <label>Group name<input name="name" value="<%= adminOrg.name || '' %>" required></label>
-      <label>Description<textarea name="description"><%= adminOrg.description || '' %></textarea></label>
-      <label>Theme<select name="theme"><option value="coral" <%= (adminOrg.theme || 'coral') === 'coral' ? 'selected' : '' %>>Coral</option><option value="green" <%= adminOrg.theme === 'green' ? 'selected' : '' %>>Green</option><option value="blue" <%= adminOrg.theme === 'blue' ? 'selected' : '' %>>Blue</option><option value="gold" <%= adminOrg.theme === 'gold' ? 'selected' : '' %>>Gold</option></select></label>
-      <label class="toggle-row"><span><strong>Allow copying tasks to other groups</strong><small>When enabled, editors can copy a task into another group where they have course-edit access.</small></span><input type="checkbox" name="allowCrossGroupTaskCopy" <%= adminOrg.allowCrossGroupTaskCopy !== false ? 'checked' : '' %>></label>
-      <button class="button primary" type="submit">Save group settings</button>
+    <div class="group-settings-heading"><h2>Group settings</h2><p class="muted">Manage group details, assignment dates, and course tools.</p></div>
+    <% if (error === 'timezone') { %><p class="group-settings-error" role="alert">Choose a valid time zone before saving.</p><% } else if (error === 'policy') { %><p class="group-settings-error" role="alert">The group name or description could not be saved.</p><% } %>
+    <form action="/org/<%= adminOrg.id || '' %>/admin/settings" method="post" class="group-settings-form">
+      <section class="group-setting-block" aria-labelledby="group-details-heading">
+        <div class="group-setting-intro"><h3 id="group-details-heading">Group details</h3><p class="muted">The name and description members see.</p></div>
+        <div class="group-setting-fields">
+          <label>Group name<input name="name" value="<%= adminOrg.name || '' %>" required></label>
+          <label>Description<textarea name="description"><%= adminOrg.description || '' %></textarea></label>
+          <label>Accent color<select name="theme"><option value="coral" <%= (adminOrg.theme || 'coral') === 'coral' ? 'selected' : '' %>>Coral</option><option value="green" <%= adminOrg.theme === 'green' ? 'selected' : '' %>>Green</option><option value="blue" <%= adminOrg.theme === 'blue' ? 'selected' : '' %>>Blue</option><option value="gold" <%= adminOrg.theme === 'gold' ? 'selected' : '' %>>Gold</option></select></label>
+        </div>
+      </section>
+      <section class="group-setting-block" aria-labelledby="assignment-settings-heading">
+        <div class="group-setting-intro"><h3 id="assignment-settings-heading">Assignments</h3><p class="muted">Set when due dates count as past for everyone in this group.</p></div>
+        <div class="group-setting-fields">
+          <label for="group-timezone-picker">Group time zone</label>
+          <%- include('mini/timezone-select', { id: 'group-timezone-picker', name: 'timezone', value: adminOrg.timezone, timezones }) %>
+          <p class="group-setting-help">What time zone should be used for this group?</p>
+          <label class="toggle-row"><span><strong>Automatically move assignments to Past</strong><small>Turn this off to keep assignments in Current until someone moves them.</small></span><input type="checkbox" name="autoMovePastAssignments" <%= adminOrg.autoMovePastAssignments !== false ? 'checked' : '' %>></label>
+        </div>
+      </section>
+      <section class="group-setting-block" aria-labelledby="course-tools-heading">
+        <div class="group-setting-intro"><h3 id="course-tools-heading">Course tools</h3><p class="muted">Control whether editors can reuse work across groups.</p></div>
+        <div class="group-setting-fields">
+          <label class="toggle-row"><span><strong>Allow copying tasks to other groups</strong><small>Editors can copy tasks into groups where they can edit courses.</small></span><input type="checkbox" name="allowCrossGroupTaskCopy" <%= adminOrg.allowCrossGroupTaskCopy !== false ? 'checked' : '' %>></label>
+        </div>
+      </section>
+      <div class="group-settings-actions"><button class="button primary" type="submit">Save changes</button></div>
     </form>
   <% } else { %>
     <div class="admin-section-heading"><div><h2>Sharing and access</h2><p class="muted">Control who can find this group and how invitations work.</p></div></div>

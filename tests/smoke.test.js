@@ -19,6 +19,12 @@ assert.match(app, /items\/reorder/, 'Course tasks should have a reorder endpoint
 assert.match(client, /course:items-reordered/, 'Course task reordering should update live over websockets.');
 assert.match(client, /response\.redirected/, 'Client navigation should not render redirected content at the requested URL.');
 assert.match(app, /\/org\/:id\/admin\/:tab\?/, 'Groups should expose tabbed admin routes.');
+const timezonePicker = fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'mini', 'timezone-select.ejs'), 'utf8');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /include\('mini\/timezone-select'/, 'Group settings should use the dedicated time-zone picker partial.');
+assert.match(timezonePicker, /data-timezone-search/, 'The time-zone picker should provide a search field.');
+assert.match(timezonePicker, /role="listbox"/, 'The time-zone picker should render accessible listbox options.');
+assert.match(timezonePicker, /timezones\.forEach/, 'The time-zone picker should render every available time zone.');
+assert.match(client, /function bindTimezoneSearch/, 'The group time-zone picker should filter options as the user searches.');
 assert.match(app, /render\(request, response, 'admin', \{/, 'Admin should render through the page renderer.');
 assert.match(app, /selectedOrg: org,/, 'Admin should render with group context.');
 assert.match(app, /\/org\/:id\/admin\/share/, 'Sharing should have its own admin mutation.');
