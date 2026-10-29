@@ -118,6 +118,13 @@ app.get('/media/offline-manifest.json', (request, response) => {
   visit(offlineDir, '');
   response.json(files);
 });
+app.get('/beta-tests/3drender', (request, response) => {
+  const user = currentUser(request);
+  if (!user?.settings?.betaTools || refreshModerationStatus(user) !== 'active') return response.redirect('/');
+  response.setHeader('Cache-Control', 'private, no-store');
+  response.setHeader('Vary', 'Cookie');
+  return response.sendFile(path.join(__dirname, 'views', 'beta-tests', '3drender', 'index.html'));
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 const sessions = new Map();
@@ -223,6 +230,13 @@ function persistState() {
 
 function saveOrg(org) {
   orgModel.save(org);
+}
+
+function persistOrg(org) {
+  db.prepare(`INSERT INTO orgs (id, payload, updated_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = CURRENT_TIMESTAMP`)
+    .run(org.id, JSON.stringify(org));
 }
 
 const users = userModel.all();
@@ -519,11 +533,12 @@ function siteFeedback() { return db.prepare('SELECT * FROM site_feedback ORDER B
 function siteAnnouncements() { return db.prepare('SELECT * FROM site_announcements ORDER BY created_at DESC').all(); }
 function siteAdminPageData(request) {
   return {
-    siteAdminTab: ['admins', 'groups', 'moderation', 'feedback', 'announcements', 'cache', 'developers'].includes(request.query.tab) ? request.query.tab : 'admins',
+    siteAdminTab: ['admins', 'users', 'groups', 'moderation', 'feedback', 'announcements', 'cache', 'developers'].includes(request.query.tab) ? request.query.tab : 'admins',
     siteAdminComments: globalModerationComments().filter((comment) => !comment.reviewedAt),
     siteAdminReports: globalReports().filter((report) => report.status === 'open'),
     feedback: siteFeedback(),
     siteAdminUsers: users.filter((user) => user.isSiteAdmin),
+    managedUsers: users.slice().sort((left, right) => left.username.localeCompare(right.username)),
     announcements: siteAnnouncements(),
     badWordReviewLogs: db.prepare('SELECT * FROM bad_word_review_logs ORDER BY created_at DESC LIMIT 20').all().map((entry) => ({
       ...entry,
@@ -795,6 +810,96 @@ app.post('/site-admin/users', requireUser, requireSiteAdmin, (request, response)
   const target = users.find((candidate) => candidate.username === username);
   if (target) { target.isSiteAdmin = true; persistState(); }
   return sendMutation(request, response, { successMessage: target ? `@${username} is now a site admin.` : 'User not found.' }, '/site-admin?tab=admins');
+});
+app.post('/site-admin/users/:id/update', requireUser, requireSiteAdmin, (request, response) => {
+  const target = users.find((candidate) => candidate.id === request.params.id);
+  if (!target) return sendMutation(request, response, { error: 'User not found.' }, '/site-admin?tab=users');
+
+  const name = String(request.body.name || '').trim();
+  const username = String(request.body.username || '').trim().toLowerCase();
+  const age = Number(request.body.age);
+  const newPassword = String(request.body.newPassword || '');
+  const isSiteAdminAccount = request.body.isSiteAdmin === 'on';
+  const moderationStatus = String(request.body.moderationStatus || '');
+  const moderationMessage = String(request.body.moderationMessage || '').trim();
+  const moderationUntilInput = String(request.body.moderationUntil || '').trim();
+  if (!name || name.length > 80 || !/^[a-z0-9_]{3,24}$/.test(username) || !Number.isInteger(age) || age < 13 || age > 120) {
+    return sendMutation(request, response, { error: 'Enter a name, username (3-24 letters, numbers, or underscores), and age from 13 to 120.' }, '/site-admin?tab=users');
+  }
+  if (users.some((candidate) => candidate.id !== target.id && candidate.username === username)) {
+    return sendMutation(request, response, { error: `@${username} is already in use.` }, '/site-admin?tab=users');
+  }
+  if (newPassword && newPassword.length < 8) {
+    return sendMutation(request, response, { error: 'New passwords must have at least 8 characters.' }, '/site-admin?tab=users');
+  }
+  if (!['active', 'suspended', 'banned'].includes(moderationStatus) || moderationMessage.length > 500) {
+    return sendMutation(request, response, { error: 'Choose a valid account status and a message of at most 500 characters.' }, '/site-admin?tab=users');
+  }
+  if (moderationUntilInput && (moderationStatus !== 'suspended' || !Number.isFinite(Date.parse(moderationUntilInput)))) {
+    return sendMutation(request, response, { error: 'Enter a valid end time for a suspended account.' }, '/site-admin?tab=users');
+  }
+  if (target.isSiteAdmin && !isSiteAdminAccount && users.filter(isSiteAdmin).length <= 1) {
+    return sendMutation(request, response, { error: 'The last site admin cannot be removed.' }, '/site-admin?tab=users');
+  }
+
+  const updatedUser = {
+    ...target,
+    name,
+    username,
+    age,
+    isSiteAdmin: isSiteAdminAccount,
+    moderationStatus,
+    moderationMessage: moderationStatus === 'active' ? '' : moderationMessage,
+    moderationUntil: moderationStatus === 'suspended' && moderationUntilInput ? new Date(moderationUntilInput).toISOString() : '',
+    settings: { ...(target.settings || {}), betaTools: request.body.betaTools === 'on' }
+  };
+  if (newPassword) {
+    updatedUser.passwordHash = passwordHash(newPassword);
+    updatedUser.settings.passwordSet = true;
+  }
+  if (!userModel.updateUser(updatedUser)) {
+    return sendMutation(request, response, { error: 'The user could not be updated.' }, '/site-admin?tab=users');
+  }
+  Object.assign(target, updatedUser);
+  const selfDemoted = target.id === request.user.id && !isSiteAdminAccount;
+  const redirectTo = selfDemoted ? '/dashboard' : '/site-admin?tab=users';
+  if (newPassword || moderationStatus !== 'active') {
+    const currentToken = parseCookies(request).session;
+    for (const [token, userId] of sessions) {
+      if (userId === target.id && (moderationStatus !== 'active' || token !== currentToken)) sessions.delete(token);
+    }
+  }
+  return sendMutation(request, response, { successMessage: `@${target.username} was updated.`, redirectTo }, redirectTo);
+});
+app.post('/site-admin/users/:id/delete', requireUser, requireSiteAdmin, (request, response) => {
+  const targetIndex = users.findIndex((candidate) => candidate.id === request.params.id);
+  const target = users[targetIndex];
+  if (!target) return sendMutation(request, response, { error: 'User not found.' }, '/site-admin?tab=users');
+  if (target.id === request.user.id) return sendMutation(request, response, { error: 'You cannot delete the account you are currently using.' }, '/site-admin?tab=users');
+  if (target.isSiteAdmin && users.filter(isSiteAdmin).length <= 1) {
+    return sendMutation(request, response, { error: 'The last site admin cannot be deleted.' }, '/site-admin?tab=users');
+  }
+
+  const changedOrgs = [];
+  orgs.forEach((org) => {
+    const previous = JSON.stringify(org);
+    org.members = (org.members || []).filter((member) => member.userId !== target.id);
+    org.pendingInvites = (org.pendingInvites || []).filter((invite) => invite.userId !== target.id);
+    org.groups = (org.groups || []).filter((group) => group.createdBy !== target.id)
+      .map((group) => ({ ...group, members: (group.members || []).filter((memberId) => memberId !== target.id) }));
+    if (JSON.stringify(org) !== previous) changedOrgs.push(org);
+  });
+  const deleted = db.transaction(() => {
+    if (!userModel.deleteUser(target.id)) return false;
+    changedOrgs.forEach(persistOrg);
+    return true;
+  })();
+  if (!deleted) {
+    return sendMutation(request, response, { error: 'The user could not be deleted.' }, '/site-admin?tab=users');
+  }
+  for (const [token, userId] of sessions) if (userId === target.id) sessions.delete(token);
+  users.splice(targetIndex, 1);
+  return sendMutation(request, response, { successMessage: `@${target.username} was deleted.`, redirectTo: '/site-admin?tab=users' }, '/site-admin?tab=users');
 });
 app.post('/site-admin/cache', requireUser, requireSiteAdmin, (request, response) => {
   const username = String(request.body.username || '').trim().toLowerCase();

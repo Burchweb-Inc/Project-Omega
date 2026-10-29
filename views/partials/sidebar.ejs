@@ -10,7 +10,7 @@
         <%= (user.tasks || []).filter(task=> !task.done).length %>
       </strong></a>
     <a class="nav-link <%= page === 'calendar' ? 'selected' : '' %>" href="/calendar"><i
-        data-lucide="calendar-days"></i><span>Academic calendar</span></a>
+          data-lucide="calendar-days"></i><span>Academic calendar</span></a>
     <div class="nav-label space-label">YOUR GROUPS</div>
     <a class="nav-link <%= page === 'groups' ? 'selected' : '' %>" href="/groups"><i
         data-lucide="users-round"></i><span>All groups</span></a>
@@ -41,7 +41,9 @@
         <summary class="icon-button" aria-label="Account menu" title="Account menu"><i data-lucide="ellipsis"></i>
         </summary>
         <div class="account-menu-popover"><a class="menu-action" href="/settings"><i data-lucide="settings"></i>
-            Account settings</a><button class="menu-action" type="button" data-debug-open><i data-lucide="bug"></i>
+            Account settings</a>
+          <% if (user.settings?.betaTools) { %><details><summary class="menu-action"><i data-lucide="flask-conical"></i> Beta access</summary><a class="menu-action" href="/beta-tests/3drender"><i data-lucide="box"></i> 3D Render test</a></details><% } %>
+          <button class="menu-action" type="button" data-debug-open><i data-lucide="bug"></i>
             Debug</button>
           <form action="/logout" method="post"><button class="menu-action" type="submit"><i data-lucide="log-out"></i>
               Sign out</button></form>

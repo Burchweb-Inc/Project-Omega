@@ -420,6 +420,7 @@ async function submitLiveForm(form, animatedEntry = null) {
   try {
     const response = await fetch(actionUrl, { method: 'POST', body: new URLSearchParams(formData), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } });
     const payload = await response.json(); if (!response.ok || payload.error) throw new Error(payload.error || 'Action failed');
+    if (payload.redirectTo) { window.location.assign(payload.redirectTo); return; }
     if (payload.groupUrl) { window.location.assign(payload.groupUrl); return; }
     if (payload.deletedAccount) { window.location.assign('/'); return; }
     if (payload.successMessage) showLiveSuccess(payload.successMessage);

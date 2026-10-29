@@ -43,7 +43,21 @@ test('loads users and migrates task payloads through the persistence model', (co
   assert.equal(model.all()[0].tasks[0].title, 'Review notes');
   assert.equal(model.needsEncryptionMigration(), false);
 
+  db.prepare(`INSERT INTO users (id, name, username, age, password_hash)
+    VALUES (?, ?, ?, ?, ?)`).run('user-2', 'Other student', 'other', 20, 'other-hash');
+  const updatedUser = model.all().find((user) => user.id === 'user-1');
+  updatedUser.name = 'Updated student';
+  updatedUser.settings.betaTools = true;
+  assert.equal(model.updateUser(updatedUser), true);
+  assert.equal(db.prepare('SELECT name FROM users WHERE id = ?').get('user-1').name, 'Updated student');
+  assert.equal(JSON.parse(db.prepare('SELECT settings FROM users WHERE id = ?').get('user-1').settings).betaTools, true);
+  assert.equal(db.prepare('SELECT name FROM users WHERE id = ?').get('user-2').name, 'Other student');
+
+  assert.equal(model.deleteUser('user-1'), true);
+  assert.equal(model.deleteUser('user-1'), false);
+  assert.deepEqual(model.all().map((user) => user.id), ['user-2']);
+
   model.persistState([]);
-  assert.equal(db.prepare('SELECT is_active FROM users WHERE id = ?').get('user-1').is_active, 0);
+  assert.equal(db.prepare('SELECT is_active FROM users WHERE id = ?').get('user-2').is_active, 0);
   assert.deepEqual(model.all(), []);
 });

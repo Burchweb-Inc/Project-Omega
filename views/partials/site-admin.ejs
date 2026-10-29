@@ -28,6 +28,16 @@
   .build-id-form input { width: 100%; font-variant-numeric: tabular-nums; letter-spacing: .08em; }
   .build-id-result { margin-top: 20px; }
   .build-id-error { margin: 16px 0 0; color: var(--coral); }
+  .user-management-list { display: grid; gap: 14px; }
+  .user-management-card { padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); }
+  .user-management-card h3 { margin: 0 0 14px; }
+  .user-management-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; align-items: end; }
+  .user-management-form label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
+  .user-management-form .user-management-toggle { display: flex; align-items: center; gap: 9px; }
+  .user-management-form .user-management-toggle input { width: auto; }
+  .user-management-form textarea { min-height: 72px; resize: vertical; }
+  .user-management-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+  @media (max-width: 700px) { .user-management-form { grid-template-columns: 1fr; } }
   @media (max-width: 800px) { .moderation-tools { grid-template-columns: 1fr; } }
   @media (max-width: 700px) { .announcement-form .form-grid, .build-id-form { grid-template-columns: 1fr; } }
 </style>
@@ -35,6 +45,7 @@
   <div class="page-heading hero-heading"><div><p class="kicker">SITE ADMINISTRATION</p><h1>Keep the whole space healthy.</h1><p class="lead">Manage the whole site from one focused workspace.</p></div></div>
   <nav class="site-admin-tabs" aria-label="Site Admin sections">
     <a class="<%= siteAdminTab === 'admins' ? 'active' : '' %>" href="/site-admin?tab=admins"><i data-lucide="shield-check"></i> Admins</a>
+    <a class="<%= siteAdminTab === 'users' ? 'active' : '' %>" href="/site-admin?tab=users"><i data-lucide="users"></i> User Management</a>
     <a class="<%= siteAdminTab === 'groups' ? 'active' : '' %>" href="/site-admin?tab=groups"><i data-lucide="users-round"></i> Groups</a>
     <a class="<%= siteAdminTab === 'moderation' ? 'active' : '' %>" href="/site-admin?tab=moderation"><i data-lucide="message-square-more"></i> Moderation</a>
     <a class="<%= siteAdminTab === 'feedback' ? 'active' : '' %>" href="/site-admin?tab=feedback"><i data-lucide="messages-square"></i> Feedback</a>
@@ -48,6 +59,33 @@
       <div class="admin-section-heading"><div><h2>Site admins</h2><p class="muted">Only explicit site admins appear here. Site admins remain invisible in group member lists unless invited.</p></div></div>
       <form data-live-form action="/site-admin/users" method="post" class="inline-admin-form"><%- include('mini/user-search', { id: 'site-admin-user-search', label: 'Search users', name: 'username', placeholder: 'username' }) %><button class="button secondary" type="submit"><i data-lucide="user-plus"></i> Add admin</button></form>
       <div class="site-admin-list"><% siteAdminUsers.forEach(admin => { %><div><span class="avatar"><%= admin.name[0] %></span><span><strong><%= admin.name %></strong><small>@<%= admin.username %></small></span></div><% }) %></div>
+    </section>
+  <% } else if (siteAdminTab === 'users') { %>
+    <section class="admin-panel">
+      <div class="admin-section-heading"><div><h2>User Management</h2><p class="muted">Edit account details and access, reset passwords, or remove accounts. Passwords and private integration credentials are never displayed.</p></div></div>
+      <div class="user-management-list">
+        <% managedUsers.forEach(account => { const moderationUntil = account.moderationUntil && Number.isFinite(Date.parse(account.moderationUntil)) ? new Date(account.moderationUntil).toISOString().slice(0, 16) : ''; %>
+          <article class="user-management-card">
+            <h3><%= account.name %> <small class="muted">@<%= account.username %></small></h3>
+            <form data-live-form action="/site-admin/users/<%= account.id %>/update" method="post" class="user-management-form">
+              <label>Display name<input name="name" value="<%= account.name %>" maxlength="80" required></label>
+              <label>Username<input name="username" value="<%= account.username %>" minlength="3" maxlength="24" pattern="[a-z0-9_]+" required></label>
+              <label>Age<input name="age" type="number" min="13" max="120" value="<%= account.age %>" required></label>
+              <label>Set a new password<input name="newPassword" type="password" minlength="8" autocomplete="new-password" placeholder="Leave blank to keep current"></label>
+              <label>Account status<select name="moderationStatus"><option value="active" <%= account.moderationStatus === 'active' ? 'selected' : '' %>>Active</option><option value="suspended" <%= account.moderationStatus === 'suspended' ? 'selected' : '' %>>Suspended</option><option value="banned" <%= account.moderationStatus === 'banned' ? 'selected' : '' %>>Banned</option></select></label>
+              <label>Suspension ends<input name="moderationUntil" type="datetime-local" value="<%= moderationUntil %>"></label>
+              <label>Account status message<textarea name="moderationMessage" maxlength="500"><%= account.moderationMessage || '' %></textarea></label>
+              <label class="user-management-toggle"><input type="checkbox" name="isSiteAdmin" <%= account.isSiteAdmin ? 'checked' : '' %>> Site admin</label>
+              <label class="user-management-toggle"><input type="checkbox" name="betaTools" <%= account.settings?.betaTools ? 'checked' : '' %>> Beta tools access</label>
+              <div class="user-management-actions">
+                <button class="button secondary" type="submit"><i data-lucide="save"></i> Save user</button>
+                <button class="button danger" type="submit" form="delete-user-<%= account.id %>"><i data-lucide="trash-2"></i> Delete user</button>
+              </div>
+            </form>
+            <form id="delete-user-<%= account.id %>" data-live-form action="/site-admin/users/<%= account.id %>/delete" method="post" data-confirm-message="Delete @<%= account.username %>? This cannot be undone."></form>
+          </article>
+        <% }) %>
+      </div>
     </section>
   <% } else if (siteAdminTab === 'groups') { %>
     <section class="admin-panel">

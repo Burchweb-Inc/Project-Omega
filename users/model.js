@@ -137,9 +137,45 @@ function persistState(db, users) {
   })();
 }
 
+function updateUser(db, user) {
+  return db.prepare(`UPDATE users SET
+    name = @name,
+    username = @username,
+    age = @age,
+    password_hash = @passwordHash,
+    is_site_admin = @isSiteAdmin,
+    tasks = @tasks,
+    notifications = @notifications,
+    settings = @settings,
+    moderation_status = @moderationStatus,
+    moderation_message = @moderationMessage,
+    moderation_until = @moderationUntil,
+    modified_at = CURRENT_TIMESTAMP
+    WHERE id = @id AND is_active = 1`).run({
+    id: user.id,
+    name: user.name,
+    username: user.username,
+    age: Number(user.age),
+    passwordHash: user.passwordHash,
+    isSiteAdmin: user.isSiteAdmin ? 1 : 0,
+    tasks: encryptTasks(user.tasks),
+    notifications: JSON.stringify(user.notifications || []),
+    settings: JSON.stringify(user.settings || {}),
+    moderationStatus: user.moderationStatus || 'active',
+    moderationMessage: user.moderationMessage || '',
+    moderationUntil: user.moderationUntil || ''
+  }).changes > 0;
+}
+
+function deleteUser(db, userId) {
+  return db.prepare('UPDATE users SET is_active = 0, modified_at = CURRENT_TIMESTAMP WHERE id = ? AND is_active = 1').run(userId).changes > 0;
+}
+
 module.exports = (db) => ({
   init: () => initialize(db),
   all: () => loadUsersFromDatabase(db),
   needsEncryptionMigration: () => taskEncryptionMigrationNeeded,
-  persistState: (users) => persistState(db, users)
+  persistState: (users) => persistState(db, users),
+  updateUser: (user) => updateUser(db, user),
+  deleteUser: (userId) => deleteUser(db, userId)
 });

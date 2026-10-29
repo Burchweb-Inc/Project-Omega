@@ -31,6 +31,14 @@ assert.match(app, /renderSuspendedGroup/, 'Suspended groups should render a lock
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'suspended-group.ejs'), 'utf8'), /GROUP LOCKED|lock-keyhole/, 'Suspended groups should show a lock state.');
 assert.match(index, /page === 'suspended-group'[\s\S]*partials\/app-layout/, 'Suspended groups should retain the application sidebar shell.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Lock group|Unlock group/, 'Site admins should have explicit group lock controls.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /User Management/, 'Site admins should have a user management tab.');
+assert.match(app, /site-admin\/users\/:id\/update/, 'Site admins should be able to update user accounts.');
+assert.match(app, /site-admin\/users\/:id\/delete/, 'Site admins should be able to delete user accounts.');
+assert.match(app, /settings\?\.betaTools/, 'The beta test page should require beta tools access.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'sidebar.ejs'), 'utf8'), /Beta access<\/summary><a class="menu-action" href="\/beta-tests\/3drender"><i data-lucide="box"><\/i> 3D Render test<\/a>/, 'Beta tools should be available from a submenu in the account menu.');
+assert.doesNotMatch(app, /eaglercraft-1\.21\.html/, 'The old public app URL should not have a compatibility redirect.');
+assert.equal(fs.existsSync(path.join(__dirname, '..', 'public', 'eaglercraft-1.21.html')), false, 'The protected static HTML should not remain publicly served.');
+assert.equal(fs.existsSync(path.join(__dirname, '..', 'views', 'beta-tests', '3drender', 'index.html')), true, 'The protected static HTML should be moved under views.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Reports from every group/, 'Site admin moderation should show cross-group reports.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /Mod Action/, 'Reports should expose removal and moderation actions.');
 assert.match(app, /\['remove', 'remove-moderate', 'warn', 'ban', 'close'\]/, 'Report moderation should support warnings.');
