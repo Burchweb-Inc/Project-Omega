@@ -35,6 +35,8 @@ assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'si
 assert.match(app, /site-admin\/users\/:id\/update/, 'Site admins should be able to update user accounts.');
 assert.match(app, /site-admin\/users\/:id\/delete/, 'Site admins should be able to delete user accounts.');
 assert.match(app, /settings\?\.betaTools/, 'The beta test page should require beta tools access.');
+assert.match(app, /createGzip\(\{ level: zlib\.constants\.Z_BEST_SPEED \}\)/, 'The large beta app should stream with fast gzip compression.');
+assert.match(app, /pipeline\(fs\.createReadStream\(file\)/, 'The beta app should stream rather than buffer its HTML.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'sidebar.ejs'), 'utf8'), /Beta access<\/summary><a class="menu-action" href="\/beta-tests\/3drender"><i data-lucide="box"><\/i> 3D Render test<\/a>/, 'Beta tools should be available from a submenu in the account menu.');
 assert.doesNotMatch(app, /eaglercraft-1\.21\.html/, 'The old public app URL should not have a compatibility redirect.');
 assert.equal(fs.existsSync(path.join(__dirname, '..', 'public', 'eaglercraft-1.21.html')), false, 'The protected static HTML should not remain publicly served.');

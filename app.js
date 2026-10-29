@@ -7,6 +7,8 @@ const http = require('http');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
+const { pipeline } = require('stream');
 const Database = require('better-sqlite3');
 const packageInfo = require('./package.json');
 const { marked } = require('marked');
@@ -118,12 +120,22 @@ app.get('/media/offline-manifest.json', (request, response) => {
   visit(offlineDir, '');
   response.json(files);
 });
-app.get('/beta-tests/3drender', (request, response) => {
+app.get('/beta-tests/3drender', (request, response, next) => {
   const user = currentUser(request);
   if (!user?.settings?.betaTools || refreshModerationStatus(user) !== 'active') return response.redirect('/');
   response.setHeader('Cache-Control', 'private, no-store');
   response.setHeader('Vary', 'Cookie');
-  return response.sendFile(path.join(__dirname, 'views', 'beta-tests', '3drender', 'index.html'));
+  const file = path.join(__dirname, 'views', 'beta-tests', '3drender', 'index.html');
+  if (request.acceptsEncodings('gzip') && !request.headers.range) {
+    response.type('html');
+    response.setHeader('Content-Encoding', 'gzip');
+    response.vary('Accept-Encoding');
+    pipeline(fs.createReadStream(file), zlib.createGzip({ level: zlib.constants.Z_BEST_SPEED }), response, (error) => {
+      if (error && !response.headersSent) next(error);
+    });
+    return;
+  }
+  return response.sendFile(file);
 });
 app.use(express.static(path.join(__dirname, 'public')));
 

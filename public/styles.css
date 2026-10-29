@@ -518,9 +518,12 @@ select {
 .account-menu-popover .menu-action {
     width: 100%;
     justify-content: flex-start;
-    color: #edf5f8
+    color: #edf5f8;
+    text-decoration: none;
 }
-
+.account-menu-popover .menu-action:hover {
+    background: rgba(255, 255, 255, .08);
+}
 .avatar {
     display: grid;
     place-items: center;
