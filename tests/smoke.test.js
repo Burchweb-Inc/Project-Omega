@@ -6,15 +6,41 @@ const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'
 const index = fs.readFileSync(path.join(__dirname, '..', 'views', 'index.ejs'), 'utf8');
 const courseView = fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'course.ejs'), 'utf8');
 const todoView = fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'todo.ejs'), 'utf8');
-const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
-const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+const app = ['app.js', 'server/configure-web.js', 'server/database.js']
+  .map((file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8'))
+  .join('\n');
+const client = ['js/shared-ui.js', 'js/course.js', 'js/todo.js', 'js/live-ui.js', 'app.js']
+  .map((file) => fs.readFileSync(path.join(__dirname, '..', 'public', file), 'utf8'))
+  .join('\n');
+const sharedUi = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'shared-ui.js'), 'utf8');
+const lockUiStyles = fs.readFileSync(path.join(__dirname, '..', 'public', 'lockui.css'), 'utf8');
+const pagesStyles = fs.readFileSync(path.join(__dirname, '..', 'public', 'pages.css'), 'utf8');
 
 assert.ok(pkg.dependencies['better-sqlite3'], 'Better SQLite should be installed for secure persistent storage.');
 assert.match(index, /<script src="\/app\.js"><\/script>/, 'The page should load the client-side auth tab script.');
+assert.match(index, /socket\.io\/socket\.io\.js[\s\S]*js\/shared-ui\.js[\s\S]*js\/course\.js[\s\S]*js\/todo\.js[\s\S]*js\/live-ui\.js[\s\S]*\/app\.js/, 'Client feature scripts should load in dependency order.');
+assert.match(sharedUi, /querySelector\('i, svg'\)[\s\S]*icon\.replaceWith\(placeholder\)/, 'Sidebar toggles should replace rendered Lucide SVGs when changing icons.');
+assert.match(sharedUi, /element\.animate\(\[[\s\S]*offsetX/, 'Desktop sidebar contents should animate between layouts.');
+assert.match(sharedUi, /prefers-reduced-motion:\s*reduce/, 'Sidebar layout animation should respect reduced-motion preferences.');
+assert.match(lockUiStyles, /grid-template-columns \.54s cubic-bezier/, 'The sidebar grid should use a smooth, eased width transition.');
+assert.match(lockUiStyles, /\.sidebar \{ z-index: 6; min-width: 0; overflow: visible;/, 'The desktop sidebar should allow its account menu to extend beyond the collapsed rail.');
+assert.match(lockUiStyles, /\.sidebar-collapsed \.nav-link, \.sidebar-collapsed \.space-link, \.sidebar-collapsed \.new-space \{ justify-content: center; gap: 0; padding-right: 0; padding-left: 0;/, 'Collapsed navigation icons should remain centered in their links.');
+assert.match(lockUiStyles, /\.sidebar-collapsed \.sidebar-foot \{ align-items: center; width: 100%; box-sizing: border-box;/, 'The collapsed account footer should align to the sidebar rail width.');
+assert.match(lockUiStyles, /\.sidebar-collapsed \.user-chip \{ flex: none; justify-content: center; gap: 0; width: 100%;/, 'The collapsed avatar should center independently of its hidden text.');
+assert.match(lockUiStyles, /\.sidebar-collapsed \.account-menu\[open\] \{ z-index: 31; \}/, 'The open account menu should stack above collapsed sidebar content.');
+assert.match(lockUiStyles, /\.sidebar-collapsed \.account-menu-popover \{ right: auto; bottom: 0; left: calc\(100% \+ 10px\); z-index: 32;/, 'The collapsed account menu should open beyond the rail.');
 assert.match(index, /\['about', 'support', 'privacy', 'terms', 'understand', 'beta'\]/, 'Public information pages should render through the shared shell.');
 assert.match(courseView, /inline-create-form.*hidden/, 'The inline event form should stay hidden until the Create event action is triggered.');
 assert.match(todoView, /data-live-todo-form/, 'The personal todo add form should be wired for browser-side updates.');
 assert.match(todoView, /toggle-task-form/, 'The personal todo should support browser-side add/toggle updates without a full page refresh.');
+assert.match(sharedUi, /function captureTaskListPositions/, 'Task insertion should capture existing item positions before the new item is inserted.');
+assert.match(sharedUi, /function animateTaskListPositions[\s\S]*rippleFrom/, 'Task insertions should ripple existing items and animate the new entry.');
+assert.match(sharedUi, /function animateTaskComposer/, 'Task creation forms should animate open and closed.');
+assert.match(client, /function insertCourseFeedItem[\s\S]*animateTaskListPositions/, 'Course items should share the insertion animation for local and live creation.');
+assert.match(client, /function insertBreakoutTask[\s\S]*animateTaskListPositions/, 'Breakout tasks should share the insertion animation for local and live creation.');
+assert.match(client, /todo:task-added[\s\S]*animateTaskListPositions/, 'Personal tasks should animate when created in another live session.');
+assert.match(pagesStyles, /\.task-creation-pending/, 'Task creation forms should show a subtle in-progress state.');
+assert.match(todoView, /aria-modal="true" aria-labelledby="quick-task-title"/, 'The personal task composer should expose an accessible dialog label.');
 assert.match(app, /items\/reorder/, 'Course tasks should have a reorder endpoint.');
 assert.match(client, /course:items-reordered/, 'Course task reordering should update live over websockets.');
 assert.match(client, /response\.redirected/, 'Client navigation should not render redirected content at the requested URL.');
@@ -43,7 +69,7 @@ assert.match(app, /site-admin\/users\/:id\/delete/, 'Site admins should be able 
 assert.match(app, /settings\?\.betaTools/, 'The beta test page should require beta tools access.');
 assert.match(app, /createGzip\(\{ level: zlib\.constants\.Z_BEST_SPEED \}\)/, 'The large beta app should stream with fast gzip compression.');
 assert.match(app, /pipeline\(fs\.createReadStream\(file\)/, 'The beta app should stream rather than buffer its HTML.');
-assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'sidebar.ejs'), 'utf8'), /Beta access<\/summary><a class="menu-action" href="\/beta-tests\/3drender"><i data-lucide="box"><\/i> 3D Render test<\/a>/, 'Beta tools should be available from a submenu in the account menu.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'sidebar.ejs'), 'utf8'), /Beta access<\/summary><a class="lui-menu-action" href="\/beta-tests\/3drender"><i data-lucide="box"><\/i> 3D Render test<\/a>/, 'Beta tools should be available from a submenu in the account menu.');
 assert.doesNotMatch(app, /eaglercraft-1\.21\.html/, 'The old public app URL should not have a compatibility redirect.');
 assert.equal(fs.existsSync(path.join(__dirname, '..', 'public', 'eaglercraft-1.21.html')), false, 'The protected static HTML should not remain publicly served.');
 assert.equal(fs.existsSync(path.join(__dirname, '..', 'views', 'beta-tests', '3drender', 'index.html')), true, 'The protected static HTML should be moved under views.');
@@ -54,7 +80,7 @@ assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'wa
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'moderation', 'comments.js'), 'utf8'), /\['admin', 'moderator'\]/, 'Reports should notify admins and moderators.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /reported-content/, 'Reports should show the reported content.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'moderation', 'comments.js'), 'utf8'), /successMessage: 'Report submitted/, 'Report submission should return a success message.');
-assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), /notification:added/, 'Notifications should arrive over websockets.');
+assert.match(client, /notification:added/, 'Notifications should arrive over websockets.');
 assert.match(app, /notifications\/:notificationId\/read/, 'Users should be able to mark notifications read.');
 assert.match(app, /members\/:userId\/repercussion/, 'Admins should have member conduct actions.');
 assert.match(app, /members\/:userId\/access/, 'Admins should be able to change member access.');
@@ -63,7 +89,7 @@ assert.match(app, /groups\/:id\/invitation\/:action/, 'Group invitations should 
 assert.match(app, /group-invite/, 'Group invitations should notify the invited user.');
 assert.match(app, /org\/:id\/leave/, 'Group members should be able to leave a group.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'org.ejs'), 'utf8'), /data-leave-group-trigger/, 'Group home should expose a leave action.');
-assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), /showLeaveGroupModal/, 'Leaving a group should require a warning confirmation.');
+assert.match(client, /showLeaveGroupModal/, 'Leaving a group should require a warning confirmation.');
 assert.match(app, /site-admin\/groups\/:id\/suspension/, 'Site admins should be able to suspend and unsuspend groups.');
 assert.match(app, /site-admin\/groups\/:id\/delete/, 'Site admins should be able to delete suspended groups.');
 assert.match(app, /suspendedAt/, 'Group suspension should persist indefinitely.');
@@ -82,10 +108,10 @@ assert.match(app, /member\.role === 'moderator' && !\['mod', 'report'\]/, 'Moder
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'people.ejs'), 'utf8'), /Ban permanently/, 'People should expose permanent bans.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'people.ejs'), 'utf8'), /Update access/, 'People should expose access changes.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'topbar.ejs'), 'utf8'), /notification-popover/, 'The topbar should expose notifications.');
-assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'course.ejs'), 'utf8'), /filter\(comment => !comment\.reported\)\.length/, 'Comment counts should exclude removed or reported comments.');
-assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), /notification-waterfall-out/, 'Notification dismissal should animate out.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'course.ejs'), 'utf8'), /filter\(comment\s*=>\s*!comment\.reported\)\.length/, 'Comment counts should exclude removed or reported comments.');
+assert.match(client, /notification-waterfall-out/, 'Notification dismissal should animate out.');
 assert.match(client, /data-report-queue/, 'Acted-on site admin reports should disappear and update the empty state live.');
-assert.match(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8'), /notification-item\.unread/, 'Notification reads should update the UI live.');
+assert.match(client, /notification-item\.unread/, 'Notification reads should update the UI live.');
 assert.match(app, /app\.get\('\/privacy'/, 'The privacy policy should have a public route.');
 assert.match(app, /app\.get\('\/terms'/, 'The terms should have a public route.');
 assert.match(app, /app\.get\('\/beta'/, 'The beta page should have a public route.');

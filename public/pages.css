@@ -1131,6 +1131,16 @@
     border-radius: 8px
 }
 
+.inline-create-form,
+.task-add-form {
+    transition: opacity .24s ease, transform .24s ease
+}
+
+.task-creation-pending {
+    opacity: .78;
+    transform: translateY(-1px)
+}
+
 .inline-create-close {
     position: absolute;
     top: 8px;

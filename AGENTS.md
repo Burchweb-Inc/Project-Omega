@@ -1,5 +1,14 @@
 # General Web Dev instructions
 
+## Project organization
+
+- Keep `app.js` as the server composition root. Extract endpoint groups into domain routers incrementally; put database connection setup and Express/static middleware in `server/`.
+- Keep feature-owned routes and persistence together by domain: `users/`, `org/`, `calendar/`, and `moderation/`. Put cross-cutting integrations and pure helpers in `utils/`.
+- Keep browser behavior under `public/js/`, grouped by responsibility: `shared-ui.js` for shared controls and utilities, `course.js` for course/breakout behavior, `todo.js` for personal tasks, and `live-ui.js` for live forms, notifications, and dashboard interactions. `public/app.js` is the final client initializer and navigation layer.
+- Preserve the script order in `views/index.ejs`: Socket.IO first, then shared UI, course, todo, live UI, and finally `app.js`. These are classic scripts so feature files can use shared browser functions and state; define cross-file globals in `shared-ui.js` and keep feature-specific state local.
+- Keep EJS page composition in `views/` and reusable fragments in `views/partials/`; keep browser-specific page styling in the existing `public/*.css` files.
+- When extracting responsibilities from a large entry point, preserve the current route paths and user-visible behavior, update callers and tests in the same change, and avoid moving an entity's SQL into another feature's module.
+
 AI models always like to do certain things when making a website.
 Since you are an AI model, follow these instructions carefully OR ELSE.
 Before you even begin to write a line of code, think about it, even if you don’t have reasoning mode on. Think about what the user wants. Think about what visitors to the site want. Make something that people will remember, not a bland SaaS startup, unless specified by the user.
@@ -61,4 +70,4 @@ ALWAYS ask questions if needed. ALWAYS!
 - Keep controls accessible: use native buttons/links, associated labels, meaningful accessible names, correct roles and ARIA state for interactive widgets, and visible keyboard focus. Decorative icons should be hidden from assistive technology when the control already has an accessible name.
 - Menus and popovers should use LockUI panel/action styles and support dismissal by outside click and Escape. Animate both opening and closing without abrupt removal or display toggles that skip the exit transition; respect reduced-motion preferences.
 - Avoid colored shadows, glow effects, redundant eyebrow labels, and descriptions that merely restate obvious headings. Follow the existing LockUI palette, spacing, and motion patterns.
-- Keep behavior in the existing shared client-side code in `public/app.js` when a component needs JavaScript. Use stable `data-*` hooks, initialize dynamically rendered controls consistently, and avoid embedding behavior-specific scripts in EJS templates.
+- Keep behavior in the appropriate client-side feature file under `public/js/` when a component needs JavaScript. Use stable `data-*` hooks, initialize dynamically rendered controls consistently, and avoid embedding behavior-specific scripts in EJS templates.

@@ -42,11 +42,11 @@
                     </div>
                     <% } %>
     </section>
-    <div id="quick-task" class="modal-backdrop">
-        <div class="modal-card"><button class="lui-icon-button modal-close" data-close aria-label="Close" type="button"><i
+    <div id="quick-task" class="modal-backdrop" aria-hidden="true" aria-labelledby="quick-task-title">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="quick-task-title"><button class="lui-icon-button modal-close" data-close aria-label="Close" type="button"><i
                     data-lucide="x"></i></button>
             <p class="eyebrow">PERSONAL TASK</p>
-            <h2>Keep one more thing visible.</h2>
+            <h2 id="quick-task-title">Keep one more thing visible.</h2>
             <form class="page-form link-composer" action="/tasks" method="post" data-live-form data-live-todo-form data-link-composer><label>Task<input
                         name="title" placeholder="Review chapter notes" required></label><label>Details<textarea name="details" rows="4" placeholder="What needs to be done?"></textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Due date<input
                         name="due" type="date"></label><label>Priority<select name="priority">

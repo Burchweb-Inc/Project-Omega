@@ -7,9 +7,6 @@ const http = require('http');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const zlib = require('zlib');
-const { pipeline } = require('stream');
-const Database = require('better-sqlite3');
 const packageInfo = require('./package.json');
 const { marked } = require('marked');
 const sanitizeHtml = require('sanitize-html');
@@ -28,15 +25,7 @@ const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || '0.0.0.0';
 const serviceWorkerVersion = 'lockin-sw-20261004-1';
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
-const dbPath = path.join(dataDir, 'studyline.db');
-
-fs.mkdirSync(dataDir, { recursive: true });
-fs.chmodSync(dataDir, 0o700);
-
-const db = new Database(dbPath);
-fs.chmodSync(dbPath, 0o600);
-db.pragma('foreign_keys = ON');
-db.pragma('journal_mode = WAL');
+const db = require('./server/database')(dataDir);
 
 const userModel = require('./users/model')(db); // user table and functions to access it are imported here
 const orgModel = require('./org/model')(db);
@@ -83,61 +72,12 @@ db.prepare(`CREATE TABLE IF NOT EXISTS bad_word_review_logs (
 )`).run();
 db.prepare('DELETE FROM bad_word_review_logs WHERE id NOT IN (SELECT id FROM bad_word_review_logs ORDER BY created_at DESC LIMIT 10)').run();
 
-app.set('view engine', 'ejs');
-app.use(express.urlencoded({ extended: true }));
-app.disable('x-powered-by');
-app.use((request, response, next) => {
-  response.setHeader('X-Content-Type-Options', 'nosniff');
-  response.setHeader('X-Frame-Options', 'DENY');
-  response.setHeader('Referrer-Policy', 'same-origin');
-  response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  next();
+require('./server/configure-web')(app, {
+  rootDir: __dirname,
+  serviceWorkerVersion,
+  currentUser,
+  refreshModerationStatus
 });
-app.get('/service-worker-version.json', (request, response) => {
-  response.setHeader('Cache-Control', 'no-store, max-age=0');
-  response.json({ version: serviceWorkerVersion });
-});
-app.get('/service-worker.js', (request, response) => {
-  response.setHeader('Cache-Control', 'no-store, max-age=0');
-  response.sendFile(path.join(__dirname, 'public', 'service-worker.js'));
-});
-app.get('/media/offline/*', (request, response, next) => {
-  response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-  next();
-});
-app.get('/media/offline-manifest.json', (request, response) => {
-  const offlineDir = path.join(__dirname, 'public', 'media', 'offline');
-  const files = [];
-  const visit = (directory, prefix) => {
-    if (!fs.existsSync(directory)) return;
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      const entryPath = path.join(directory, entry.name);
-      const entryPrefix = `${prefix}/${entry.name}`;
-      if (entry.isDirectory()) visit(entryPath, entryPrefix);
-      else files.push(`/media/offline${entryPrefix}`);
-    }
-  };
-  visit(offlineDir, '');
-  response.json(files);
-});
-app.get('/beta-tests/3drender', (request, response, next) => {
-  const user = currentUser(request);
-  if (!user?.settings?.betaTools || refreshModerationStatus(user) !== 'active') return response.redirect('/');
-  response.setHeader('Cache-Control', 'private, no-store');
-  response.setHeader('Vary', 'Cookie');
-  const file = path.join(__dirname, 'views', 'beta-tests', '3drender', 'index.html');
-  if (request.acceptsEncodings('gzip') && !request.headers.range) {
-    response.type('html');
-    response.setHeader('Content-Encoding', 'gzip');
-    response.vary('Accept-Encoding');
-    pipeline(fs.createReadStream(file), zlib.createGzip({ level: zlib.constants.Z_BEST_SPEED }), response, (error) => {
-      if (error && !response.headersSent) next(error);
-    });
-    return;
-  }
-  return response.sendFile(file);
-});
-app.use(express.static(path.join(__dirname, 'public')));
 
 const sessions = new Map();
 const snarkyTypePending = new Map();
