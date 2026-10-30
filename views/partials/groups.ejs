@@ -3,7 +3,7 @@
         <div>
             <h1>Groups</h1>
             <p class="lead">Administrative homes for your people, settings, visibility, and courses.</p>
-        </div><a class="button primary" href="/group/new"><i data-lucide="plus"></i> Create group</a>
+        </div><a class="lui-button lui-button-primary" href="/group/new"><i data-lucide="plus"></i> Create group</a>
     </div>
     <div class="group-grid">
         <% groups.forEach(group=> { const isPending = Boolean(group.pendingInvite); %><article class="group-card">
@@ -30,10 +30,10 @@
                 <div class="group-actions">
                     <% if (isPending) { %>
                         <form data-live-form action="/groups/<%= group.id %>/invitation/accept" method="post"><button
-                                class="button primary" type="submit"><i data-lucide="check"></i> Accept</button></form>
+                                class="lui-button lui-button-primary" type="submit"><i data-lucide="check"></i> Accept</button></form>
                         <form data-live-form action="/groups/<%= group.id %>/invitation/deny" method="post"><button
-                                class="button secondary" type="submit"><i data-lucide="x"></i> Deny</button></form>
-                        <% } else { %><a class="button secondary" href="/group/<%= group.slug || group.id %>">Open
+                                class="lui-button lui-button-secondary" type="submit"><i data-lucide="x"></i> Deny</button></form>
+                        <% } else { %><a class="lui-button lui-button-secondary" href="/group/<%= group.slug || group.id %>">Open
                                 group</a>
                             <% if (group.members.find(member=> member.userId === user.id)?.role === 'admin') { %><a
                                     class="icon-link" href="/org/<%= group.id %>/settings"
@@ -47,7 +47,7 @@
                 <% if (!groups.length) { %>
                     <div class="empty-panel"><i data-lucide="users-round"></i>
                         <h3>Create your first group</h3>
-                        <p>Keep people, privacy, and course folders together.</p><a class="button primary"
+                        <p>Keep people, privacy, and course folders together.</p><a class="lui-button lui-button-primary"
                             href="/group/new">Create group</a>
                     </div>
                     <% } %>

@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/lockui.css">
   <title>LockIn | <%= status %></title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -79,30 +80,15 @@
       color: var(--ink-soft);
       line-height: 1.6;
     }
-    .button {
-      display: inline-flex;
-      min-height: 42px;
-      align-items: center;
-      justify-content: center;
-      padding: 0 18px;
-      color: white;
-      background: var(--blue);
-      border: 0;
-      font-weight: 700;
-      text-decoration: none;
-      transition: background .2s, transform .2s;
-    }
-    .button:hover { background: var(--ink); transform: translateY(-2px); }
-    .button:focus-visible { outline: 3px solid rgba(232, 111, 81, .45); outline-offset: 3px; }
   </style>
 </head>
 <body>
-  <main>
+  <main class="lui-panel">
     <a class="wordmark" href="/" aria-label="LockIn home">LockIn</a>
     <p class="status" aria-label="Error <%= status %>"><%= status %></p>
     <h1><%= title %></h1>
     <p><%= message %></p>
-    <a class="button" href="/">Back to LockIn</a>
+    <a class="lui-button lui-button-primary" href="/">Back to LockIn</a>
   </main>
 </body>
 </html>

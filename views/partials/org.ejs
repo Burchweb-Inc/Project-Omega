@@ -17,10 +17,10 @@
             </div>
         </div>
         <div class="group-home-actions">
-            <% if (member?.role==='admin' ) { %><a class="button secondary" href="/org/<%= selectedOrg.id %>/settings"><i
+            <% if (member?.role==='admin' ) { %><a class="lui-button lui-button-secondary" href="/org/<%= selectedOrg.id %>/settings"><i
                         data-lucide="settings-2"></i> Manage group</a>
                 <% } %>
-            <% if (member) { %><details class="group-menu"><summary class="icon-button" aria-label="More group actions" title="More group actions"><i data-lucide="more-horizontal"></i></summary><div class="group-menu-popover"><form action="/org/<%= selectedOrg.id %>/leave" method="post" data-leave-group-form><button class="menu-action danger" type="button" data-leave-group-trigger><i data-lucide="log-out"></i> Leave Group</button></form><% if (member.role === 'admin') { %><form action="/org/<%= selectedOrg.id %>/delete" method="post" data-live-form data-confirm-message="Delete this group permanently? This cannot be undone."><button class="menu-action danger" type="submit"><i data-lucide="trash-2"></i> Delete group</button></form><% } %></div></details><% } %>
+            <% if (member) { %><details class="group-menu"><summary class="lui-icon-button" aria-label="More group actions" title="More group actions"><i data-lucide="more-horizontal"></i></summary><div class="group-menu-popover"><form action="/org/<%= selectedOrg.id %>/leave" method="post" data-leave-group-form><button class="lui-menu-action lui-menu-action-danger" type="button" data-leave-group-trigger><i data-lucide="log-out"></i> Leave Group</button></form><% if (member.role === 'admin') { %><form action="/org/<%= selectedOrg.id %>/delete" method="post" data-live-form data-confirm-message="Delete this group permanently? This cannot be undone."><button class="lui-menu-action lui-menu-action-danger" type="submit"><i data-lucide="trash-2"></i> Delete group</button></form><% } %></div></details><% } %>
         </div>
     </div>
     <div class="space-nav"><a class="active" href="/org/<%= selectedOrg.id %>">Courses <span>
@@ -33,7 +33,7 @@
             <p class="eyebrow">COURSES IN THIS GROUP</p>
             <h2>Each subject gets its own folder.</h2>
         </div>
-        <% if (canEdit(member)) { %><a class="text-button" href="/org/<%= selectedOrg.id %>/courses/new"><i
+        <% if (canEdit(member)) { %><a class="lui-link" href="/org/<%= selectedOrg.id %>/courses/new"><i
                     data-lucide="plus"></i> Add course</a>
             <% } %>
     </div>
@@ -63,7 +63,7 @@
                 <% if (!selectedOrg.courses.length) { %>
                     <div class="empty-panel"><i data-lucide="book-open"></i>
                         <h3>No courses yet</h3>
-                        <p>Add the first course folder to this group.</p><a class="button primary"
+                        <p>Add the first course folder to this group.</p><a class="lui-button lui-button-primary"
                             href="/org/<%= selectedOrg.id %>/courses/new">Add course</a>
                     </div>
                     <% } %>

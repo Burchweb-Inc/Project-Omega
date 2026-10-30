@@ -20,7 +20,7 @@
 %>
 <div id="task-sync-modal" class="modal-backdrop task-sync-modal <%= integrationStatus ? 'open' : '' %>" data-task-sync-modal>
     <section class="modal-card task-sync-card" role="dialog" aria-modal="true" aria-labelledby="task-sync-title" aria-describedby="task-sync-description">
-        <button class="modal-close" data-close aria-label="Close task sync settings" type="button"><i data-lucide="x"></i></button>
+        <button class="lui-icon-button modal-close" data-close aria-label="Close task sync settings" type="button"><i data-lucide="x"></i></button>
         <h2 id="task-sync-title">Task sync</h2>
         <p id="task-sync-description" class="task-sync-intro">LockIn pushes task changes and deletions to connected tools. Edits in Google Tasks or Reminders do not sync back.</p>
         <% if (!taskSyncConfigured) { %><p class="task-sync-status task-sync-error" role="status">Task syncing is disabled until these environment values are set: <%= taskSyncMissingConfig %>.</p><% } %>
@@ -33,9 +33,9 @@
                 <div class="task-sync-connection-actions">
                     <% if (googleTasksConnected) { %>
                         <span class="task-sync-connected">Connected</span>
-                        <form action="/integrations/google/disconnect" method="post"><button class="text-button" type="submit">Disconnect</button></form>
+                        <form action="/integrations/google/disconnect" method="post"><button class="lui-link" type="submit">Disconnect</button></form>
                     <% } else if (taskSyncConfigured && googleTasksConfigured) { %>
-                        <a class="button secondary" href="/integrations/google/connect"><i data-lucide="link"></i> Connect Google</a>
+                        <a class="lui-button lui-button-secondary" href="/integrations/google/connect"><i data-lucide="link"></i> Connect Google</a>
                     <% } else { %>
                         <span class="fine-print"><%= googleTasksConfigured ? 'Task sync ENV configuration is incomplete.' : 'Google OAuth is not configured.' %></span>
                     <% } %>
@@ -44,12 +44,12 @@
             <article class="task-sync-connection">
                 <div><h3>Apple Reminders</h3><p><%= appleRemindersConnected ? `Connected as ${appleRemindersUsername}.` : 'Use your Apple ID and an app-specific password.' %></p></div>
                 <% if (appleRemindersConnected) { %>
-                    <div class="task-sync-connection-actions"><span class="task-sync-connected">Connected</span><form action="/integrations/apple/disconnect" method="post"><button class="text-button" type="submit">Disconnect</button></form></div>
+                    <div class="task-sync-connection-actions"><span class="task-sync-connected">Connected</span><form action="/integrations/apple/disconnect" method="post"><button class="lui-link" type="submit">Disconnect</button></form></div>
                 <% } %>
                 <form class="task-sync-apple-form" action="/integrations/apple/connect" method="post">
                     <label>Apple ID<input name="username" type="email" autocomplete="username" value="<%= appleRemindersUsername %>" <%= taskSyncConfigured ? '' : 'disabled' %> required></label>
                     <label>App-specific password<input name="appSpecificPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" <%= taskSyncConfigured ? '' : 'disabled' %> required></label>
-                    <button class="button secondary" type="submit" <%= taskSyncConfigured ? '' : 'disabled' %>><%= appleRemindersConnected ? 'Update Apple connection' : 'Connect Apple' %></button>
+                    <button class="lui-button lui-button-secondary" type="submit" <%= taskSyncConfigured ? '' : 'disabled' %>><%= appleRemindersConnected ? 'Update Apple connection' : 'Connect Apple' %></button>
                     <small>Password is encrypted in LockIn and never displayed again. Create one at <a href="https://account.apple.com/" target="_blank" rel="noopener noreferrer">account.apple.com</a>.</small>
                 </form>
             </article>
@@ -57,7 +57,7 @@
 
         <div class="task-sync-controls">
             <form action="/integrations/sync" method="post">
-                <button class="button primary" type="submit" <%= taskSyncConfigured && (googleTasksConnected || appleRemindersConnected) ? '' : 'disabled' %>><i data-lucide="refresh-cw"></i> Sync now</button>
+                <button class="lui-button lui-button-primary" type="submit" <%= taskSyncConfigured && (googleTasksConnected || appleRemindersConnected) ? '' : 'disabled' %>><i data-lucide="refresh-cw"></i> Sync now</button>
             </form>
             <form class="task-sync-schedule-form" action="/integrations/sync/schedule" method="post">
                 <label for="task-sync-schedule">Automatic sync</label>
@@ -68,7 +68,7 @@
                     <option value="day" <%= taskSyncSettings.schedule === 'day' ? 'selected' : '' %>>Every 24 hours</option>
                     <option value="week" <%= taskSyncSettings.schedule === 'week' ? 'selected' : '' %>>Every week</option>
                 </select>
-                <button class="button secondary" type="submit" <%= taskSyncConfigured ? '' : 'disabled' %>>Save schedule</button>
+                <button class="lui-button lui-button-secondary" type="submit" <%= taskSyncConfigured ? '' : 'disabled' %>>Save schedule</button>
             </form>
         </div>
     </section>

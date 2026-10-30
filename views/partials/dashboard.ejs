@@ -205,7 +205,7 @@
       <h1 class="hero">Make today easier to carry.</h1>
       <p class="lead">Hey, <%= user.name %>, ready to get some work done?</p>
     </div>
-    <a class="button primary spbtn" href="/org/new"><i data-lucide="plus"></i> New Group</a>
+    <a class="spbtn lui-button lui-button-primary" href="/org/new"><i data-lucide="plus"></i> New Group</a>
   </div>
 
   <nav class="dashboard-tabs" aria-label="Dashboard sections">
@@ -230,7 +230,7 @@
               <p class="eyebrow">LIVE FROM YOUR SPACES</p>
               <h2>Course activity</h2>
             </div>
-            <a class="text-button" href="/calendar">View calendar <i data-lucide="arrow-up-right"></i></a>
+            <a class="lui-link" href="/calendar">View calendar <i data-lucide="arrow-up-right"></i></a>
           </div>
           <div class="feed-list">
             <% feedItems.forEach(entry => { %>
@@ -254,7 +254,7 @@
               <div class="empty-panel"><i data-lucide="layers-2"></i>
                 <h3>Your course feed starts here</h3>
                 <p>Add a course and post the first deadline for your classmates.</p>
-                <a class="button secondary" href="/org/new">Create a study space</a>
+                <a class="lui-button lui-button-secondary" href="/org/new">Create a study space</a>
               </div>
             <% } %>
           </div>
@@ -294,7 +294,7 @@
               <i data-lucide="users-round"></i>
             </div>
             <p>Split project work, claim responsibilities, and keep the shared deadline visible.</p>
-            <a class="button secondary" href="/groups">Explore groups</a>
+            <a class="lui-button lui-button-secondary" href="/groups">Explore groups</a>
           </section>
         </aside>
       </div>
@@ -313,7 +313,7 @@
               <small><%= org.members?.length || 0 %> members · <%= org.groups?.length || 0 %> breakout groups</small>
             </div>
             <div class="group-actions">
-              <a class="button secondary" href="/group/<%= org.slug || org.id %>">Visit group</a>
+              <a class="lui-button lui-button-secondary" href="/group/<%= org.slug || org.id %>">Visit group</a>
             </div>
           </article>
         <% }) %>
@@ -331,10 +331,10 @@
               <% if (comment.editedAt) { %><small class="comment-edited">Edited <%= new Date(comment.editedAt).toLocaleString() %></small><% } %>
               <div class="mod-actions moderation-actions">
                 <form data-live-form action="/org/<%= comment.orgId %>/admin/comments/<%= comment.id %>/review" method="post">
-                  <button class="button primary" type="submit"><i data-lucide="check"></i> Keep and mark reviewed</button>
+                  <button class="lui-button lui-button-primary" type="submit"><i data-lucide="check"></i> Keep and mark reviewed</button>
                 </form>
                 <form data-live-form action="/org/<%= comment.orgId %>/admin/comments/<%= comment.id %>/remove" method="post">
-                  <button class="button danger" type="submit"><i data-lucide="trash-2"></i> Remove</button>
+                  <button class="lui-button lui-button-danger" type="submit"><i data-lucide="trash-2"></i> Remove</button>
                 </form>
               </div>
             </article>

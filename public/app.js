@@ -4,6 +4,406 @@ document.body.appendChild(routeProgress);
 
 const liveState = { socket: null, notificationSocket: null, pending: new Map(), dashboardHeroTimer: null, dashboardHeroFadeTimer: null };
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+const popupMenuSelector = '.notification-menu, .account-menu, .group-menu, .task-menu, .comment-menu, .reply-details, .member-actions, .create-breakout-details, .task-edit-details, .priority-menu';
+const popupDetailsSelector = 'details.notification-menu, details.account-menu, details.group-menu, details.task-menu, details.comment-menu, details.reply-details, details.member-actions, details.create-breakout-details, details.task-edit-details';
+
+function decoratePopupMenu(menu) {
+  menu.classList.add('lui-menu');
+  const panel = menu.matches('.timezone-picker')
+    ? menu.querySelector(':scope > [data-timezone-panel]')
+    : menu.querySelector(':scope > .notification-popover, :scope > .account-menu-popover, :scope > .group-menu-popover, :scope > .task-menu-popover, :scope > .comment-menu-popover, :scope > .reply-form, :scope > .member-actions-popover, :scope > .breakout-create-form, :scope > .task-edit-form, :scope > .priority-options');
+  panel?.classList.add('lui-menu-panel');
+  menu.querySelector(':scope > summary, :scope > .priority-flag, :scope > [data-timezone-trigger]')?.classList.add('lui-menu-trigger');
+  return panel;
+}
+
+const popupMenuAnimations = new WeakMap();
+const popupMenuMotion = {
+  opening: [{ opacity: 0, transform: 'translateY(-4px) scale(.985)', filter: 'blur(1.5px)' }, { opacity: 1, transform: 'translateY(0) scale(1)', filter: 'blur(0)' }],
+  closing: [{ opacity: 1, transform: 'translateY(0) scale(1)', filter: 'blur(0)' }, { opacity: 0, transform: 'translateY(-2px) scale(.99)', filter: 'blur(1.5px)' }]
+};
+
+function animatePopupMenu(menu, panel, opening) {
+  const previousAnimation = popupMenuAnimations.get(menu);
+  const currentStyle = previousAnimation && panel ? getComputedStyle(panel) : null;
+  previousAnimation?.cancel();
+  popupMenuAnimations.delete(menu);
+  if (!panel || window.matchMedia('(prefers-reduced-motion: reduce)').matches || typeof panel.animate !== 'function') {
+    if (panel) panel.style.willChange = '';
+    return null;
+  }
+  const motion = popupMenuMotion[opening ? 'opening' : 'closing'];
+  const keyframes = currentStyle
+    ? [{ opacity: currentStyle.opacity, transform: currentStyle.transform, filter: currentStyle.filter }, motion[1]]
+    : motion;
+  const animation = panel.animate(keyframes, {
+    duration: opening ? 220 : 155,
+    easing: 'cubic-bezier(.2,.7,.25,1)',
+    fill: 'both'
+  });
+  panel.style.willChange = 'opacity, transform, filter';
+  popupMenuAnimations.set(menu, animation);
+  animation.finished.then(() => {
+    if (popupMenuAnimations.get(menu) !== animation) return;
+    popupMenuAnimations.delete(menu);
+    panel.style.willChange = '';
+    animation.cancel();
+  }, () => {
+    if (popupMenuAnimations.get(menu) !== animation) return;
+    popupMenuAnimations.delete(menu);
+    panel.style.willChange = '';
+  });
+  return animation;
+}
+
+function closePopupMenu(menu, restoreFocus = false) {
+  if (!menu) return;
+  const panel = decoratePopupMenu(menu);
+  if (menu.matches('.timezone-picker')) {
+    if (!menu.classList.contains('open') || menu.classList.contains('menu-closing')) return;
+    const trigger = menu.querySelector('[data-timezone-trigger]');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) trigger?.focus();
+    menu.classList.add('menu-closing');
+    if (!animatePopupMenu(menu, panel, false)) {
+      menu.classList.remove('open', 'menu-closing');
+      if (panel) panel.hidden = true;
+      return;
+    }
+    popupMenuAnimations.get(menu).finished.then(() => {
+      if (!menu.classList.contains('menu-closing')) return;
+      menu.classList.remove('open', 'menu-closing');
+      if (panel) panel.hidden = true;
+      if (panel) panel.inert = false;
+    }, () => {});
+    if (panel) panel.inert = true;
+    return;
+  }
+  const isPriorityMenu = menu.matches('.priority-menu');
+  if (isPriorityMenu ? !menu.classList.contains('open') || menu.classList.contains('menu-closing') : !menu.open || menu.classList.contains('menu-closing')) return;
+  menu.querySelector(':scope > summary, :scope > .priority-flag')?.setAttribute('aria-expanded', 'false');
+  if (restoreFocus) menu.querySelector(':scope > summary, :scope > .priority-flag')?.focus();
+  menu.classList.add('menu-closing');
+  if (!animatePopupMenu(menu, panel, false)) {
+    if (isPriorityMenu) menu.classList.remove('open');
+    else menu.open = false;
+    menu.classList.remove('menu-closing');
+    return;
+  }
+  if (panel) panel.inert = true;
+  popupMenuAnimations.get(menu).finished.then(() => {
+    if (!menu.classList.contains('menu-closing')) return;
+    if (isPriorityMenu) menu.classList.remove('open');
+    else menu.open = false;
+    menu.classList.remove('menu-closing');
+    if (panel) panel.inert = false;
+  }, () => {});
+}
+
+function openPopupMenu(menu) {
+  document.querySelectorAll(popupMenuSelector).forEach((other) => {
+    if (other !== menu) closePopupMenu(other);
+  });
+  document.querySelectorAll('.timezone-picker.open').forEach((other) => closePopupMenu(other));
+  const panel = decoratePopupMenu(menu);
+  menu.classList.remove('menu-closing');
+  if (panel) panel.inert = false;
+  if (menu.matches('.priority-menu, .timezone-picker')) menu.classList.add('open');
+  else menu.open = true;
+  menu.querySelector(':scope > summary, :scope > .priority-flag')?.setAttribute('aria-expanded', 'true');
+  animatePopupMenu(menu, panel, true);
+}
+
+function bindPopupMenus() {
+  document.querySelectorAll(popupMenuSelector).forEach((menu) => {
+    decoratePopupMenu(menu);
+    const trigger = menu.querySelector(':scope > summary, :scope > .priority-flag');
+    if (trigger) trigger.setAttribute('aria-expanded', String(menu.matches('.priority-menu') ? menu.classList.contains('open') : menu.open));
+  });
+  if (document.body.dataset.popupMenusBound) return;
+  document.body.dataset.popupMenusBound = 'true';
+  document.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) return;
+    const summary = event.target.closest('summary');
+    const detailMenu = summary?.parentElement;
+    if (summary && detailMenu?.matches(popupMenuSelector) && detailMenu.firstElementChild === summary) {
+      event.preventDefault();
+      if (detailMenu.classList.contains('menu-closing')) openPopupMenu(detailMenu);
+      else if (detailMenu.open) closePopupMenu(detailMenu);
+      else openPopupMenu(detailMenu);
+      return;
+    }
+    if (!event.target.closest('.priority-menu')) {
+      document.querySelectorAll('.priority-menu.open').forEach((menu) => closePopupMenu(menu));
+    }
+    if (!event.target.closest('.timezone-picker')) {
+      document.querySelectorAll('.timezone-picker.open').forEach((menu) => closePopupMenu(menu));
+    }
+    document.querySelectorAll(popupDetailsSelector).forEach((menu) => {
+      if (!menu.contains(event.target)) closePopupMenu(menu);
+    });
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const openMenu = [...document.querySelectorAll(`${popupMenuSelector}, .timezone-picker.open`)].reverse().find((menu) => menu.matches('.priority-menu, .timezone-picker') ? menu.classList.contains('open') : menu.open);
+    if (!openMenu) return;
+    event.preventDefault();
+    closePopupMenu(openMenu, true);
+  });
+}
+
+function showLockUiStatus(message) {
+  const status = document.querySelector('[data-lui-status]');
+  if (!status) return;
+  status.textContent = message;
+  status.classList.add('is-visible');
+  window.clearTimeout(status.hideTimer);
+  status.hideTimer = window.setTimeout(() => status.classList.remove('is-visible'), 2200);
+}
+
+function decorateLockUiComponents(root = document) {
+  const decorate = (selector, callback) => {
+    if (root instanceof Element && root.matches(selector)) callback(root);
+    root.querySelectorAll(selector).forEach(callback);
+  };
+  decorate('.modal-close', (button) => button.classList.add('lui-icon-button'));
+  decorate('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]), select, textarea', (field) => {
+    field.classList.add(field.matches('select') ? 'lui-select' : field.matches('textarea') ? 'lui-textarea' : 'lui-input');
+  });
+  decorate('label', (label) => {
+    if (label.querySelector('input[type="checkbox"], input[type="radio"]') || label.matches('.course-feed-search, .toggle-row')) return;
+    if (label.querySelector('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea')) label.classList.add('lui-field');
+  });
+  decorate('[role="tablist"], .course-tabs, .admin-tabs, .dashboard-tabs', (tablist) => {
+    tablist.classList.add('lui-tabs');
+    tablist.querySelectorAll('a, button').forEach((tab) => {
+      tab.classList.add('lui-tab');
+      if (tablist.matches('[role="tablist"]')) {
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-selected', String(tab.classList.contains('active') || tab.getAttribute('aria-selected') === 'true'));
+      }
+    });
+  });
+  decorate('.feed-card, .group-card, .metric-card, .mod-card, .report-row, .resource-row, .member-card, .settings-section, .setting-card', (card) => card.classList.add('lui-card'));
+  decorate('.empty-panel', (empty) => empty.classList.add('lui-empty'));
+  decorate('.avatar', (avatar) => {
+    avatar.classList.add('lui-avatar');
+    if (avatar.classList.contains('small') || avatar.classList.contains('mini')) avatar.classList.add('lui-avatar-sm');
+  });
+  decorate('.role-label, .queue-count, .nav-count, .priority-flag, .progress-ring', (status) => status.classList.add('lui-badge'));
+  decorate('.form-alert, .form-success, .auth-page-alert, .conduct-banner, .settings-tip, .group-settings-error', (alert) => {
+    alert.classList.add('lui-alert');
+    if (alert.matches('.form-success')) alert.classList.add('lui-alert-success');
+    else if (alert.matches('.group-settings-error')) alert.classList.add('lui-alert-danger');
+    else if (alert.matches('.conduct-banner')) alert.classList.add('lui-alert-warning');
+  });
+  decorate('dialog', (dialog) => dialog.classList.add('lui-dialog'));
+  decorate('.modal-card, .warning-modal, .announcement-modal, .tutorial-card', (panel) => panel.classList.add('lui-panel'));
+}
+
+let sidebarCollapsedPreference = false;
+let sidebarPreferenceLoaded = false;
+function bindSidebarToggle() {
+  const shell = document.querySelector('.app-shell');
+  const sidebar = shell?.querySelector('.sidebar');
+  if (!shell || !sidebar) return;
+  const mobileViewport = window.matchMedia('(max-width: 700px)');
+  if (!sidebarPreferenceLoaded) {
+    try {
+      sidebarCollapsedPreference = localStorage.getItem('lockin-sidebar-collapsed') === 'true';
+    } catch (error) {
+      sidebarCollapsedPreference = false;
+    }
+    sidebarPreferenceLoaded = true;
+  }
+  let collapsed = sidebarCollapsedPreference;
+  const setState = (isCollapsed, isMobileOpen = false) => {
+    shell.classList.toggle('sidebar-collapsed', isCollapsed);
+    sidebar.classList.toggle('mobile-open', isMobileOpen && mobileViewport.matches);
+    shell.classList.toggle('sidebar-mobile-open', isMobileOpen && mobileViewport.matches);
+    document.body.classList.toggle('sidebar-mobile-open', isMobileOpen && mobileViewport.matches);
+    shell.querySelectorAll('[data-sidebar-toggle]').forEach((button) => {
+      const expanded = mobileViewport.matches ? isMobileOpen : !isCollapsed;
+      const label = mobileViewport.matches
+        ? (isMobileOpen ? 'Close navigation' : 'Open navigation')
+        : (isCollapsed ? 'Expand sidebar' : 'Collapse sidebar');
+      button.setAttribute('aria-expanded', String(expanded));
+      button.setAttribute('aria-label', label);
+      button.title = label;
+      const icon = button.querySelector('i');
+      if (icon) {
+        icon.dataset.lucide = mobileViewport.matches
+          ? (isMobileOpen ? 'x' : 'menu')
+          : (isCollapsed ? 'panel-left-close' : 'panel-right-open');
+      }
+    });
+    lucide.createIcons();
+  };
+  let mobileOpen = false;
+  setState(collapsed, mobileOpen);
+  shell.querySelectorAll('[data-sidebar-toggle]').forEach((button) => {
+    button.onclick = () => {
+      if (mobileViewport.matches) {
+        mobileOpen = !mobileOpen;
+        setState(collapsed, mobileOpen);
+        if (mobileOpen) sidebar.querySelector('.sidebar-toggle')?.focus();
+        return;
+      }
+      collapsed = !collapsed;
+      sidebarCollapsedPreference = collapsed;
+      setState(collapsed, false);
+      try {
+        localStorage.setItem('lockin-sidebar-collapsed', String(collapsed));
+      } catch (error) {
+        console.warn('[LockIn] Could not save sidebar preference.', error);
+      }
+    };
+  });
+  const backdrop = shell.querySelector('[data-sidebar-close]');
+  if (backdrop) backdrop.onclick = () => {
+    mobileOpen = false;
+    setState(collapsed, mobileOpen);
+    shell.querySelector('.mobile-menu')?.focus();
+  };
+  sidebar.querySelectorAll('a[href]').forEach((link) => {
+    link.onclick = () => {
+      if (!mobileViewport.matches || !mobileOpen) return;
+      mobileOpen = false;
+      setState(collapsed, mobileOpen);
+    };
+  });
+  sidebar.querySelectorAll('.nav-link, .space-link, .new-space').forEach((link) => {
+    link.title = link.textContent.trim().replace(/\s+/g, ' ');
+  });
+  if (!document.body.dataset.sidebarResponsiveBound) {
+    document.body.dataset.sidebarResponsiveBound = 'true';
+    mobileViewport.addEventListener('change', () => bindSidebarToggle());
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      const currentSidebar = document.querySelector('.sidebar.mobile-open');
+      if (!currentSidebar) return;
+      currentSidebar.querySelector('[data-sidebar-toggle]')?.click();
+      document.querySelector('.mobile-menu')?.focus();
+    });
+  }
+}
+
+let lockUiDecorationObserver;
+function bindLockUiComponentDecoration() {
+  decorateLockUiComponents();
+  if (lockUiDecorationObserver) return;
+  lockUiDecorationObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => mutation.addedNodes.forEach((node) => {
+      if (node instanceof Element) decorateLockUiComponents(node);
+    }));
+  });
+  lockUiDecorationObserver.observe(document.body, { childList: true, subtree: true });
+}
+
+function bindLockUiGallery() {
+  if (!document.querySelector('.lui-gallery')) return;
+  document.querySelectorAll('[data-lui-expand]').forEach((button) => {
+    if (button.dataset.luiBound) return;
+    button.dataset.luiBound = 'true';
+    button.addEventListener('click', () => {
+      const source = button.closest('[data-lui-component]')?.querySelector('.lui-source');
+      if (!source) return;
+      source.open = !source.open;
+      button.setAttribute('aria-expanded', String(source.open));
+      button.dataset.tooltip = source.open ? 'Collapse code' : 'Expand code';
+      button.setAttribute('aria-label', source.open ? 'Collapse component code' : 'Expand component code');
+      if (source.open) source.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
+  document.querySelectorAll('[data-lui-copy]').forEach((button) => {
+    if (button.dataset.luiBound) return;
+    button.dataset.luiBound = 'true';
+    button.addEventListener('click', async () => {
+      const source = button.closest('[data-lui-component]')?.querySelector('.lui-source pre code')?.textContent?.trim();
+      if (!source) {
+        showLockUiStatus('No markup is available for this component.');
+        return;
+      }
+      try {
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(source);
+        else {
+          const field = document.createElement('textarea');
+          field.value = source;
+          field.setAttribute('readonly', '');
+          field.style.position = 'fixed';
+          field.style.opacity = '0';
+          document.body.appendChild(field);
+          field.select();
+          const copied = document.execCommand('copy');
+          field.remove();
+          if (!copied) throw new Error('Clipboard access is unavailable.');
+        }
+        showLockUiStatus('Markup copied.');
+      } catch (error) {
+        showLockUiStatus('Could not copy markup. Select and copy the expanded code instead.');
+      }
+    });
+  });
+  document.querySelectorAll('[data-lui-dialog-open], [data-lui-open-modal]').forEach((button) => {
+    if (button.dataset.luiBound) return;
+    button.dataset.luiBound = 'true';
+    button.addEventListener('click', () => {
+      const dialog = document.getElementById(button.dataset.luiDialogOpen || button.dataset.luiOpenModal);
+      if (dialog instanceof HTMLDialogElement && !dialog.open) dialog.showModal();
+    });
+  });
+  document.querySelectorAll('[data-lui-demo-dialog]').forEach((dialog) => {
+    if (dialog.dataset.luiBound) return;
+    dialog.dataset.luiBound = 'true';
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+  });
+  document.querySelectorAll('[data-lui-task-toggle]').forEach((button) => {
+    if (button.dataset.luiBound) return;
+    button.dataset.luiBound = 'true';
+    button.addEventListener('click', () => {
+      const row = button.closest('.lui-task');
+      const done = row?.classList.toggle('is-done');
+      button.innerHTML = `<i data-lucide="${done ? 'check-circle-2' : 'circle'}"></i>`;
+      lucide.createIcons();
+    });
+  });
+  document.querySelectorAll('.lui-gallery [data-lui-tab]').forEach((tab) => {
+    if (tab.dataset.luiBound) return;
+    tab.dataset.luiBound = 'true';
+    tab.addEventListener('click', () => {
+      tab.closest('[role="tablist"], .lui-tabs')?.querySelectorAll('[data-lui-tab]').forEach((other) => other.setAttribute('aria-selected', String(other === tab)));
+    });
+  });
+  document.querySelectorAll('[data-lui-search-demo]').forEach((input) => {
+    if (input.dataset.luiBound) return;
+    input.dataset.luiBound = 'true';
+    const results = input.closest('.lui-search-demo')?.querySelector('[data-lui-search-results]');
+    const options = [...(results?.querySelectorAll('button') || [])];
+    input.addEventListener('input', () => {
+      const query = input.value.trim().toLocaleLowerCase();
+      let visible = 0;
+      options.forEach((option) => {
+        option.hidden = Boolean(query) && !option.textContent.toLocaleLowerCase().includes(query);
+        if (!option.hidden) visible += 1;
+      });
+      if (results) results.hidden = !query;
+      input.setAttribute('aria-expanded', String(Boolean(query && visible)));
+    });
+    options.forEach((option) => option.addEventListener('click', () => {
+      input.value = option.textContent.trim().split('@')[0].trim();
+      options.forEach((entry) => entry.setAttribute('aria-selected', String(entry === option)));
+      if (results) results.hidden = true;
+      input.setAttribute('aria-expanded', 'false');
+    }));
+  });
+  document.querySelectorAll('[data-lui-demo-copy-task]').forEach((button) => {
+    if (button.dataset.luiBound) return;
+    button.dataset.luiBound = 'true';
+    button.addEventListener('click', () => showLockUiStatus('Demo only. The real action opens the copy-task dialog.'));
+  });
+}
 
 function courseRoot() { return document.querySelector('[data-course-live]'); }
 function courseItemPast(item) {
@@ -57,6 +457,7 @@ function bindTimezoneSearch(scope = document) {
     const empty = picker.querySelector('[data-timezone-empty]');
     const count = picker.querySelector('[data-timezone-count]');
     if (!trigger || !value || !selectedLabel || !panel || !search) return;
+    decoratePopupMenu(picker);
 
     const visibleOptions = () => options.filter((option) => !option.hidden);
     const focusOption = (option) => {
@@ -65,11 +466,12 @@ function bindTimezoneSearch(scope = document) {
       option.focus();
     };
     const close = (restoreFocus = false) => {
-      panel.hidden = true;
-      trigger.setAttribute('aria-expanded', 'false');
-      if (restoreFocus) trigger.focus();
+      closePopupMenu(picker, restoreFocus);
     };
     const open = () => {
+      document.querySelectorAll(popupMenuSelector).forEach((menu) => closePopupMenu(menu));
+      document.querySelectorAll('.timezone-picker.open').forEach((menu) => { if (menu !== picker) closePopupMenu(menu); });
+      openPopupMenu(picker);
       panel.hidden = false;
       trigger.setAttribute('aria-expanded', 'true');
       search.focus();
@@ -104,7 +506,7 @@ function bindTimezoneSearch(scope = document) {
       close(true);
     };
 
-    trigger.addEventListener('click', () => panel.hidden ? open() : close());
+    trigger.addEventListener('click', () => picker.classList.contains('open') && !picker.classList.contains('menu-closing') ? close() : open());
     search.addEventListener('input', filter);
     search.addEventListener('keydown', (event) => {
       const available = visibleOptions();
@@ -174,7 +576,7 @@ function courseItemEditMarkup(item, root, orgId, itemId) {
   const canEdit = root.dataset.canEdit === 'true' && (root.dataset.isAdmin === 'true' || item.createdBy === root.dataset.userId);
   if (!canEdit) return '';
   const selected = (type) => item.type === type ? 'selected' : '';
-  return `<details class="item-edit-details"><summary class="text-button"><i data-lucide="pencil"></i> Edit</summary><form class="inline-tool-form item-edit-form" data-live-form action="/org/${orgId}/items/${itemId}/update" method="post"><label class="item-title-field">Title<input name="title" value="${escapeHtml(item.title)}" required></label><label>Details<textarea name="details" rows="5" placeholder="Details">${escapeHtml(item.details || '')}</textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Type<select name="type"><option ${selected('Homework')}>Homework</option><option ${selected('Upcoming test')}>Upcoming test</option><option ${selected('Event')}>Event</option><option ${selected('Project')}>Project</option></select></label><label>Date<input name="due" type="date" value="${item.due !== 'No date' ? escapeHtml(item.due) : ''}"></label><button class="button secondary" type="submit">Save</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/delete" method="post"><button class="text-button" type="submit"><i data-lucide="trash-2"></i> Delete</button></form></details>`;
+  return `<details class="item-edit-details"><summary class="lui-link"><i data-lucide="pencil"></i> Edit</summary><form class="inline-tool-form item-edit-form" data-live-form action="/org/${orgId}/items/${itemId}/update" method="post"><label class="item-title-field">Title<input name="title" value="${escapeHtml(item.title)}" required></label><label>Details<textarea name="details" rows="5" placeholder="Details">${escapeHtml(item.details || '')}</textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Type<select name="type"><option ${selected('Homework')}>Homework</option><option ${selected('Upcoming test')}>Upcoming test</option><option ${selected('Event')}>Event</option><option ${selected('Project')}>Project</option></select></label><label>Date<input name="due" type="date" value="${item.due !== 'No date' ? escapeHtml(item.due) : ''}"></label><button class="lui-button lui-button-secondary" type="submit">Save</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/delete" method="post"><button class="lui-link" type="submit"><i data-lucide="trash-2"></i> Delete</button></form></details>`;
 }
 function courseItemCopyActionMarkup(item, root, orgId, itemId) {
   const copyableIds = JSON.parse(root.dataset.copyableItemIds || '[]');
@@ -182,30 +584,30 @@ function courseItemCopyActionMarkup(item, root, orgId, itemId) {
     root.dataset.isAdmin === 'true' || item.createdBy === root.dataset.userId || copyableIds.includes(item.id)
   );
   if (!canCopy) return '';
-  return `<details class="task-menu copy-task-menu"><summary class="icon-button" aria-label="More actions for ${escapeHtml(item.title)}"><i data-lucide="ellipsis"></i></summary><div class="task-menu-popover"><button class="menu-action" type="button" data-copy-task-open data-copy-url="/org/${orgId}/items/${itemId}/copy" data-copy-title="${escapeHtml(item.title)}"><i data-lucide="copy"></i> Copy task</button></div></details>`;
+  return `<details class="task-menu copy-task-menu"><summary class="lui-icon-button" aria-label="More actions for ${escapeHtml(item.title)}"><i data-lucide="ellipsis"></i></summary><div class="task-menu-popover"><button class="lui-menu-action" type="button" data-copy-task-open data-copy-url="/org/${orgId}/items/${itemId}/copy" data-copy-title="${escapeHtml(item.title)}"><i data-lucide="copy"></i> Copy task</button></div></details>`;
 }
 function itemCard(item) {
   const typeClass = String(item.type || '').toLowerCase().replace(/[^a-z]/g, '-');
-  const root = courseRoot(); const orgId = escapeHtml(root.dataset.orgId); const itemId = escapeHtml(item.id); const taskSlug = `${String(item.title || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || itemId}-${itemId.slice(-8)}`; const projectAction = item.type === 'Project' ? `<a class="text-button breakout-action" href="/org/${orgId}/course/${escapeHtml(root.dataset.courseId)}/task/${escapeHtml(taskSlug)}/breakout-groups"><i data-lucide="users-round"></i> Breakout Groups</a>` : ''; const canModerate = root.dataset.isAdmin === 'true'; const downvoteAction = `<form data-live-form action="/org/${orgId}/items/${itemId}/downvote" method="post"><button class="text-button" type="submit"><i data-lucide="thumbs-down"></i>${canModerate ? ` <span data-downvote-count>${(item.downvotedBy || []).length}</span>` : ''}</button></form>`;
-  const dragHandle = `<button class="icon-button course-drag-handle" type="button" aria-label="Move ${escapeHtml(item.title)}"><i data-lucide="grip-vertical"></i></button>`;
-  return `<article class="feed-card feed-item" id="item-${itemId}" data-item-id="${itemId}" data-position="${Number(item.position) || 0}" data-past="${courseItemPast(item)}" data-type="${escapeHtml(item.type)}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(formatCourseDate(item.due, root))}</span><h3 data-item-title>${linkedTaskTextMarkup(item.title, item.links)}</h3>${item.details ? `<p class="task-details">${linkedTaskTextMarkup(item.details, item.links)}</p>` : ''}</div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="text-button" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="text-button" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}${courseItemEditMarkup(item, root, orgId, itemId)}${courseItemCopyActionMarkup(item, root, orgId, itemId)}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${(item.comments || []).filter((comment) => !comment.reported).length}</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><small class="form-error" data-form-error hidden></small><button class="button primary" type="submit">Reply</button></form></div></details></div></article>`;
+  const root = courseRoot(); const orgId = escapeHtml(root.dataset.orgId); const itemId = escapeHtml(item.id); const taskSlug = `${String(item.title || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || itemId}-${itemId.slice(-8)}`; const projectAction = item.type === 'Project' ? `<a class="lui-link breakout-action" href="/org/${orgId}/course/${escapeHtml(root.dataset.courseId)}/task/${escapeHtml(taskSlug)}/breakout-groups"><i data-lucide="users-round"></i> Breakout Groups</a>` : ''; const canModerate = root.dataset.isAdmin === 'true'; const downvoteAction = `<form data-live-form action="/org/${orgId}/items/${itemId}/downvote" method="post"><button class="lui-link" type="submit"><i data-lucide="thumbs-down"></i>${canModerate ? ` <span data-downvote-count>${(item.downvotedBy || []).length}</span>` : ''}</button></form>`;
+  const dragHandle = `<button class="lui-icon-button course-drag-handle" type="button" aria-label="Move ${escapeHtml(item.title)}"><i data-lucide="grip-vertical"></i></button>`;
+  return `<article class="feed-card feed-item" id="item-${itemId}" data-item-id="${itemId}" data-position="${Number(item.position) || 0}" data-past="${courseItemPast(item)}" data-type="${escapeHtml(item.type)}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(formatCourseDate(item.due, root))}</span><h3 data-item-title>${linkedTaskTextMarkup(item.title, item.links)}</h3>${item.details ? `<p class="task-details">${linkedTaskTextMarkup(item.details, item.links)}</p>` : ''}</div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="lui-link" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="lui-link" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}${courseItemEditMarkup(item, root, orgId, itemId)}${courseItemCopyActionMarkup(item, root, orgId, itemId)}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${(item.comments || []).filter((comment) => !comment.reported).length}</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><small class="form-error" data-form-error hidden></small><button class="lui-button lui-button-primary" type="submit">Reply</button></form></div></details></div></article>`;
 }
 
 function commentMenuMarkup(comment, context) {
   const { orgId, itemId, groupId, canEdit, canDelete, canViewHistory } = context;
   const base = groupId ? `/org/${escapeHtml(orgId)}/breakout/${escapeHtml(groupId)}/comments/${escapeHtml(comment.id)}` : `/org/${escapeHtml(orgId)}/items/${escapeHtml(itemId)}/comments/${escapeHtml(comment.id)}`;
-  const report = `<form data-live-form action="/org/${escapeHtml(orgId)}/content-reports" method="post"><input type="hidden" name="contentId" value="${escapeHtml(comment.id)}"><button class="menu-action" type="submit"><i data-lucide="flag"></i> Report comment</button></form>`;
-  const edit = canEdit ? `<button class="menu-action" type="button" data-comment-edit-open><i data-lucide="pencil"></i> Edit comment</button>` : '';
-  const remove = canDelete ? `<form data-live-form action="${base}/delete" method="post"><button class="menu-action danger" type="submit">Delete comment</button></form>` : '';
+  const report = `<form data-live-form action="/org/${escapeHtml(orgId)}/content-reports" method="post"><input type="hidden" name="contentId" value="${escapeHtml(comment.id)}"><button class="lui-menu-action" type="submit"><i data-lucide="flag"></i> Report comment</button></form>`;
+  const edit = canEdit ? `<button class="lui-menu-action" type="button" data-comment-edit-open><i data-lucide="pencil"></i> Edit comment</button>` : '';
+  const remove = canDelete ? `<form data-live-form action="${base}/delete" method="post"><button class="lui-menu-action lui-menu-action-danger" type="submit">Delete comment</button></form>` : '';
   const history = canViewHistory && comment.history?.length ? `<details class="comment-history"><summary><i data-lucide="history"></i> Show edited comment</summary><div>${comment.history.slice().reverse().map((version) => `<p>${escapeHtml(version.text)}<small>${escapeHtml(version.editedAt)} · ${escapeHtml(version.editorName)}</small></p>`).join('')}</div></details>` : '';
-  return `<details class="comment-menu"><summary class="icon-button" aria-label="More comment actions"><i data-lucide="ellipsis"></i></summary><div class="comment-menu-popover">${edit}${report}${remove}${history}</div></details>`;
+  return `<details class="comment-menu"><summary class="lui-icon-button" aria-label="More comment actions"><i data-lucide="ellipsis"></i></summary><div class="comment-menu-popover">${edit}${report}${remove}${history}</div></details>`;
 }
 
 function commentMarkup(comment, context) {
   const edited = comment.editedAt ? '<small class="comment-edited">edited</small>' : '';
   const { orgId, itemId, groupId, canEdit } = context;
   const base = groupId ? `/org/${escapeHtml(orgId)}/breakout/${escapeHtml(groupId)}/comments/${escapeHtml(comment.id)}` : `/org/${escapeHtml(orgId)}/items/${escapeHtml(itemId)}/comments/${escapeHtml(comment.id)}`;
-  const editor = canEdit ? `<form class="comment-edit-form" data-live-form action="${base}/update" method="post" hidden><input type="text" name="comment" value="${escapeHtml(comment.text)}" required><small class="form-error" data-form-error hidden></small><div class="comment-edit-actions"><button class="button secondary" type="submit">Save</button><button class="text-button" type="button" data-comment-edit-cancel>Cancel</button></div></form>` : '';
+  const editor = canEdit ? `<form class="comment-edit-form" data-live-form action="${base}/update" method="post" hidden><input type="text" name="comment" value="${escapeHtml(comment.text)}" required><small class="form-error" data-form-error hidden></small><div class="comment-edit-actions"><button class="lui-button lui-button-secondary" type="submit">Save</button><button class="lui-link" type="button" data-comment-edit-cancel>Cancel</button></div></form>` : '';
   return `<div class="comment-entry" data-comment-id="${escapeHtml(comment.id)}"><div class="comment-body"><div class="comment-text"><strong>${escapeHtml(comment.author)}</strong> <span>${escapeHtml(comment.text)}</span>${edited}</div>${editor}</div>${commentMenuMarkup(comment, context)}</div>`;
 }
 
@@ -235,18 +637,18 @@ function markCommentReported(entry) {
 
 function breakoutTaskMarkup(task, root) {
   const orgId = escapeHtml(root.dataset.orgId); const groupId = escapeHtml(root.dataset.groupId); const userId = root.dataset.userId; const groupAdmin = root.dataset.groupAdmin === 'true'; const members = JSON.parse(root.dataset.members || '[]'); const claimedName = members.find((member) => member.id === task.claimedBy)?.name || 'a member';
-  const claimAction = !task.claimedBy ? `<form data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/claim" method="post"><button class="button secondary task-action" type="submit">Claim task</button></form>` : '';
-  const unclaimAction = task.claimedBy && (groupAdmin || task.claimedBy === userId) ? `<form data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/unclaim" method="post"><button class="menu-action" type="submit">Unclaim task</button></form>` : '';
-  const adminActions = groupAdmin ? `<details class="inline-edit"><summary><i data-lucide="pencil"></i> Edit task</summary><form class="inline-tool-form" data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/update" method="post"><input name="title" value="${escapeHtml(task.title)}" required><button class="button secondary" type="submit">Save</button></form></details><details class="inline-edit"><summary><i data-lucide="user-plus"></i> Delegate task</summary><form class="inline-tool-form" data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/delegate" method="post"><select name="userId">${members.map((member) => `<option value="${escapeHtml(member.id)}" ${task.claimedBy === member.id ? 'selected' : ''}>${escapeHtml(member.name)}</option>`).join('')}</select><button class="button secondary" type="submit">Delegate</button></form></details><form data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/delete" method="post"><button class="menu-action danger" type="submit"><i data-lucide="trash-2"></i> Delete task</button></form>` : '';
-  const menu = groupAdmin || task.claimedBy === userId ? `<details class="task-menu"><summary class="icon-button" aria-label="More actions for ${escapeHtml(task.title)}"><i data-lucide="ellipsis"></i></summary><div class="task-menu-popover">${unclaimAction}${adminActions}</div></details>` : '';
-  const toggleAction = `<form data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/toggle" method="post"><button class="task-check" type="submit" aria-label="${task.done ? 'Mark incomplete' : 'Mark complete'}"><i data-lucide="${task.done ? 'check-circle-2' : 'circle'}"></i></button></form>`;
+  const claimAction = !task.claimedBy ? `<form data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/claim" method="post"><button class="lui-button lui-button-secondary task-action" type="submit">Claim task</button></form>` : '';
+  const unclaimAction = task.claimedBy && (groupAdmin || task.claimedBy === userId) ? `<form data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/unclaim" method="post"><button class="lui-menu-action" type="submit">Unclaim task</button></form>` : '';
+  const adminActions = groupAdmin ? `<details class="inline-edit"><summary><i data-lucide="pencil"></i> Edit task</summary><form class="inline-tool-form" data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/update" method="post"><input name="title" value="${escapeHtml(task.title)}" required><button class="lui-button lui-button-secondary" type="submit">Save</button></form></details><details class="inline-edit"><summary><i data-lucide="user-plus"></i> Delegate task</summary><form class="inline-tool-form" data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/delegate" method="post"><select name="userId">${members.map((member) => `<option value="${escapeHtml(member.id)}" ${task.claimedBy === member.id ? 'selected' : ''}>${escapeHtml(member.name)}</option>`).join('')}</select><button class="lui-button lui-button-secondary" type="submit">Delegate</button></form></details><form data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/delete" method="post"><button class="lui-menu-action lui-menu-action-danger" type="submit"><i data-lucide="trash-2"></i> Delete task</button></form>` : '';
+  const menu = groupAdmin || task.claimedBy === userId ? `<details class="task-menu"><summary class="lui-icon-button" aria-label="More actions for ${escapeHtml(task.title)}"><i data-lucide="ellipsis"></i></summary><div class="task-menu-popover">${unclaimAction}${adminActions}</div></details>` : '';
+  const toggleAction = `<form data-live-form action="/org/${orgId}/breakout/${groupId}/tasks/${escapeHtml(task.id)}/toggle" method="post"><button class="lui-check task-check" type="submit" aria-label="${task.done ? 'Mark incomplete' : 'Mark complete'}"><i data-lucide="${task.done ? 'check-circle-2' : 'circle'}"></i></button></form>`;
   return `<article class="claim-row breakout-task ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}">${toggleAction}<span class="breakout-task-copy"><strong>${escapeHtml(task.title)}</strong><small>${task.claimedBy ? `Claimed by ${escapeHtml(claimedName)}` : 'Open'}${task.done ? ' · Complete' : ''}</small></span><span class="task-actions">${claimAction}${menu}</span></article>`;
 }
 
 function breakoutCommentMarkup(comment, root) {
   const context = { orgId: root.dataset.orgId, groupId: root.dataset.groupId, canEdit: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.groupAdmin === 'true' || comment.userId === root.dataset.userId, canViewHistory: root.dataset.groupAdmin === 'true' };
   if (comment.parentId) return commentMarkup(comment, context);
-  return `<div class="comment-thread" data-comment-id="${escapeHtml(comment.id)}">${commentMarkup(comment, context)}<details class="reply-details"><summary class="reply-trigger"><i data-lucide="corner-down-right"></i> Reply</summary><form class="reply-form" data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/breakout/${escapeHtml(root.dataset.groupId)}/comments" method="post"><input type="hidden" name="parentId" value="${escapeHtml(comment.id)}"><textarea name="comment" placeholder="Reply to this thread..." rows="1" required></textarea><button class="button secondary" type="submit">Send reply</button></form></details><div class="comment-replies"></div></div>`;
+  return `<div class="comment-thread" data-comment-id="${escapeHtml(comment.id)}">${commentMarkup(comment, context)}<details class="reply-details"><summary class="reply-trigger"><i data-lucide="corner-down-right"></i> Reply</summary><form class="reply-form" data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/breakout/${escapeHtml(root.dataset.groupId)}/comments" method="post"><input type="hidden" name="parentId" value="${escapeHtml(comment.id)}"><textarea name="comment" placeholder="Reply to this thread..." rows="1" required></textarea><button class="lui-button lui-button-secondary" type="submit">Send reply</button></form></details><div class="comment-replies"></div></div>`;
 }
 
 function appendBreakoutComment(comment, root) {
@@ -274,9 +676,9 @@ function renderBreakoutPresence(root, members) {
   const records = JSON.parse(root.dataset.members || '[]'); if (!list) return;
   const statusLabel = { 'same-page': 'Here now', inactive: 'On another page' };
   const visible = records.map((member) => ({ ...member, ...(members.find((presence) => presence.userId === member.id) || {}) })).filter((member) => member.status);
-  list.innerHTML = visible.map((member) => `<div class="presence-person ${member.status}" data-presence-user="${escapeHtml(member.id)}" data-presence-tooltip="${escapeHtml(`${member.name}${member.id === root.dataset.userId ? ' (you)' : ''} · ${statusLabel[member.status]} · @${member.username || 'member'}`)}"><button class="presence-avatar" type="button" data-presence-details="${escapeHtml(member.id)}" aria-label="View ${escapeHtml(member.name)}">${escapeHtml(member.name.slice(0, 1).toUpperCase())}</button>${member.id !== root.dataset.userId ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/breakout/${escapeHtml(root.dataset.groupId)}/ping/${escapeHtml(member.id)}" method="post"><button class="presence-ping" type="submit" aria-label="Ping ${escapeHtml(member.name)}" title="Ping ${escapeHtml(member.name)}"><i data-lucide="bell-ring"></i></button></form>` : ''}</div>`).join('');
+  list.innerHTML = visible.map((member) => `<div class="presence-person ${member.status}" data-presence-user="${escapeHtml(member.id)}" data-presence-tooltip="${escapeHtml(`${member.name}${member.id === root.dataset.userId ? ' (you)' : ''} · ${statusLabel[member.status]} · @${member.username || 'member'}`)}"><button class="lui-avatar presence-avatar" type="button" data-presence-details="${escapeHtml(member.id)}" aria-label="View ${escapeHtml(member.name)}">${escapeHtml(member.name.slice(0, 1).toUpperCase())}</button>${member.id !== root.dataset.userId ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/breakout/${escapeHtml(root.dataset.groupId)}/ping/${escapeHtml(member.id)}" method="post"><button class="lui-icon-button presence-ping" type="submit" aria-label="Ping ${escapeHtml(member.name)}" title="Ping ${escapeHtml(member.name)}"><i data-lucide="bell-ring"></i></button></form>` : ''}</div>`).join('');
   const active = visible.filter((member) => member.status === 'same-page').length; if (summary) summary.textContent = `${active} here now`;
-  bindLiveForms(list); list.querySelectorAll('[data-presence-details]').forEach((button) => button.addEventListener('click', () => { const member = visible.find((entry) => entry.id === button.dataset.presenceDetails); if (!member) return; document.querySelector('[data-presence-details-modal]')?.remove(); const modal = document.createElement('div'); modal.className = 'presence-details'; modal.dataset.presenceDetailsModal = 'true'; modal.innerHTML = `<article class="presence-details-card"><button class="icon-button" type="button" data-presence-close aria-label="Close details"><i data-lucide="x"></i></button><h2>${escapeHtml(member.name)}</h2><p>@${escapeHtml(member.username || 'member')} · ${escapeHtml(member.role || 'Member')}</p><p>${escapeHtml(statusLabel[member.status])}</p><button class="button secondary" type="button" data-presence-close>Close</button></article>`; modal.addEventListener('click', (event) => { if (event.target === modal || event.target.closest('[data-presence-close]')) modal.remove(); }); document.body.appendChild(modal); lucide.createIcons(); }));
+  bindLiveForms(list); list.querySelectorAll('[data-presence-details]').forEach((button) => button.addEventListener('click', () => { const member = visible.find((entry) => entry.id === button.dataset.presenceDetails); if (!member) return; document.querySelector('[data-presence-details-modal]')?.remove(); const modal = document.createElement('div'); modal.className = 'presence-details'; modal.dataset.presenceDetailsModal = 'true'; modal.innerHTML = `<article class="presence-details-card"><button class="lui-icon-button" type="button" data-presence-close aria-label="Close details"><i data-lucide="x"></i></button><h2>${escapeHtml(member.name)}</h2><p>@${escapeHtml(member.username || 'member')} · ${escapeHtml(member.role || 'Member')}</p><p>${escapeHtml(statusLabel[member.status])}</p><button class="lui-button lui-button-secondary" type="button" data-presence-close>Close</button></article>`; modal.addEventListener('click', (event) => { if (event.target === modal || event.target.closest('[data-presence-close]')) modal.remove(); }); document.body.appendChild(modal); lucide.createIcons(); }));
   list.querySelectorAll('.presence-person').forEach((row) => row.addEventListener('click', (event) => { if (!event.target.closest('form, button')) row.querySelector('[data-presence-details]')?.click(); }));
 }
 
@@ -284,7 +686,7 @@ function enhanceBreakoutTasks(root) {
   root.querySelectorAll('[data-breakout-task-list] .breakout-task').forEach((row) => {
     if (row.querySelector('.task-check')) return;
     const taskId = row.dataset.taskId; const done = row.classList.contains('is-done');
-    row.insertAdjacentHTML('afterbegin', `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/breakout/${escapeHtml(root.dataset.groupId)}/tasks/${escapeHtml(taskId)}/toggle" method="post"><button class="task-check" type="submit" aria-label="${done ? 'Mark incomplete' : 'Mark complete'}"><i data-lucide="${done ? 'check-circle-2' : 'circle'}"></i></button></form>`);
+    row.insertAdjacentHTML('afterbegin', `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/breakout/${escapeHtml(root.dataset.groupId)}/tasks/${escapeHtml(taskId)}/toggle" method="post"><button class="lui-check task-check" type="submit" aria-label="${done ? 'Mark incomplete' : 'Mark complete'}"><i data-lucide="${done ? 'check-circle-2' : 'circle'}"></i></button></form>`);
     row.querySelector(':scope > span:first-of-type')?.classList.add('breakout-task-copy');
   });
   bindLiveForms(root); lucide.createIcons();
@@ -292,7 +694,11 @@ function enhanceBreakoutTasks(root) {
 
 function setCourseTab(tabName, updateHash = true) {
   const root = courseRoot(); if (!root) return;
-  document.querySelectorAll('[data-course-tab]').forEach((tab) => tab.classList.toggle('active', tab.dataset.courseTab === tabName));
+  document.querySelectorAll('[data-course-tab]').forEach((tab) => {
+    const selected = tab.dataset.courseTab === tabName;
+    tab.classList.toggle('active', selected);
+    tab.setAttribute('aria-selected', String(selected));
+  });
   document.querySelectorAll('[data-course-view]').forEach((view) => view.classList.toggle('active', view.dataset.courseView === tabName));
   if (updateHash) history.replaceState({}, '', `${window.location.pathname}#${tabName}`);
 }
@@ -358,8 +764,8 @@ function connectLiveCourse() {
   liveState.socket.on('item:comment-updated', ({ itemId, comment }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(comment?.id || '')}"]`); if (entry && comment) { entry.outerHTML = commentMarkup(comment, { orgId: root.dataset.orgId, itemId, canEdit: root.dataset.isAdmin === 'true' || comment.userId === root.dataset.userId, canDelete: root.dataset.isAdmin === 'true' || comment.userId === root.dataset.userId, canViewHistory: root.dataset.isAdmin === 'true' }); bindLiveForms(root); lucide.createIcons(); } });
   liveState.socket.on('item:comment-deleted', ({ itemId, commentId }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`); finishCommentRemoval(entry); });
   liveState.socket.on('item:comment-reported', ({ itemId, commentId }) => { const entry = root.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-comment-id="${CSS.escape(commentId)}"]`); markCommentReported(entry); });
-  liveState.socket.on('board:card-created', ({ card }) => { if (!card) return; const list = root.querySelector('[data-board-list]'); if (!list || list.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`)) return; root.querySelector('[data-empty-board]')?.remove(); const remove = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/course/${escapeHtml(root.dataset.courseId)}/board/${escapeHtml(card.id)}/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete board task"><i data-lucide="trash-2"></i></button></form>` : '<i data-lucide="arrow-right"></i>'; list.insertAdjacentHTML('beforeend', `<div class="claim-row" data-card-id="${escapeHtml(card.id)}"><span><strong>${escapeHtml(card.title)}</strong><small>${escapeHtml(card.status)}</small></span>${remove}</div>`); bindLiveForms(list.lastElementChild); lucide.createIcons(); });
-  liveState.socket.on('resource:created', ({ resource }) => { if (!resource) return; const list = root.querySelector('[data-resource-list]'); if (!list || list.querySelector(`[data-resource-id="${CSS.escape(resource.id)}"]`)) return; const remove = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/course/${escapeHtml(root.dataset.courseId)}/resources/${escapeHtml(resource.id)}/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete resource"><i data-lucide="trash-2"></i></button></form>` : ''; list.insertAdjacentHTML('beforeend', `<div class="resource-row" data-resource-id="${escapeHtml(resource.id)}"><a class="resource-link" href="${escapeHtml(resource.url)}" target="_blank" rel="noreferrer"><i data-lucide="external-link"></i><span>${escapeHtml(resource.title)}</span></a>${remove}</div>`); bindLiveForms(list.lastElementChild); lucide.createIcons(); });
+  liveState.socket.on('board:card-created', ({ card }) => { if (!card) return; const list = root.querySelector('[data-board-list]'); if (!list || list.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`)) return; root.querySelector('[data-empty-board]')?.remove(); const remove = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/course/${escapeHtml(root.dataset.courseId)}/board/${escapeHtml(card.id)}/delete" method="post"><button class="lui-icon-button" type="submit" aria-label="Delete board task"><i data-lucide="trash-2"></i></button></form>` : '<i data-lucide="arrow-right"></i>'; list.insertAdjacentHTML('beforeend', `<div class="claim-row" data-card-id="${escapeHtml(card.id)}"><span><strong>${escapeHtml(card.title)}</strong><small>${escapeHtml(card.status)}</small></span>${remove}</div>`); bindLiveForms(list.lastElementChild); lucide.createIcons(); });
+  liveState.socket.on('resource:created', ({ resource }) => { if (!resource) return; const list = root.querySelector('[data-resource-list]'); if (!list || list.querySelector(`[data-resource-id="${CSS.escape(resource.id)}"]`)) return; const remove = root.dataset.isAdmin === 'true' ? `<form data-live-form action="/org/${escapeHtml(root.dataset.orgId)}/course/${escapeHtml(root.dataset.courseId)}/resources/${escapeHtml(resource.id)}/delete" method="post"><button class="lui-icon-button" type="submit" aria-label="Delete resource"><i data-lucide="trash-2"></i></button></form>` : ''; list.insertAdjacentHTML('beforeend', `<div class="resource-row" data-resource-id="${escapeHtml(resource.id)}"><a class="resource-link" href="${escapeHtml(resource.url)}" target="_blank" rel="noreferrer"><i data-lucide="external-link"></i><span>${escapeHtml(resource.title)}</span></a>${remove}</div>`); bindLiveForms(list.lastElementChild); lucide.createIcons(); });
   liveState.socket.on('resource:deleted', ({ resourceId }) => root.querySelector(`[data-resource-id="${CSS.escape(resourceId)}"]`)?.remove());
 }
 
@@ -409,7 +815,6 @@ function connectLiveBreakout() {
   liveState.socket.on('breakout:comment-reported', ({ groupId, commentId }) => { if (groupId === root.dataset.groupId) markCommentReported(root.querySelector(`[data-breakout-comment-list] [data-comment-id="${CSS.escape(commentId)}"]`)); });
   enhanceBreakoutTasks(root);
   scrollBreakoutComments(root);
-  if (!form.closest('.notification-menu')) form.closest('details')?.removeAttribute('open');
 }
 
 function todoList() { return document.querySelector('[data-live-todo-list]'); }
@@ -440,8 +845,8 @@ function todoImportance(due) {
 }
 function todoTaskMarkup(task) {
   const importance = task.importance || todoImportance(task.due); const priority = task.priority || 'Normal';
-  const editForm = `<details class="task-edit-details"><summary class="icon-button" aria-label="Edit task"><i data-lucide="pencil"></i></summary><form class="task-edit-form link-composer" action="/tasks/${escapeHtml(task.id)}/update" method="post" data-live-form data-link-composer><label>Title<input name="title" value="${escapeHtml(task.title)}" required></label><label>Details<textarea name="details" rows="3">${escapeHtml(task.details || '')}</textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Due date<input name="due" type="date" value="${task.due !== 'No date' ? escapeHtml(task.due) : ''}"></label><label>Priority<select name="priority">${['Low', 'Normal', 'Medium', 'High'].map((value) => `<option ${priority === value ? 'selected' : ''}>${value}</option>`).join('')}</select></label><button class="button secondary" type="submit">Save task</button></form></details>`;
-  return `<article class="private-task ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}" data-due="${escapeHtml(task.due)}" data-importance="${importance}" data-priority="${escapeHtml(priority.toLowerCase())}" data-position="${Number(task.position) || 0}" draggable="false"><form class="toggle-task-form" action="/tasks/${escapeHtml(task.id)}/toggle" method="post" data-live-form><button class="task-check" aria-label="Toggle ${escapeHtml(task.title)}"><i data-lucide="check"></i></button></form><div class="private-task-copy"><h3>${linkedTaskTextMarkup(task.title, task.links)}</h3>${task.details ? `<p class="task-details">${linkedTaskTextMarkup(task.details, task.links)}</p>` : ''}<span><i data-lucide="link-2"></i> ${escapeHtml(task.source)}</span><small class="task-due" data-raw-due="${escapeHtml(task.due)}">Due ${escapeHtml(formatTodoDate(task.due))} · ${importance}</small></div>${editForm}<div class="priority-menu"><button class="priority-flag" type="button" aria-haspopup="menu" aria-expanded="false"><i data-lucide="flag"></i> <span>${escapeHtml(priority)}</span><i data-lucide="chevron-down"></i></button><div class="priority-options" role="menu"><button type="button" data-priority="Low">Low</button><button type="button" data-priority="Normal">Normal</button><button type="button" data-priority="Medium">Medium</button><button type="button" data-priority="High">High</button></div></div><form data-live-form action="/tasks/${escapeHtml(task.id)}/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete task"><i data-lucide="trash-2"></i></button></form><button class="icon-button drag-handle" aria-label="Move task" type="button"><i data-lucide="grip-vertical"></i></button></article>`;
+  const editForm = `<details class="task-edit-details"><summary class="lui-icon-button" aria-label="Edit task"><i data-lucide="pencil"></i></summary><form class="task-edit-form link-composer" action="/tasks/${escapeHtml(task.id)}/update" method="post" data-live-form data-link-composer><label>Title<input name="title" value="${escapeHtml(task.title)}" required></label><label>Details<textarea name="details" rows="3">${escapeHtml(task.details || '')}</textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Due date<input name="due" type="date" value="${task.due !== 'No date' ? escapeHtml(task.due) : ''}"></label><label>Priority<select name="priority">${['Low', 'Normal', 'Medium', 'High'].map((value) => `<option ${priority === value ? 'selected' : ''}>${value}</option>`).join('')}</select></label><button class="lui-button lui-button-secondary" type="submit">Save task</button></form></details>`;
+  return `<article class="private-task ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}" data-due="${escapeHtml(task.due)}" data-importance="${importance}" data-priority="${escapeHtml(priority.toLowerCase())}" data-position="${Number(task.position) || 0}" draggable="false"><form class="toggle-task-form" action="/tasks/${escapeHtml(task.id)}/toggle" method="post" data-live-form><button class="lui-check task-check" aria-label="Toggle ${escapeHtml(task.title)}"><i data-lucide="check"></i></button></form><div class="private-task-copy"><h3>${linkedTaskTextMarkup(task.title, task.links)}</h3>${task.details ? `<p class="task-details">${linkedTaskTextMarkup(task.details, task.links)}</p>` : ''}<span><i data-lucide="link-2"></i> ${escapeHtml(task.source)}</span><small class="task-due" data-raw-due="${escapeHtml(task.due)}">Due ${escapeHtml(formatTodoDate(task.due))} · ${importance}</small></div>${editForm}<div class="priority-menu"><button class="lui-menu-trigger priority-flag" type="button" aria-haspopup="menu" aria-expanded="false"><i data-lucide="flag"></i> <span>${escapeHtml(priority)}</span><i data-lucide="chevron-down"></i></button><div class="priority-options" role="menu"><button class="lui-menu-action" type="button" data-priority="Low">Low</button><button class="lui-menu-action" type="button" data-priority="Normal">Normal</button><button class="lui-menu-action" type="button" data-priority="Medium">Medium</button><button class="lui-menu-action" type="button" data-priority="High">High</button></div></div><form data-live-form action="/tasks/${escapeHtml(task.id)}/delete" method="post"><button class="lui-icon-button" type="submit" aria-label="Delete task"><i data-lucide="trash-2"></i></button></form><button class="lui-icon-button drag-handle" aria-label="Move task" type="button"><i data-lucide="grip-vertical"></i></button></article>`;
 }
 function sortTodoDom(compare) { const list = todoList(); if (!list) return; [...list.querySelectorAll('.private-task')].sort(compare).forEach((task) => list.appendChild(task)); }
 function persistTodoOrder() {
@@ -469,7 +874,7 @@ function enhanceTodoTasks() {
   list.querySelectorAll('.private-task').forEach((task, index) => {
     task.draggable = false; task.dataset.position ||= index; task.dataset.due ||= task.querySelector('[data-raw-due]')?.dataset.rawDue || 'No date'; task.dataset.importance ||= todoImportance(task.dataset.due); task.dataset.priority ||= task.querySelector('.priority-flag')?.textContent.trim().toLowerCase() || 'normal';
     const priority = task.querySelector('.priority-flag');
-    if (priority && !priority.closest('.priority-menu')) { const value = priority.textContent.trim(); const menu = document.createElement('div'); menu.className = 'priority-menu'; menu.innerHTML = `<button class="priority-flag" type="button" aria-haspopup="menu" aria-expanded="false"><i data-lucide="flag"></i> <span>${escapeHtml(value)}</span><i data-lucide="chevron-down"></i></button><div class="priority-options" role="menu"><button type="button" data-priority="Low">Low</button><button type="button" data-priority="Normal">Normal</button><button type="button" data-priority="Medium">Medium</button><button type="button" data-priority="High">High</button></div>`; priority.replaceWith(menu); }
+    if (priority && !priority.closest('.priority-menu')) { const value = priority.textContent.trim(); const menu = document.createElement('div'); menu.className = 'priority-menu'; menu.innerHTML = `<button class="lui-menu-trigger priority-flag" type="button" aria-haspopup="menu" aria-expanded="false"><i data-lucide="flag"></i> <span>${escapeHtml(value)}</span><i data-lucide="chevron-down"></i></button><div class="priority-options" role="menu"><button class="lui-menu-action" type="button" data-priority="Low">Low</button><button class="lui-menu-action" type="button" data-priority="Normal">Normal</button><button class="lui-menu-action" type="button" data-priority="Medium">Medium</button><button class="lui-menu-action" type="button" data-priority="High">High</button></div>`; priority.replaceWith(menu); }
   });
   bindTodoPriorityMenus(list);
   list.querySelectorAll('.private-task').forEach((task) => {
@@ -493,8 +898,8 @@ function bindTodoPriorityMenus(scope = document) {
   scope.querySelectorAll('.priority-menu').forEach((menu) => {
     if (menu.dataset.priorityBound === 'true') return;
     menu.dataset.priorityBound = 'true';
-    menu.querySelector('.priority-flag')?.addEventListener('click', () => { const open = menu.classList.toggle('open'); menu.querySelector('.priority-flag').setAttribute('aria-expanded', String(open)); });
-    menu.querySelectorAll('[data-priority]').forEach((option) => option.addEventListener('click', async () => { const row = menu.closest('.private-task'); const response = await fetch(`/tasks/${row.dataset.taskId}/priority`, { method: 'POST', body: new URLSearchParams({ priority: option.dataset.priority }), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); if (!response.ok) return; row.dataset.priority = option.dataset.priority.toLowerCase(); menu.querySelector('.priority-flag span').textContent = option.dataset.priority; menu.classList.remove('open'); menu.querySelector('.priority-flag').setAttribute('aria-expanded', 'false'); }));
+    menu.querySelector('.priority-flag')?.addEventListener('click', (event) => { event.preventDefault(); menu.classList.contains('open') ? closePopupMenu(menu) : openPopupMenu(menu); });
+    menu.querySelectorAll('[data-priority]').forEach((option) => option.addEventListener('click', async () => { const row = menu.closest('.private-task'); const response = await fetch(`/tasks/${row.dataset.taskId}/priority`, { method: 'POST', body: new URLSearchParams({ priority: option.dataset.priority }), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); if (!response.ok) return; row.dataset.priority = option.dataset.priority.toLowerCase(); menu.querySelector('.priority-flag span').textContent = option.dataset.priority; closePopupMenu(menu); }));
   });
 }
 function connectLiveTodo() {
@@ -535,7 +940,11 @@ async function submitLiveForm(form, animatedEntry = null) {
       document.body.dataset.pushAnnouncements = formData.get('pushAnnouncements') === 'on' ? 'true' : 'false';
     }
     form.querySelectorAll('input:not([type="hidden"]), textarea').forEach((field) => { field.value = ''; field.dispatchEvent(new Event('input')); });
-    form.closest('details')?.removeAttribute('open');
+    const details = form.closest('details');
+    if (!form.closest('.notification-menu')) {
+      if (details?.matches(popupDetailsSelector)) closePopupMenu(details);
+      else details?.removeAttribute('open');
+    }
     if (payload.invitationAction || payload.leftGroup || payload.deletedGroup) { window.location.reload(); return; }
     if (payload.read || payload.readAll) {
       if (payload.readAll) document.querySelectorAll('.notification-item.unread').forEach((item) => item.classList.replace('unread', 'is-read'));
@@ -631,7 +1040,7 @@ function showFormError(form, message, phrase) {
     form.querySelector('.comment-edit-actions')?.before(error);
     if (!error.parentElement) form.append(error);
   }
-  error.innerHTML = `${escapeHtml(message)}${phrase ? ` <button class="text-button appeal-word-link" type="button" data-appeal-word data-phrase="${escapeHtml(phrase)}">Report mistake</button>` : ''}`;
+  error.innerHTML = `${escapeHtml(message)}${phrase ? ` <button class="lui-link appeal-word-link" type="button" data-appeal-word data-phrase="${escapeHtml(phrase)}">Report mistake</button>` : ''}`;
   error.hidden = false;
   bindLiveForms(error);
 }
@@ -713,7 +1122,9 @@ function bindTaskCopyModal() {
     selectedCourse = null;
     modal.dataset.copyUrl = button.dataset.copyUrl || '';
     modal.dataset.copyTitle = button.dataset.copyTitle || '';
-    button.closest('details')?.removeAttribute('open');
+    const details = button.closest('details');
+    if (details?.matches(popupDetailsSelector)) closePopupMenu(details);
+    else details?.removeAttribute('open');
     renderStep('groups');
     modal.hidden = false;
     modal.classList.add('open');
@@ -799,8 +1210,8 @@ function syncTodoSummary() {
 }
 
 function notificationMarkup(notification) {
-  const action = notification.href && notification.actionLabel ? `<a class="text-button" href="${escapeHtml(notification.href)}">${escapeHtml(notification.actionLabel)}</a>` : '';
-  return `<div class="notification-item unread" data-notification-id="${escapeHtml(notification.id)}"><div><strong>${escapeHtml(notification.title)}</strong><p>${escapeHtml(notification.message)}</p>${action}<small>${escapeHtml(new Date(notification.createdAt).toLocaleString())}</small></div><div class="notification-actions"><form data-live-form action="/notifications/${escapeHtml(notification.id)}/read" method="post"><button class="icon-button" type="submit" aria-label="Mark notification read"><i data-lucide="check"></i></button></form><form data-live-form action="/notifications/${escapeHtml(notification.id)}/delete" method="post"><button class="icon-button notification-delete-button" type="submit" aria-label="Delete notification"><i data-lucide="trash-2"></i></button></form></div></div>`;
+  const action = notification.href && notification.actionLabel ? `<a class="lui-link" href="${escapeHtml(notification.href)}">${escapeHtml(notification.actionLabel)}</a>` : '';
+  return `<div class="notification-item unread" data-notification-id="${escapeHtml(notification.id)}"><div><strong>${escapeHtml(notification.title)}</strong><p>${escapeHtml(notification.message)}</p>${action}<small>${escapeHtml(new Date(notification.createdAt).toLocaleString())}</small></div><div class="notification-actions"><form data-live-form action="/notifications/${escapeHtml(notification.id)}/read" method="post"><button class="lui-icon-button" type="submit" aria-label="Mark notification read"><i data-lucide="check"></i></button></form><form data-live-form action="/notifications/${escapeHtml(notification.id)}/delete" method="post"><button class="lui-icon-button notification-delete-button" type="submit" aria-label="Delete notification"><i data-lucide="trash-2"></i></button></form></div></div>`;
 }
 function pushCategoryEnabled(notification) {
   const settings = document.body?.dataset || {};
@@ -858,8 +1269,9 @@ function bindNotificationGestures(scope = document) {
 }
 
 function bindLiveForms(scope = document) {
+  scope.querySelectorAll(popupMenuSelector).forEach(decoratePopupMenu);
   scope.querySelectorAll('[data-live-form]').forEach((form) => { if (form.dataset.liveBound === 'true') return; form.dataset.liveBound = 'true'; form.addEventListener('submit', (event) => { event.preventDefault(); const message = form.dataset.confirmMessage; if (message && !window.confirm(message)) return; submitLiveForm(form); }); }); bindLeaveGroupActions(scope);
-  scope.querySelectorAll('[data-comment-edit-open]').forEach((button) => { if (button.dataset.editBound === 'true') return; button.dataset.editBound = 'true'; button.addEventListener('click', () => { const entry = button.closest('[data-comment-id]'); const menu = button.closest('.comment-menu'); const editor = entry?.querySelector('.comment-edit-form'); menu?.removeAttribute('open'); if (editor && entry?.querySelector('.comment-text')) { entry.querySelector('.comment-text').hidden = true; editor.hidden = false; editor.querySelector('input')?.focus(); } }); });
+  scope.querySelectorAll('[data-comment-edit-open]').forEach((button) => { if (button.dataset.editBound === 'true') return; button.dataset.editBound = 'true'; button.addEventListener('click', () => { const entry = button.closest('[data-comment-id]'); const menu = button.closest('.comment-menu'); const editor = entry?.querySelector('.comment-edit-form'); if (menu) closePopupMenu(menu); if (editor && entry?.querySelector('.comment-text')) { entry.querySelector('.comment-text').hidden = true; editor.hidden = false; editor.querySelector('input')?.focus(); } }); });
   scope.querySelectorAll('[data-comment-edit-cancel]').forEach((button) => { if (button.dataset.editBound === 'true') return; button.dataset.editBound = 'true'; button.addEventListener('click', () => { const entry = button.closest('[data-comment-id]'); const editor = button.closest('.comment-edit-form'); if (entry && editor) { editor.hidden = true; entry.querySelector('.comment-text').hidden = false; } }); });
   scope.querySelectorAll('[data-appeal-word]').forEach((button) => { if (button.dataset.appealBound === 'true') return; button.dataset.appealBound = 'true'; button.addEventListener('click', async () => { button.disabled = true; const response = await fetch('/appeals', { method: 'POST', body: new URLSearchParams({ phrase: button.dataset.phrase || '' }), headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); const payload = await response.json(); if (response.ok && !payload.error) { button.closest('[data-form-error]').textContent = payload.successMessage || 'Thanks. We will review that phrase.'; } else { button.disabled = false; } }); });
 }
@@ -872,7 +1284,7 @@ function showLeaveGroupModal(form) {
   modal.setAttribute('role', 'dialog');
   modal.setAttribute('aria-modal', 'true');
   modal.setAttribute('aria-labelledby', 'leave-group-modal-title');
-  modal.innerHTML = `<article class="warning-modal"><i data-lucide="log-out"></i><p class="kicker">LEAVE GROUP</p><h2 id="leave-group-modal-title">Leave this group?</h2><p>You will lose access to this group and its courses. You can only return if someone invites you or you join again.</p><div class="form-actions"><button class="button secondary" type="button" data-leave-group-cancel>Cancel</button><button class="button danger" type="button" data-leave-group-confirm>Leave Group</button></div></article>`;
+  modal.innerHTML = `<article class="warning-modal"><i data-lucide="log-out"></i><p class="kicker">LEAVE GROUP</p><h2 id="leave-group-modal-title">Leave this group?</h2><p>You will lose access to this group and its courses. You can only return if someone invites you or you join again.</p><div class="form-actions"><button class="lui-button lui-button-secondary" type="button" data-leave-group-cancel>Cancel</button><button class="lui-button lui-button-danger" type="button" data-leave-group-confirm>Leave Group</button></div></article>`;
   const close = () => modal.remove();
   modal.querySelector('[data-leave-group-cancel]').addEventListener('click', close);
   modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
@@ -886,7 +1298,7 @@ function bindLeaveGroupActions(scope = document) {
   scope.querySelectorAll('[data-leave-group-trigger]').forEach((button) => {
     if (button.dataset.leaveBound === 'true') return;
     button.dataset.leaveBound = 'true';
-    button.addEventListener('click', () => { button.closest('details')?.removeAttribute('open'); showLeaveGroupModal(button.closest('[data-leave-group-form]')); });
+    button.addEventListener('click', () => { const details = button.closest('details'); if (details?.matches(popupDetailsSelector)) closePopupMenu(details); else details?.removeAttribute('open'); showLeaveGroupModal(button.closest('[data-leave-group-form]')); });
   });
 }
 
@@ -896,7 +1308,7 @@ function showLiveError(message) {
   alert.className = 'live-error';
   alert.dataset.liveError = 'true';
   alert.setAttribute('role', 'alert');
-  alert.innerHTML = `<i data-lucide="triangle-alert"></i><span>${escapeHtml(message)}</span><button type="button" aria-label="Dismiss message"><i data-lucide="x"></i></button>`;
+  alert.innerHTML = `<i data-lucide="triangle-alert"></i><span>${escapeHtml(message)}</span><button class="lui-icon-button" type="button" aria-label="Dismiss message"><i data-lucide="x"></i></button>`;
   alert.querySelector('button').addEventListener('click', () => alert.remove());
   document.body.appendChild(alert);
   lucide.createIcons();
@@ -905,7 +1317,7 @@ function showLiveError(message) {
 function showLiveSuccess(message) {
   document.querySelector('[data-live-success]')?.remove();
   const alert = document.createElement('div'); alert.className = 'live-success'; alert.dataset.liveSuccess = 'true'; alert.setAttribute('role', 'status');
-  alert.innerHTML = `<i data-lucide="circle-check"></i><span>${escapeHtml(message)}</span><button type="button" aria-label="Dismiss message"><i data-lucide="x"></i></button>`;
+  alert.innerHTML = `<i data-lucide="circle-check"></i><span>${escapeHtml(message)}</span><button class="lui-icon-button" type="button" aria-label="Dismiss message"><i data-lucide="x"></i></button>`;
   alert.querySelector('button').addEventListener('click', () => alert.remove()); document.body.appendChild(alert); lucide.createIcons(); window.setTimeout(() => alert.remove(), 7000);
 }
 async function purgeClientCache() {
@@ -920,7 +1332,7 @@ function showDebugModal(remote = false) {
   modal.dataset.debugModal = 'true';
   modal.setAttribute('role', 'dialog');
   modal.setAttribute('aria-modal', 'true');
-  modal.innerHTML = `<article class="debug-modal"><button class="modal-close" type="button" data-debug-close aria-label="Close debug menu"><i data-lucide="x"></i></button><p class="kicker">${remote ? 'REMOTE CACHE COMMAND' : 'DEBUG TOOLS'}</p><h2>${remote ? 'Cache purge requested' : 'Browser cache'}</h2>${remote ? '<p>A site admin requested a full cache purge for this browser. The page will unregister its service workers, delete every site cache, and reload.</p><button class="button danger" type="button" data-debug-nuke><i data-lucide="bomb"></i> Start purge</button>' : '<p>Use this when updated service workers or media files are not appearing. Nuking cache removes this site\'s service workers and every Cache Storage entry, then reloads the page.</p><p class="debug-warning"><i data-lucide="triangle-alert"></i> Offline media will be removed. The next load downloads fresh files and may be slower. This does not delete your account, tasks, groups, or server data.</p><button class="button danger" type="button" data-debug-nuke><i data-lucide="bomb"></i> NUKE CACHE</button>'}</article>`;
+  modal.innerHTML = `<article class="debug-modal"><button class="lui-icon-button modal-close" type="button" data-debug-close aria-label="Close debug menu"><i data-lucide="x"></i></button><p class="kicker">${remote ? 'REMOTE CACHE COMMAND' : 'DEBUG TOOLS'}</p><h2>${remote ? 'Cache purge requested' : 'Browser cache'}</h2>${remote ? '<p>A site admin requested a full cache purge for this browser. The page will unregister its service workers, delete every site cache, and reload.</p><button class="lui-button lui-button-danger" type="button" data-debug-nuke><i data-lucide="bomb"></i> Start purge</button>' : '<p>Use this when updated service workers or media files are not appearing. Nuking cache removes this site\'s service workers and every Cache Storage entry, then reloads the page.</p><p class="debug-warning"><i data-lucide="triangle-alert"></i> Offline media will be removed. The next load downloads fresh files and may be slower. This does not delete your account, tasks, groups, or server data.</p><button class="lui-button lui-button-danger" type="button" data-debug-nuke><i data-lucide="bomb"></i> NUKE CACHE</button>'}</article>`;
   modal.querySelector('[data-debug-close]').addEventListener('click', () => modal.remove());
   modal.addEventListener('click', (event) => { if (event.target === modal) modal.remove(); });
   modal.querySelector('[data-debug-nuke]').addEventListener('click', async (event) => {
@@ -934,11 +1346,11 @@ function showDebugModal(remote = false) {
   lucide.createIcons();
 }
 function bindDebugTools() {
-  document.querySelectorAll('[data-debug-open]').forEach((button) => button.addEventListener('click', () => { button.closest('details')?.removeAttribute('open'); showDebugModal(); }));
+  document.querySelectorAll('[data-debug-open]').forEach((button) => button.addEventListener('click', () => { const details = button.closest('details'); if (details?.matches(popupDetailsSelector)) closePopupMenu(details); else details?.removeAttribute('open'); showDebugModal(); }));
 }
 function showWarningModal(notification) {
   document.querySelector('[data-warning-modal]')?.remove();
-  const modal = document.createElement('div'); modal.className = 'warning-modal-backdrop open'; modal.dataset.warningModal = 'true'; modal.dataset.warningId = notification.id; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.innerHTML = `<div class="warning-modal"><i data-lucide="shield-alert"></i><p class="kicker">MODERATION NOTICE</p><h2>${escapeHtml(notification.title)}</h2><p>${escapeHtml(notification.message)}</p><button class="button primary" type="button" data-warning-close>I understand</button></div>`;
+  const modal = document.createElement('div'); modal.className = 'warning-modal-backdrop open'; modal.dataset.warningModal = 'true'; modal.dataset.warningId = notification.id; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.innerHTML = `<div class="warning-modal"><i data-lucide="shield-alert"></i><p class="kicker">MODERATION NOTICE</p><h2>${escapeHtml(notification.title)}</h2><p>${escapeHtml(notification.message)}</p><button class="lui-button lui-button-primary" type="button" data-warning-close>I understand</button></div>`;
   modal.querySelector('[data-warning-close]').addEventListener('click', () => { modal.remove(); fetch(`/notifications/${encodeURIComponent(notification.id)}/read`, { method: 'POST', headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); });
   document.body.appendChild(modal); lucide.createIcons();
 }
@@ -952,7 +1364,7 @@ function showAnnouncementModal(notification) {
   modal.dataset.announcementId = notification.id;
   modal.setAttribute('role', 'dialog');
   modal.setAttribute('aria-modal', 'true');
-  modal.innerHTML = `<article class="announcement-modal announcement-size-${size}"><button class="modal-close" type="button" data-announcement-close aria-label="Close announcement"><i data-lucide="x"></i></button><p class="kicker">SITE ANNOUNCEMENT</p><h2>${escapeHtml(notification.title)}</h2><div class="announcement-content">${notification.html || `<p>${escapeHtml(notification.message || '')}</p>`}</div>${media}<button class="button primary" type="button" data-announcement-close>I Gotchu</button></article>`;
+  modal.innerHTML = `<article class="announcement-modal announcement-size-${size}"><button class="lui-icon-button modal-close" type="button" data-announcement-close aria-label="Close announcement"><i data-lucide="x"></i></button><p class="kicker">SITE ANNOUNCEMENT</p><h2>${escapeHtml(notification.title)}</h2><div class="announcement-content">${notification.html || `<p>${escapeHtml(notification.message || '')}</p>`}</div>${media}<button class="lui-button lui-button-primary" type="button" data-announcement-close>I Gotchu</button></article>`;
   modal.querySelectorAll('[data-announcement-close]').forEach((button) => button.addEventListener('click', () => { const id = modal.dataset.announcementId; modal.remove(); if (id) fetch(`/notifications/${encodeURIComponent(id)}/read`, { method: 'POST', headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); }));
   document.body.appendChild(modal);
   lucide.createIcons();
@@ -1055,6 +1467,10 @@ function bindDashboardInteractions() {
 }
 
 function bindInteractions() {
+  bindLockUiComponentDecoration();
+  bindSidebarToggle();
+  bindPopupMenus();
+  bindLockUiGallery();
   document.querySelectorAll('[data-tab]').forEach((tab) => tab.addEventListener('click', () => { document.querySelectorAll('.tab').forEach((item) => item.classList.remove('active')); document.querySelectorAll('.auth-form').forEach((form) => form.classList.add('hidden')); tab.classList.add('active'); document.getElementById(tab.dataset.tab).classList.remove('hidden'); }));
   bindLiveForms();
   bindTimezoneSearch();
@@ -1069,6 +1485,8 @@ function bindInteractions() {
   }));
   bindDebugTools();
   document.querySelectorAll('[data-inline-create]').forEach((button) => button.addEventListener('click', () => { const form = document.querySelector('.inline-create-form'); form?.classList.remove('hidden'); form?.querySelector('input[name="title"]')?.focus(); form?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }));
+  document.querySelectorAll('[data-inline-create-close]').forEach((button) => button.addEventListener('click', () => { const form = button.closest('.inline-create-form'); form?.classList.add('hidden'); document.querySelector('[data-inline-create]')?.focus?.(); }));
+  document.querySelector('.inline-create-form')?.addEventListener('keydown', (event) => { if (event.key === 'Escape') { event.preventDefault(); const form = event.currentTarget; form?.classList.add('hidden'); document.querySelector('[data-inline-create]')?.focus?.(); } });
   document.querySelectorAll('[data-course-tab]').forEach((tab) => tab.addEventListener('click', (event) => { event.preventDefault(); setCourseTab(tab.dataset.courseTab); }));
   document.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => { const target = document.getElementById(button.dataset.open); target?.classList.add('open'); target?.querySelector('[data-modal-autofocus], input[name="title"]')?.focus(); }));
   document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => { const modal = button.closest('.modal-backdrop'); modal?.classList.remove('open'); if (modal?.matches('[data-task-sync-modal]')) document.querySelector('[data-open="task-sync-modal"]')?.focus(); }));
@@ -1104,7 +1522,7 @@ function bindInteractions() {
       try { localStorage.setItem('lockin-task-sync-tip-dismissed', 'true'); } catch (error) {}
     });
   }
-  document.querySelectorAll('.comment-menu .menu-action.danger i[data-lucide="trash-2"]').forEach((icon) => icon.remove());
+  document.querySelectorAll('.comment-menu .lui-menu-action.lui-menu-action-danger i[data-lucide="trash-2"]').forEach((icon) => icon.remove());
   bindNotificationGestures();
   document.querySelectorAll('[data-warning-close]').forEach((button) => button.addEventListener('click', () => { const modal = button.closest('[data-warning-modal]'); const warningId = modal?.dataset.warningId; modal?.remove(); if (warningId) fetch(`/notifications/${encodeURIComponent(warningId)}/read`, { method: 'POST', headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); }));
   document.querySelectorAll('[data-announcement-close]').forEach((button) => button.addEventListener('click', () => { const modal = button.closest('[data-announcement-modal]'); const announcementId = modal?.dataset.announcementId; modal?.remove(); if (announcementId) fetch(`/notifications/${encodeURIComponent(announcementId)}/read`, { method: 'POST', headers: { Accept: 'application/json', 'X-Live-Request': 'true' } }); }));
@@ -1132,7 +1550,7 @@ function bindInteractions() {
           if (!response.ok) throw new Error(`User search returned ${response.status}.`);
           if (!results || input.value.trim() !== query) return;
           const users = await response.json();
-          results.innerHTML = users.map((candidate) => `<button type="button" role="option" aria-selected="false" data-username="${escapeHtml(candidate.username)}"><strong>${escapeHtml(candidate.name)}</strong><small>@${escapeHtml(candidate.username)}</small></button>`).join('') || '<span class="user-search-empty">No classmates found</span>';
+          results.innerHTML = users.map((candidate) => `<button class="lui-menu-action" type="button" role="option" aria-selected="false" data-username="${escapeHtml(candidate.username)}"><strong>${escapeHtml(candidate.name)}</strong><small>@${escapeHtml(candidate.username)}</small></button>`).join('') || '<span class="user-search-empty">No classmates found</span>';
           input.setAttribute('aria-expanded', 'true');
           results.querySelectorAll('[data-username]').forEach((option) => option.addEventListener('click', () => { input.value = option.dataset.username; results.innerHTML = ''; input.setAttribute('aria-expanded', 'false'); input.focus(); }));
         } catch (error) {

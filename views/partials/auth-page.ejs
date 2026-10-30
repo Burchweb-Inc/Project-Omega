@@ -33,7 +33,7 @@
           <label>What should we call you?<input name="name" autocomplete="name" placeholder="Alex Morgan" required></label>
           <label>Choose a username<input name="username" autocomplete="username" placeholder="alexm" pattern="[a-z0-9_]{3,24}" required></label>
           <label>How old are you?<input name="age" type="number" min="13" placeholder="18" required></label>
-          <button class="button primary full" type="submit">Finish with SnarkyType <i data-lucide="arrow-up-right"></i></button>
+          <button class="lui-button lui-button-primary full" type="submit">Finish with SnarkyType <i data-lucide="arrow-up-right"></i></button>
         </form>
       <% } else if (mode === 'signup') { %>
         <form class="auth-page-form" action="/signup" method="post" data-auth-form>
@@ -41,18 +41,18 @@
           <label>What should we call you?<input name="name" autocomplete="name" placeholder="Alex Morgan" required></label>
           <label>Choose a username<input name="username" autocomplete="username" placeholder="alexm" required></label>
           <div class="auth-form-row"><label>How old are you?<input name="age" type="number" min="13" placeholder="18" required></label><label>Create a password<input name="password" type="password" minlength="8" autocomplete="new-password" placeholder="8+ characters" required></label></div>
-          <button class="button primary full" type="submit">Create my workspace <i data-lucide="arrow-up-right"></i></button>
+          <button class="lui-button lui-button-primary full" type="submit">Create my workspace <i data-lucide="arrow-up-right"></i></button>
         </form>
-        <% if (snarkyTypeConfigured) { %><a class="button secondary full" href="/auth/snarkytype?mode=signup&next=<%= encodeURIComponent(next) %>"><i data-lucide="key-round"></i> Sign up with SnarkyType</a><% } %>
+        <% if (snarkyTypeConfigured) { %><a class="lui-button lui-button-secondary full" href="/auth/snarkytype?mode=signup&next=<%= encodeURIComponent(next) %>"><i data-lucide="key-round"></i> Sign up with SnarkyType</a><% } %>
         <p class="auth-page-switch">Already have a desk? <a href="/login<%= next ? `?next=${encodeURIComponent(next)}` : '' %>">Sign in</a></p>
       <% } else { %>
         <form class="auth-page-form" action="/login" method="post" data-auth-form>
           <input type="hidden" name="next" value="<%= next %>">
           <label>Username<input name="username" autocomplete="username" placeholder="alexm" required></label>
           <label>Password<input name="password" type="password" autocomplete="current-password" placeholder="Your password" required></label>
-          <button class="button primary full" type="submit">Open my workspace <i data-lucide="arrow-up-right"></i></button>
+          <button class="lui-button lui-button-primary full" type="submit">Open my workspace <i data-lucide="arrow-up-right"></i></button>
         </form>
-        <% if (snarkyTypeConfigured) { %><a class="button secondary full" href="/auth/snarkytype?mode=login&next=<%= encodeURIComponent(next) %>"><img src="/media/sktp.png" style="max-width:30%; display:block; height:auto;"> Log in with SnarkyType</a><% } %>
+        <% if (snarkyTypeConfigured) { %><a class="lui-button lui-button-secondary full" href="/auth/snarkytype?mode=login&next=<%= encodeURIComponent(next) %>"><img src="/media/sktp.png" style="max-width:30%; display:block; height:auto;"> Log in with SnarkyType</a><% } %>
         <p class="auth-page-switch">New to LockIn? <a href="/signup<%= next ? `?next=${encodeURIComponent(next)}` : '' %>">Create an account</a></p>
       <% } %>
       <p class="auth-page-note"><i data-lucide="shield-check"></i> Ad-free, privacy-minded, and built for school networks.</p>

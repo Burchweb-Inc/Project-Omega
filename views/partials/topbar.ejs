@@ -1,14 +1,14 @@
 <% const userNotifications=typeof notifications==='undefined' ? (user.notifications || []) : notifications; const
     unreadNotifications=userNotifications.filter(notification=> !notification.read); %>
-    <header class="topbar"><button class="mobile-menu icon-button" aria-label="Open navigation"><i
-                data-lucide="menu"></i></button>
+    <header class="topbar"><button class="mobile-menu lui-icon-button" type="button" data-sidebar-toggle aria-label="Open navigation" aria-expanded="false" title="Open navigation"><i data-lucide="panel-left-open"></i></button>
         <div class="breadcrumbs"><a href="/dashboard">My desk</a><i data-lucide="chevron-right"></i><strong>
                 <%= locals.selectedOrg?.name || ({ dashboard: 'Overview' , todo: 'Personal Todo' ,
                     calendar: 'Academic calendar' , groups: 'Breakout groups' }[page] || 'Study space' ) %>
             </strong></div>
-        <div class="top-actions"><a href="/support" style="text-decoration:none;"><span class="offline-status"><i data-lucide="hand-heart"></i> Support Us</span></a>
+        <div class="top-actions"><a href="/support" style="text-decoration:none;"><span class="offline-status"><i
+                        data-lucide="hand-heart"></i> Support Us</span></a>
             <details class="notification-menu">
-                <summary class="icon-button" aria-label="Notifications"><i data-lucide="bell"></i>
+                <summary class="lui-icon-button" aria-label="Notifications"><i data-lucide="bell"></i>
                     <% if (unreadNotifications.length) { %><span class="notification-count">
                             <%= unreadNotifications.length %>
                         </span>
@@ -17,8 +17,8 @@
                 <div class="notification-popover">
                     <div class="notification-heading"><strong>Notifications</strong>
                         <% if (unreadNotifications.length) { %>
-                            <form data-live-form action="/notifications/read-all" method="post"><button
-                                    class="text-button" type="submit">Mark all read</button></form>
+                            <form data-live-form action="/notifications/read-all" method="post"><button class="lui-link"
+                                    type="submit">Mark all read</button></form>
                             <% } %>
                     </div>
                     <% if (userNotifications.length) { userNotifications.slice(0, 8).forEach(notification=> { %><div
@@ -30,7 +30,7 @@
                                 <p>
                                     <%= notification.message %>
                                 </p>
-                                <% if (notification.href && notification.actionLabel) { %><a class="text-button"
+                                <% if (notification.href && notification.actionLabel) { %><a class="lui-link"
                                         href="<%= notification.href %>">
                                         <%= notification.actionLabel %>
                                     </a>
@@ -41,12 +41,12 @@
                             <div class="notification-actions">
                                 <% if (!notification.read) { %>
                                     <form data-live-form action="/notifications/<%= notification.id %>/read"
-                                        method="post"><button class="icon-button" type="submit"
+                                        method="post"><button class="lui-icon-button" type="submit"
                                             aria-label="Mark notification read"><i data-lucide="check"></i></button>
                                     </form>
                                     <% } %>
                                         <form data-live-form action="/notifications/<%= notification.id %>/delete"
-                                            method="post"><button class="icon-button notification-delete-button"
+                                            method="post"><button class="lui-icon-button notification-delete-button"
                                                 type="submit" aria-label="Delete notification"><i
                                                     data-lucide="trash-2"></i></button></form>
                             </div>

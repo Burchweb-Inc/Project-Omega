@@ -348,7 +348,7 @@
     color: var(--blue)
 }
 
-.task-sync-tip .text-button {
+.task-sync-tip .lui-link {
     flex: 0 0 auto;
     color: var(--blue);
     font-size: 11px;
@@ -457,16 +457,16 @@
     margin: 0
 }
 
-.task-sync-connection-actions .button,
-.task-sync-controls .button {
+.task-sync-connection-actions .lui-button,
+.task-sync-controls .lui-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 7px
 }
 
-.task-sync-connection-actions .button svg,
-.task-sync-controls .button svg {
+.task-sync-connection-actions .lui-button svg,
+.task-sync-controls .lui-button svg {
     width: 15px;
     height: 15px
 }
@@ -477,7 +477,7 @@
     font-weight: 700
 }
 
-.task-sync-connection-actions .text-button {
+.task-sync-connection-actions .lui-link {
     border: 0;
     background: transparent;
     color: var(--muted);
@@ -511,7 +511,7 @@
     color: var(--navy)
 }
 
-.task-sync-apple-form .button,
+.task-sync-apple-form .lui-button,
 .task-sync-apple-form small {
     grid-column: 1 / -1
 }
@@ -1089,7 +1089,7 @@
     }
 
     .task-sync-apple-form label,
-    .task-sync-apple-form .button,
+    .task-sync-apple-form .lui-button,
     .task-sync-apple-form small {
         grid-column: 1
     }
@@ -1098,7 +1098,7 @@
         padding: 15px
     }
 
-    .private-task .icon-button {
+    .private-task .lui-icon-button {
         display: none
     }
 
@@ -1121,6 +1121,7 @@
 }
 
 .inline-create-form {
+    position: relative;
     display: grid;
     gap: 10px;
     margin: 0 0 16px;
@@ -1128,6 +1129,12 @@
     background: #f5f8fa;
     border: 1px solid var(--line);
     border-radius: 8px
+}
+
+.inline-create-close {
+    position: absolute;
+    top: 8px;
+    right: 8px
 }
 
 .inline-create-fields {
@@ -1142,7 +1149,7 @@
     margin: 0
 }
 
-.inline-create-form .text-button {
+.inline-create-form .lui-link {
     justify-self: start
 }
 
@@ -1255,7 +1262,7 @@
         grid-column: 1/-1
     }
 
-    .inline-create-fields .button {
+    .inline-create-fields .lui-button {
         grid-column: 1/-1
     }
 

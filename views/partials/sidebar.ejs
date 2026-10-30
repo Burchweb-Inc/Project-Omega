@@ -1,11 +1,13 @@
 <aside class="sidebar" aria-label="Primary navigation">
-  <div class="sidebar-head"><a href="/dashboard" class="wordmark" aria-label="LockIn dashboard"><img
-        src="/media/logo.png" alt="LockIn" style="width: 88px; height: auto;"></a></div>
+  <div class="sidebar-head">
+    <a href="/dashboard" class="wordmark sidebar-logo" aria-label="LockIn dashboard"><img src="/media/logo.png" alt="LockIn"></a>
+    <button class="lui-icon-button sidebar-toggle" type="button" data-sidebar-toggle aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar"><i data-lucide="panel-left-close"></i></button>
+  </div>
   <nav class="nav-groups">
     <div class="nav-label">MY DESK</div>
     <a class="nav-link <%= page === 'dashboard' ? 'selected' : '' %>" href="/dashboard"><i
         data-lucide="layout-dashboard"></i><span>Overview</span></a>
-    <a class="nav-link <%= page === 'todo' ? 'selected' : '' %>" href="/todo"><i
+    <a class="nav-link <%= page === 'todo' ? 'selected' : '' %>" href="/todo?filter=pending"><i
         data-lucide="check-square-2"></i><span>Personal Todo</span><strong class="nav-count" data-live-todo-count>
         <%= (user.tasks || []).filter(task=> !task.done).length %>
       </strong></a>
@@ -38,14 +40,14 @@
           </strong><small>@<%= user.username %></small></div>
       </div>
       <details class="account-menu">
-        <summary class="icon-button" aria-label="Account menu" title="Account menu"><i data-lucide="ellipsis"></i>
+        <summary class="lui-icon-button" aria-label="Account menu" title="Account menu"><i data-lucide="ellipsis"></i>
         </summary>
-        <div class="account-menu-popover"><a class="menu-action" href="/settings"><i data-lucide="settings"></i>
+        <div class="account-menu-popover"><a class="lui-menu-action" href="/settings"><i data-lucide="settings"></i>
             Account settings</a>
-          <% if (user.settings?.betaTools) { %><details><summary class="menu-action"><i data-lucide="flask-conical"></i> Beta access</summary><a class="menu-action" href="/beta-tests/3drender"><i data-lucide="box"></i> 3D Render test</a></details><% } %>
-          <button class="menu-action" type="button" data-debug-open><i data-lucide="bug"></i>
+          <% if (user.settings?.betaTools) { %><details><summary class="lui-menu-action"><i data-lucide="flask-conical"></i> Beta access</summary><a class="lui-menu-action" href="/beta-tests/3drender"><i data-lucide="box"></i> 3D Render test</a></details><% } %>
+          <button class="lui-menu-action" type="button" data-debug-open><i data-lucide="bug"></i>
             Debug</button>
-          <form action="/logout" method="post"><button class="menu-action" type="submit"><i data-lucide="log-out"></i>
+          <form action="/logout" method="post"><button class="lui-menu-action" type="submit"><i data-lucide="log-out"></i>
               Sign out</button></form>
         </div>
       </details>

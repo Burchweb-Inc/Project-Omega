@@ -2,27 +2,26 @@
     <div class="page-heading hero-heading">
         <div>
             <h1>Personal Todo</h1>
-            <p class="lead">Your own queue, pulled from class feeds and group work.</p>
-        </div><button class="button primary" type="button" data-open="quick-task"><i data-lucide="plus"></i> Add
+        </div><button class="lui-button lui-button-primary" type="button" data-open="quick-task"><i data-lucide="plus"></i> Add
             personal task</button>
     </div>
     <div class="todo-toolbar">
         <div class="segmented"><a class="active" data-todo-filter="all" href="/todo">All tasks</a><a data-todo-filter="pending" href="/todo?filter=pending">Pending</a><a
-            data-todo-filter="completed" href="/todo?filter=completed">Completed</a></div><div class="todo-toolbar-actions"><button class="button secondary" type="button" data-focus-mode><i data-lucide="sparkles"></i> Auto organize</button><span class="muted" data-todo-summary>
+            data-todo-filter="completed" href="/todo?filter=completed">Completed</a></div><div class="todo-toolbar-actions"><button class="lui-button lui-button-secondary" type="button" data-focus-mode><i data-lucide="sparkles"></i> Auto organize</button><span class="muted" data-todo-summary>
             <%= (user.tasks || []).filter(task=> !task.done).length %> things still in motion
-        </span><button class="icon-button task-sync-trigger" type="button" data-open="task-sync-modal" aria-controls="task-sync-modal" aria-label="Open task sync settings" title="Task sync"><i data-lucide="refresh-cw"></i></button></div>
+        </span><button class="lui-icon-button task-sync-trigger" type="button" data-open="task-sync-modal" aria-controls="task-sync-modal" aria-label="Open task sync settings" title="Task sync"><i data-lucide="refresh-cw"></i></button></div>
     </div>
     <aside class="task-sync-tip" data-task-sync-tip aria-label="Task sync setup tip">
         <p><i data-lucide="refresh-cw" aria-hidden="true"></i><span>Sync your LockIn tasks to Google Tasks or Apple Reminders.</span></p>
-        <button class="text-button" type="button" data-open="task-sync-modal" aria-controls="task-sync-modal">Set up sync</button>
-        <button class="task-sync-tip-close" type="button" data-dismiss-sync-tip aria-label="Dismiss task sync tip"><i data-lucide="x"></i></button>
+        <button class="lui-link" type="button" data-open="task-sync-modal" aria-controls="task-sync-modal">Set up sync</button>
+        <button class="lui-icon-button task-sync-tip-close" type="button" data-dismiss-sync-tip aria-label="Dismiss task sync tip"><i data-lucide="x"></i></button>
     </aside>
     <%- include('mini/task-sync-modal') %>
     <section class="private-list" data-live-todo-list>
         <% (user.tasks || []).forEach(task=> { %><article class="private-task <%= task.done ? 'is-done' : '' %>" data-priority="<%= (task.priority || 'Normal').toLowerCase() %>"
                 data-task-id="<%= task.id %>">
                 <form class="toggle-task-form" action="/tasks/<%= task.id %>/toggle" method="post" data-live-form>
-                    <button class="task-check" aria-label="Toggle <%= task.title %>"><i
+                    <button class="lui-check task-check" aria-label="Toggle <%= task.title %>"><i
                             data-lucide="check"></i></button></form>
                 <div class="private-task-copy">
                     <h3>
@@ -30,9 +29,9 @@
                     </h3><% if (task.details) { %><p class="task-details"><%- renderLinkedText(task.details, task.links) %></p><% } %><span><i data-lucide="link-2"></i>
                         <%= task.source %>
                     </span><small class="task-due" data-raw-due="<%= task.due %>">Due <%= formatTaskDate(task.due, todoDateTimezone, todoDateLocale) %></small>
-                </div><details class="task-edit-details"><summary class="icon-button" aria-label="Edit task"><i data-lucide="pencil"></i></summary><form class="task-edit-form link-composer" action="/tasks/<%= task.id %>/update" method="post" data-live-form><label>Title<input name="title" value="<%= task.title %>" required></label><label>Details<textarea name="details" rows="3"><%= task.details || '' %></textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Due date<input name="due" type="date" value="<%= task.due !== 'No date' ? task.due : '' %>"></label><label>Priority<select name="priority"><% ['Low', 'Normal', 'Medium', 'High'].forEach(priority => { %><option <%= task.priority === priority ? 'selected' : '' %>><%= priority %></option><% }) %></select></label><button class="button secondary" type="submit">Save task</button></form></details><span class="priority-flag"><i data-lucide="flag"></i>
+                </div><details class="task-edit-details"><summary class="lui-icon-button" aria-label="Edit task"><i data-lucide="pencil"></i></summary><form class="task-edit-form link-composer" action="/tasks/<%= task.id %>/update" method="post" data-live-form><label>Title<input name="title" value="<%= task.title %>" required></label><label>Details<textarea name="details" rows="3"><%= task.details || '' %></textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Due date<input name="due" type="date" value="<%= task.due !== 'No date' ? task.due : '' %>"></label><label>Priority<select name="priority"><% ['Low', 'Normal', 'Medium', 'High'].forEach(priority => { %><option <%= task.priority === priority ? 'selected' : '' %>><%= priority %></option><% }) %></select></label><button class="lui-button lui-button-secondary" type="submit">Save task</button></form></details><span class="priority-flag"><i data-lucide="flag"></i>
                     <%= task.priority || 'Normal' %>
-                </span><form data-live-form action="/tasks/<%= task.id %>/delete" method="post"><button class="icon-button" type="submit" aria-label="Delete task"><i data-lucide="trash-2"></i></button></form><button class="icon-button drag-handle" aria-label="Move task" type="button"><i
+                </span><form data-live-form action="/tasks/<%= task.id %>/delete" method="post"><button class="lui-icon-button" type="submit" aria-label="Delete task"><i data-lucide="trash-2"></i></button></form><button class="lui-icon-button drag-handle" aria-label="Move task" type="button"><i
                     data-lucide="grip-vertical"></i></button>
             </article>
             <% }) %>
@@ -44,7 +43,7 @@
                     <% } %>
     </section>
     <div id="quick-task" class="modal-backdrop">
-        <div class="modal-card"><button class="modal-close" data-close aria-label="Close" type="button"><i
+        <div class="modal-card"><button class="lui-icon-button modal-close" data-close aria-label="Close" type="button"><i
                     data-lucide="x"></i></button>
             <p class="eyebrow">PERSONAL TASK</p>
             <h2>Keep one more thing visible.</h2>
@@ -54,7 +53,7 @@
                         <option>Normal</option>
                         <option>Medium</option>
                         <option>High</option>
-                    </select></label><button class="button primary full" type="submit">Add to my Todo</button></form>
+                    </select></label><button class="lui-button lui-button-primary full" type="submit">Add to my Todo</button></form>
         </div>
     </div>
 </section>

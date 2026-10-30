@@ -6,24 +6,24 @@
         <h2 id="task-copy-title" data-copy-heading>Choose a group</h2>
         <p id="task-copy-description" data-copy-description>Select where to place this task.</p>
       </div>
-      <button class="icon-button" type="button" data-copy-close aria-label="Close task copy dialog"><i data-lucide="x"></i></button>
+      <button class="lui-icon-button" type="button" data-copy-close aria-label="Close task copy dialog"><i data-lucide="x"></i></button>
     </header>
     <nav class="task-copy-trail" aria-label="Copy destination">
-      <button type="button" data-copy-nav="groups" aria-current="step">Groups</button>
-      <span data-copy-group-crumb hidden><i data-lucide="chevron-right"></i><button type="button" data-copy-nav="courses"></button></span>
+      <button class="lui-link" type="button" data-copy-nav="groups" aria-current="step">Groups</button>
+      <span data-copy-group-crumb hidden><i data-lucide="chevron-right"></i><button class="lui-link" type="button" data-copy-nav="courses"></button></span>
       <span data-copy-course-crumb hidden><i data-lucide="chevron-right"></i><span data-copy-course-label></span></span>
     </nav>
-    <button class="task-copy-back text-button" type="button" data-copy-back hidden><i data-lucide="arrow-left"></i> Back</button>
+    <button class="task-copy-back lui-link" type="button" data-copy-back hidden><i data-lucide="arrow-left"></i> Back</button>
     <div class="task-copy-groups" data-copy-groups>
       <% (copyDestinations || []).forEach(destination => { %>
-        <button class="task-copy-choice" type="button" data-copy-group="<%= destination.id %>" data-copy-group-name="<%= destination.name %>">
+        <button class="lui-choice task-copy-choice" type="button" data-copy-group="<%= destination.id %>" data-copy-group-name="<%= destination.name %>">
           <span class="task-copy-choice-icon"><i data-lucide="users-round"></i></span>
           <span><strong><%= destination.name %></strong><small><%= destination.courses.length %> course<%= destination.courses.length === 1 ? '' : 's' %> available</small></span>
           <i data-lucide="chevron-right"></i>
         </button>
         <div class="task-copy-courses" data-copy-courses="<%= destination.id %>" hidden>
           <% destination.courses.forEach(course => { %>
-            <button class="task-copy-choice" type="button" data-copy-course="<%= course.id %>" data-copy-course-name="<%= course.name %>" data-copy-course-code="<%= course.code %>">
+            <button class="lui-choice task-copy-choice" type="button" data-copy-course="<%= course.id %>" data-copy-course-name="<%= course.name %>" data-copy-course-code="<%= course.code %>">
               <span class="task-copy-choice-icon"><i data-lucide="book-open"></i></span>
               <span><strong><%= course.name %></strong><small><%= course.code || 'Course' %></small></span>
               <i data-lucide="chevron-right"></i>
@@ -35,7 +35,7 @@
     <section class="task-copy-review" data-copy-review hidden>
       <div class="task-copy-destination"><i data-lucide="folder-check"></i><div><small>Copy destination</small><strong data-copy-destination></strong></div></div>
       <p>The original task will stay where it is. Comments and completion status will not be copied.</p>
-      <button class="button primary" type="button" data-copy-submit><i data-lucide="copy"></i> Copy task here</button>
+      <button class="lui-button lui-button-primary" type="button" data-copy-submit><i data-lucide="copy"></i> Copy task here</button>
     </section>
     <section class="task-copy-progress" data-copy-progress role="status" aria-live="polite" hidden>
       <span class="task-copy-loader" aria-hidden="true"></span>
@@ -47,8 +47,8 @@
       <span class="task-copy-result-icon"><i data-lucide="check"></i></span>
       <h3>Task copied</h3>
       <p>Your new copy is ready in the selected course.</p>
-      <a class="button primary" data-copy-result-link href="">Go to copied task <i data-lucide="arrow-up-right"></i></a>
-      <button class="text-button" type="button" data-copy-another>Copy to another course</button>
+      <a class="lui-button lui-button-primary" data-copy-result-link href="">Go to copied task <i data-lucide="arrow-up-right"></i></a>
+      <button class="lui-link" type="button" data-copy-another>Copy to another course</button>
     </section>
     <p class="task-copy-error" data-copy-error role="alert" hidden></p>
   </section>

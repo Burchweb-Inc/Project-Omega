@@ -515,13 +515,13 @@ select {
     margin: 0
 }
 
-.account-menu-popover .menu-action {
+.account-menu-popover .lui-menu-action {
     width: 100%;
     justify-content: flex-start;
     color: #edf5f8;
     text-decoration: none;
 }
-.account-menu-popover .menu-action:hover {
+.account-menu-popover .lui-menu-action:hover {
     background: rgba(255, 255, 255, .08);
 }
 .avatar {
@@ -542,7 +542,7 @@ select {
     font-size: 12px
 }
 
-.icon-button {
+.lui-icon-button {
     display: grid;
     place-items: center;
     width: 34px;
@@ -554,11 +554,11 @@ select {
     cursor: pointer
 }
 
-.icon-button:hover {
+.lui-icon-button:hover {
     background: rgba(44, 110, 159, .12)
 }
 
-.icon-button svg {
+.lui-icon-button svg {
     width: 17px
 }
 
@@ -668,52 +668,13 @@ select {
     letter-spacing: .16em
 }
 
-.button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    border: 0;
-    border-radius: 7px;
-    padding: 12px 16px;
-    font-weight: 700;
-    text-decoration: none;
-    cursor: pointer;
-    transition: transform .2s, box-shadow .2s
-}
 
-.button:hover {
-    transform: translateY(-2px)
-}
-
-.button svg,
-.text-button svg {
-    width: 15px;
-    height: 15px
-}
-
-.primary {
-    background: var(--coral);
-    color: white;
-    box-shadow: 0 9px 18px rgba(232, 111, 81, .2)
-}
-
-.secondary {
-    background: white;
-    border: 1px solid var(--line);
-    color: var(--navy)
-}
-
-.danger {
-    background: #be594f;
-    color: white
-}
 
 .full {
     width: 100%
 }
 
-.text-button {
+.lui-link {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -726,7 +687,7 @@ select {
     cursor: pointer
 }
 
-.text-button:hover {
+.lui-link:hover {
     color: var(--coral)
 }
 
@@ -813,7 +774,7 @@ select {
 .tutorial-card h2 { font-size: 25px }
 .tutorial-card p { margin-top: 9px; color: var(--ink-soft); font-size: 13px; line-height: 1.6 }
 .tutorial-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px }
-.tutorial-actions .button:disabled { opacity: .4; cursor: not-allowed }
+.tutorial-actions .lui-button:disabled { opacity: .4; cursor: not-allowed }
 .tutorial-target { position: relative; z-index: 41; border-radius: 8px; box-shadow: 0 0 0 5px rgba(237, 184, 77, .75), 0 0 0 999px rgba(23, 43, 77, .05) }
 
 .course-page .feed-panel {
@@ -1235,17 +1196,17 @@ select {
     font-size: 12px
 }
 
-.public-nav>a:not(.button),
+.public-nav>a:not(.lui-button),
 .public-footer a {
     text-decoration: none
 }
 
-.public-nav>a:not(.button):hover,
+.public-nav>a:not(.lui-button):hover,
 .public-footer a:hover {
     color: var(--coral)
 }
 
-.public-nav .button {
+.public-nav .lui-button {
     padding: 9px 12px;
     font-size: 11px
 }
@@ -2903,10 +2864,9 @@ textarea {
 .settings-security-stack { display: grid; gap: 24px }
 .settings-provider { padding-top: 20px; border-top: 1px solid var(--line) }
 .settings-provider p { margin: 7px 0 12px }
-.settings-provider .button { display: inline-flex; margin-top: 4px }
+.settings-provider .lui-button { display: inline-flex; margin-top: 4px }
 .settings-section.danger-zone { border-color: #efc8bc }
 .settings-section.danger-zone h2 { color: #a34c40 }
-.button.danger { background: #b95647; color: white }
 .breakout-groups-page > .page-heading { position: relative; z-index: 60 }
 
 @media(max-width:700px) {
@@ -3008,7 +2968,7 @@ textarea {
     color: var(--coral)
 }
 
-.debug-modal .button {
+.debug-modal .lui-button {
     margin-top: 10px
 }
 
@@ -3539,7 +3499,7 @@ body.page-ready .page-loader {
 .auth-page-form input { width: 100%; padding: 13px 14px; border: 1px solid #9eb4bc; border-radius: 4px; background: #fff; color: #172b4d; outline: 0; transition: border-color .2s, box-shadow .2s, background .2s }
 .auth-page-form input:focus { border-color: var(--blue); background: #fff; box-shadow: 0 0 0 3px rgba(44,110,159,.13) }
 .auth-form-row { display: grid; grid-template-columns: .72fr 1.28fr; gap: 12px }
-.auth-page-form .button { margin-top: 7px; justify-content: center; padding: 14px 16px }
+.auth-page-form .lui-button { margin-top: 7px; justify-content: center; padding: 14px 16px }
 .auth-page-alert { display: flex; align-items: flex-start; gap: 9px; margin-top: 24px; padding: 12px; border-left: 3px solid var(--coral); background: #fff0e9; color: #914b3d; font-size: 11px; line-height: 1.45 }.auth-page-alert svg { width: 15px; flex: none }
 .auth-page-switch { margin-top: 22px; color: #42607d; font-size: 12px }.auth-page-switch a { color: #195f89; font-weight: 700; text-decoration: none }.auth-page-switch a:hover { color: var(--coral) }
 .auth-page-note { display: flex; align-items: center; gap: 7px; margin-top: 52px; color: #42607d; font-size: 10px }.auth-page-note svg { width: 15px; color: #195f89 }
@@ -3594,6 +3554,6 @@ body.page-ready .page-loader {
 @media (max-width: 700px) {
     .group-setting-block { grid-template-columns: 1fr; gap: 14px; padding: 18px }
     .group-settings-actions { justify-content: stretch }
-    .group-settings-actions .button { width: 100% }
+    .group-settings-actions .lui-button { width: 100% }
     .timezone-picker-panel { max-height: min(360px, calc(100dvh - 110px)) }
 }

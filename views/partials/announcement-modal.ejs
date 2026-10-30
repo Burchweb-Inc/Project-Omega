@@ -19,13 +19,13 @@
 <% if (announcement) { %>
 <div class="announcement-modal-backdrop open" data-announcement-modal data-announcement-id="<%= announcement.id %>" role="dialog" aria-modal="true" aria-labelledby="announcement-modal-title">
   <article class="announcement-modal announcement-size-<%= announcement.fontSize || 'normal' %>">
-    <button class="modal-close" type="button" data-announcement-close aria-label="Close announcement"><i data-lucide="x"></i></button>
+    <button class="lui-icon-button modal-close" type="button" data-announcement-close aria-label="Close announcement"><i data-lucide="x"></i></button>
     <p class="kicker">SITE ANNOUNCEMENT</p>
     <h2 id="announcement-modal-title"><%= announcement.title %></h2>
     <div class="announcement-content"><%- announcement.html %></div>
     <% if (announcement.mediaUrl && announcement.mediaType === 'image') { %><img class="announcement-media" src="<%= announcement.mediaUrl %>" alt="Announcement media"><% } %>
     <% if (announcement.mediaUrl && announcement.mediaType === 'video') { %><video class="announcement-media" controls preload="metadata" src="<%= announcement.mediaUrl %>"></video><% } %>
-    <button class="button primary" type="button" data-announcement-close>I Gotchu</button>
+    <button class="lui-button lui-button-primary" type="button" data-announcement-close>I Gotchu</button>
   </article>
 </div>
 <% } %>
