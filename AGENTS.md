@@ -51,3 +51,14 @@ Unless the user *wants* a boring website, don’t give them one. Judging by what
 - Add or update tests for model initialization/migration and persistence behavior, including that unrelated rows are preserved and only intended entity rows change.
 
 ALWAYS ask questions if needed. ALWAYS!
+
+## LockUI templates and documentation
+
+- Treat `public/lockui.css` as the source for shared LockUI primitives and `views/partials/lockui.ejs` as the live component gallery and usage reference. The gallery is served at `/dev/lockui` by the route in `app.js`.
+- Use LockUI classes (`lui-button`, `lui-icon-button`, `lui-menu-action`, `lui-menu-panel`, and related `lui-*` primitives) when adding or updating reusable UI. Keep page-specific composition in the page stylesheets instead of expanding shared primitives for one-off layouts.
+- When changing a reusable component or mini partial, update its gallery preview and copyable example/include in `lockui.ejs` in the same change. Keep snippets accurate to the partial’s actual name, locals, and behavior; document required parent-provided data beside the include example.
+- Keep mini partials in `views/partials/mini/`. Preserve their EJS include interface and unique, caller-provided IDs. When changing a partial’s required locals or behavior, update every caller and its gallery documentation.
+- Keep controls accessible: use native buttons/links, associated labels, meaningful accessible names, correct roles and ARIA state for interactive widgets, and visible keyboard focus. Decorative icons should be hidden from assistive technology when the control already has an accessible name.
+- Menus and popovers should use LockUI panel/action styles and support dismissal by outside click and Escape. Animate both opening and closing without abrupt removal or display toggles that skip the exit transition; respect reduced-motion preferences.
+- Avoid colored shadows, glow effects, redundant eyebrow labels, and descriptions that merely restate obvious headings. Follow the existing LockUI palette, spacing, and motion patterns.
+- Keep behavior in the existing shared client-side code in `public/app.js` when a component needs JavaScript. Use stable `data-*` hooks, initialize dynamically rendered controls consistently, and avoid embedding behavior-specific scripts in EJS templates.
