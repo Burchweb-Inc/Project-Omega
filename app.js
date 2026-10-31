@@ -31,8 +31,15 @@ const db = require('./server/database')(dataDir);
 const userModel = require('./users/model')(db); // user table and functions to access it are imported here
 const orgModel = require('./org/model')(db);
 const betaGateAttemptModel = require('./beta-tests/model')(db);
+const feedbackModel = require('./feedback/model')(db);
+const announcementModel = require('./announcements/model')(db);
+const badWordModel = require('./bad-words/model')(db);
+
 userModel.init(); // creates and migrates the user table when needed
 orgModel.init();
+feedbackModel.init();
+badWordModel.init();
+announcementModel.init();
 betaGateAttemptModel.init();
 
 const buildIdModel = require('./utils/build-id').initializeBuildIds(db, path.join(dataDir, '.build-id-key'));
@@ -44,35 +51,6 @@ const buildInfo = buildIdModel.createBuild({
   architecture: process.arch
 });
 
-db.prepare(`CREATE TABLE IF NOT EXISTS site_feedback (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  username TEXT NOT NULL,
-  kind TEXT NOT NULL,
-  message TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'open'
-)`).run();
-db.prepare(`CREATE TABLE IF NOT EXISTS site_announcements (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  body_markdown TEXT NOT NULL,
-  body_html TEXT NOT NULL,
-  media_url TEXT NOT NULL DEFAULT '',
-  media_type TEXT NOT NULL DEFAULT 'none',
-  font_size TEXT NOT NULL DEFAULT 'normal',
-  created_by TEXT NOT NULL,
-  created_at TEXT NOT NULL
-)`).run();
-db.prepare(`CREATE TABLE IF NOT EXISTS bad_word_review_logs (
-  id TEXT PRIMARY KEY,
-  trigger TEXT NOT NULL,
-  checked INTEGER NOT NULL,
-  kept_words TEXT NOT NULL DEFAULT '[]',
-  removed_words TEXT NOT NULL DEFAULT '[]',
-  fallback TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL
-)`).run();
 db.prepare('DELETE FROM bad_word_review_logs WHERE id NOT IN (SELECT id FROM bad_word_review_logs ORDER BY created_at DESC LIMIT 10)').run();
 
 require('./server/configure-web')(app, {
