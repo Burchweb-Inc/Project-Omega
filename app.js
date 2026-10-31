@@ -51,7 +51,7 @@ const buildInfo = buildIdModel.createBuild({
   architecture: process.arch
 });
 
-db.prepare('DELETE FROM bad_word_review_logs WHERE id NOT IN (SELECT id FROM bad_word_review_logs ORDER BY created_at DESC LIMIT 10)').run();
+badWordModel.cleanup();
 
 require('./server/configure-web')(app, {
   rootDir: __dirname,
@@ -266,10 +266,16 @@ const badWordReviewIntervalMs = Number(process.env.BAD_WORD_REVIEW_INTERVAL_MS |
 const badWordReviewInterval = Number.isFinite(badWordReviewIntervalMs) && badWordReviewIntervalMs > 0 ? badWordReviewIntervalMs : 10 * 60 * 1000;
 const recordBadWordReview = (trigger, result) => {
   if (trigger !== 'manual' && !result?.checked && !result?.fallback) return;
-  db.prepare('INSERT INTO bad_word_review_logs (id, trigger, checked, kept_words, removed_words, fallback, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-    id(), trigger, result.checked || 0, JSON.stringify(result.kept || []), JSON.stringify(result.removed || []), result.fallback || '', new Date().toISOString()
-  );
-  db.prepare('DELETE FROM bad_word_review_logs WHERE id NOT IN (SELECT id FROM bad_word_review_logs ORDER BY created_at DESC LIMIT 10)').run();
+  badWordModel.add({
+    id: id(),
+    trigger,
+    checked: result.checked || 0,
+    keptWords: JSON.stringify(result.kept || []),
+    removedWords: JSON.stringify(result.removed || []),
+    fallback: result.fallback || '',
+    createdAt: new Date().toISOString()
+  });
+  badWordModel.cleanup();
 };
 const reviewQueuedBadWordsNow = async (trigger = 'scheduled') => {
   try {
