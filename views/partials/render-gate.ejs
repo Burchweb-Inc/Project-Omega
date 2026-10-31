@@ -1,0 +1,25 @@
+<section class="content-wrap render-gate-page">
+    <div class="page-heading">
+        <div>
+            <h1>3D Render Test</h1>
+            <p>Finish the checks before opening the test.</p>
+        </div>
+    </div>
+    <section class="render-gate-card" aria-labelledby="render-gate-title">
+        <% if (renderGateStep === 'captcha') { %>
+            <h2 id="render-gate-title">Human check <%= captchaIndex + 1 %> of <%= captchaAmount %></h2>
+            <%- include('mini/captcha', { captcha, captchaIndex, captchaAmount, flowId }) %>
+        <% } else { %>
+            <h2 id="render-gate-title">One last check</h2>
+            <p>All personal todos are complete. Enter the HOLY PASSWORD.</p>
+            <form action="/beta-tests/3drender" method="post" class="render-gate-form" data-render-gate-launch>
+                <input type="hidden" name="flowId" value="<%= flowId %>">
+                <label for="render-gate-password">Enter the HOLY PASSWORD</label>
+                <input id="render-gate-password" name="password" type="password" autocomplete="off" required autofocus>
+                <button class="lui-button lui-button-primary" type="submit">Open 3D Render Test</button>
+            </form>
+            <p data-render-gate-status role="status" aria-live="polite"></p>
+        <% } %>
+    </section>
+</section>
+<% if (renderGateStep === 'password') { %><script src="/js/render-gate.js" defer></script><% } %>

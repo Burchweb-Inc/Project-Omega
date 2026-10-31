@@ -327,6 +327,16 @@ function decorateLockUiComponents(root = document) {
   decorate('.modal-card, .warning-modal, .announcement-modal, .tutorial-card', (panel) => panel.classList.add('lui-panel'));
 }
 
+function bindTransientBanners() {
+  document.querySelectorAll('[data-transient-banner]').forEach((banner) => {
+    if (banner.dataset.bound) return;
+    banner.dataset.bound = 'true';
+    const dismiss = () => banner.remove();
+    banner.querySelector('[data-dismiss-banner]')?.addEventListener('click', dismiss);
+    window.setTimeout(dismiss, 5000);
+  });
+}
+
 let sidebarCollapsedPreference = false;
 let sidebarPreferenceLoaded = false;
 const sidebarLayoutAnimations = new WeakMap();

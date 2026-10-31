@@ -18,6 +18,7 @@ const { discoverAppleCalendar, syncAppleReminders, syncGoogleTasks } = require('
 const { isSyncDue, isSyncSchedule, syncInterval } = require('./utils/task-sync-schedule');
 const { taskSyncConfiguration } = require('./utils/task-sync-config');
 const sharedGroupUserIds = require('./utils/shared-group-users');
+const registerRenderGateRoutes = require('./beta-tests/routes');
 
 const app = express();
 const taskSyncConfig = taskSyncConfiguration(config);
@@ -29,8 +30,10 @@ const db = require('./server/database')(dataDir);
 
 const userModel = require('./users/model')(db); // user table and functions to access it are imported here
 const orgModel = require('./org/model')(db);
+const betaGateAttemptModel = require('./beta-tests/model')(db);
 userModel.init(); // creates and migrates the user table when needed
 orgModel.init();
+betaGateAttemptModel.init();
 
 const buildIdModel = require('./utils/build-id').initializeBuildIds(db, path.join(dataDir, '.build-id-key'));
 const buildInfo = buildIdModel.createBuild({
@@ -74,9 +77,7 @@ db.prepare('DELETE FROM bad_word_review_logs WHERE id NOT IN (SELECT id FROM bad
 
 require('./server/configure-web')(app, {
   rootDir: __dirname,
-  serviceWorkerVersion,
-  currentUser,
-  refreshModerationStatus
+  serviceWorkerVersion
 });
 
 const sessions = new Map();
@@ -455,8 +456,17 @@ function renderLinkedText(text, links = []) {
   }
   return output + escapeHtmlServer(value.slice(cursor));
 }
-function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs: orgModel.all(), canEdit, canManageItem, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), renderLinkedText, buildInfo, ...extra }); }
+let consumeRenderGateNotice = () => null;
+function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs: orgModel.all(), canEdit, canManageItem, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), renderLinkedText, buildInfo, renderGateBanner: consumeRenderGateNotice(request.user?.id), ...extra }); }
 function renderPublicPage(request, response, page, extra = {}) { response.render('index', { page, view: page, user: null, users, orgs: orgModel.all(), canEdit, selectedOrg: null, notifications: [], error: null, canonicalUrl: canonicalUrl(request), buildInfo, ...extra }); }
+consumeRenderGateNotice = registerRenderGateRoutes({
+  app,
+  rootDir: __dirname,
+  currentUser,
+  refreshModerationStatus,
+  gateAttempts: betaGateAttemptModel,
+  render
+});
 function getOrg(request) { return orgModel.for({ id: request.params.id, slug: request.params.slug }); }
 function getCourse(org, courseId) { return org?.courses.find((course) => course.id === courseId); }
 function isSiteAdmin(user) { return Boolean(user?.isSiteAdmin); }

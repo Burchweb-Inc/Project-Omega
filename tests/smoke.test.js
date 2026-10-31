@@ -6,7 +6,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'
 const index = fs.readFileSync(path.join(__dirname, '..', 'views', 'index.ejs'), 'utf8');
 const courseView = fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'course.ejs'), 'utf8');
 const todoView = fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'todo.ejs'), 'utf8');
-const app = ['app.js', 'server/configure-web.js', 'server/database.js']
+const app = ['app.js', 'server/configure-web.js', 'server/database.js', 'beta-tests/routes.js']
   .map((file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8'))
   .join('\n');
 const client = ['js/shared-ui.js', 'js/course.js', 'js/todo.js', 'js/live-ui.js', 'app.js']
@@ -68,7 +68,7 @@ assert.match(app, /site-admin\/users\/:id\/update/, 'Site admins should be able 
 assert.match(app, /site-admin\/users\/:id\/delete/, 'Site admins should be able to delete user accounts.');
 assert.match(app, /settings\?\.betaTools/, 'The beta test page should require beta tools access.');
 assert.match(app, /createGzip\(\{ level: zlib\.constants\.Z_BEST_SPEED \}\)/, 'The large beta app should stream with fast gzip compression.');
-assert.match(app, /pipeline\(fs\.createReadStream\(file\)/, 'The beta app should stream rather than buffer its HTML.');
+assert.match(app, /pipeline\(fs\.createReadStream\(renderTestPath\)/, 'The beta app should stream rather than buffer its HTML.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'sidebar.ejs'), 'utf8'), /Beta access<\/summary><a class="lui-menu-action" href="\/beta-tests\/3drender"><i data-lucide="box"><\/i> 3D Render test<\/a>/, 'Beta tools should be available from a submenu in the account menu.');
 assert.doesNotMatch(app, /eaglercraft-1\.21\.html/, 'The old public app URL should not have a compatibility redirect.');
 assert.equal(fs.existsSync(path.join(__dirname, '..', 'public', 'eaglercraft-1.21.html')), false, 'The protected static HTML should not remain publicly served.');

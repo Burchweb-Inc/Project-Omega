@@ -20,7 +20,9 @@
     userSearch: includeSnippet('mini/user-search', "id: 'member-search', label: 'Add a member', name: 'username', placeholder: 'Search members', groupId: selectedOrg.id"),
     copyAction: includeSnippet('mini/copy-task-action', 'item, selectedOrg'),
     copyModal: includeSnippet('mini/copy-task-modal', 'copyDestinations'),
-    taskSync: includeSnippet('mini/task-sync-modal', 'user, integrationStatus, taskSyncConfigured, taskSyncMissingConfig, googleTasksConfigured, googleTasksConnected, appleRemindersConnected, appleRemindersUsername')
+    taskSync: includeSnippet('mini/task-sync-modal', 'user, integrationStatus, taskSyncConfigured, taskSyncMissingConfig, googleTasksConfigured, googleTasksConnected, appleRemindersConnected, appleRemindersUsername'),
+    captcha: includeSnippet('mini/captcha', 'captcha: { left: 7, right: 3 }, captchaIndex: 0, captchaAmount: 3, flowId: "example-flow"'),
+    banner: includeSnippet('mini/banner', 'message: "That was a cute attempt to dodge your todos. Please get back to work."')
   };
 %>
 <main class="lui-page lui-gallery" aria-labelledby="lockui-title">
@@ -176,6 +178,16 @@
           <div class="lui-component-heading"><h3>Task-sync modal</h3><div class="lui-component-tools"><button class="lui-icon-button" type="button" data-lui-copy data-tooltip="Copy include" aria-label="Copy task-sync-modal include"><i data-lucide="copy"></i></button><button class="lui-icon-button" type="button" data-lui-expand data-tooltip="Expand code" aria-label="Expand task-sync-modal usage" aria-expanded="false"><i data-lucide="code-2"></i></button></div></div>
           <div class="lui-component-preview lui-cluster"><button class="lui-button lui-button-secondary" type="button" data-lui-open-modal="task-sync-demo">Open modal demo</button><dialog class="lui-dialog" id="task-sync-demo" data-lui-demo-dialog><form method="dialog"><header><h2>Task sync</h2><button class="lui-icon-button" type="submit" aria-label="Close"><i data-lucide="x"></i></button></header><p>Connect a task provider and choose a sync schedule.</p><label class="lui-field">Automatic sync<select class="lui-select"><option>Only manual</option><option>Every hour</option></select></label><button class="lui-button lui-button-primary" type="submit">Done</button></form></dialog></div>
           <details class="lui-source"><summary>Include usage</summary><pre><code><%= lockuiSnippets.taskSync %></code></pre><p class="lui-help">Requires the account settings, integration status, and provider connection locals used by Todo.</p></details>
+        </article>
+        <article class="lui-component" data-lui-component>
+          <div class="lui-component-heading"><h3>Captcha prompt</h3><div class="lui-component-tools"><button class="lui-icon-button" type="button" data-lui-copy data-tooltip="Copy include" aria-label="Copy captcha include"><i data-lucide="copy"></i></button><button class="lui-icon-button" type="button" data-lui-expand data-tooltip="Expand code" aria-label="Expand captcha usage" aria-expanded="false"><i data-lucide="code-2"></i></button></div></div>
+          <div class="lui-component-preview lui-mini-preview"><div class="render-gate-form"><label>What is 7 + 3?</label><input class="lui-input" type="number" value="10" disabled><button class="lui-button lui-button-primary" type="button" disabled>Check answer</button></div></div>
+          <details class="lui-source"><summary>Include usage</summary><pre><code><%= lockuiSnippets.captcha %></code></pre><p class="lui-help">Provide server-generated <code>captcha.left</code> and <code>captcha.right</code>, the index and count, and a server-verified <code>flowId</code>.</p></details>
+        </article>
+        <article class="lui-component" data-lui-component>
+          <div class="lui-component-heading"><h3>Transient banner</h3><div class="lui-component-tools"><button class="lui-icon-button" type="button" data-lui-copy data-tooltip="Copy include" aria-label="Copy banner include"><i data-lucide="copy"></i></button><button class="lui-icon-button" type="button" data-lui-expand data-tooltip="Expand code" aria-label="Expand banner usage" aria-expanded="false"><i data-lucide="code-2"></i></button></div></div>
+          <div class="lui-component-preview lui-mini-preview"><div class="transient-banner lui-alert lui-alert-warning"><i data-lucide="triangle-alert" aria-hidden="true"></i><p>That was a cute attempt to dodge your todos. Please get back to work.</p><button class="transient-banner-close" type="button" aria-label="Dismiss notification"><i data-lucide="x" aria-hidden="true"></i></button></div></div>
+          <details class="lui-source"><summary>Include usage</summary><pre><code><%= lockuiSnippets.banner %></code></pre><p class="lui-help">Pass a one-time <code>message</code> and initialize <code>bindTransientBanners()</code> for five-second auto-dismissal.</p></details>
         </article>
       </div>
     </section>

@@ -1,0 +1,6 @@
+<form action="/beta-tests/3drender" method="post" class="render-gate-form">
+    <input type="hidden" name="flowId" value="<%= flowId %>">
+    <label for="render-gate-answer">What is <%= captcha.left %> + <%= captcha.right %>?</label>
+    <input id="render-gate-answer" name="answer" type="number" inputmode="numeric" autocomplete="off" required autofocus>
+    <button class="lui-button lui-button-primary" type="submit">Check answer</button>
+</form>

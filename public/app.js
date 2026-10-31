@@ -1,5 +1,6 @@
 function bindInteractions() {
   bindLockUiComponentDecoration();
+  bindTransientBanners();
   bindSidebarToggle();
   bindPopupMenus();
   bindLockUiGallery();
