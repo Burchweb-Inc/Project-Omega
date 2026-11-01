@@ -1,0 +1,11 @@
+[
+  {
+    "label": "Run current Node test file",
+    "command": "node",
+    "args": ["--test", "$ZED_FILE"],
+    "use_new_terminal": false,
+    "reveal": "always",
+    "hide": "never",
+    "save": "current"
+  }
+]
