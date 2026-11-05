@@ -7,8 +7,8 @@ function createRouter({ policyError = null } = {}) {
   const creates = [];
   const user = { id: 'user-1' };
   const groups = [
-    { id: 'member-org', name: 'Member org' },
-    { id: 'invite-org', name: 'Invited org' }
+    { id: 'member-org', name: 'Member org', members: [{ userId: 'user-1' }], pendingInvites: [] },
+    { id: 'invite-org', name: 'Invited org', members: [], pendingInvites: [{ userId: 'user-1' }] }
   ];
   const middleware = (request, response, next) => next();
   const router = routes({
@@ -107,8 +107,8 @@ test('GET /groups renders orgs returned for the current user', () => {
     page: 'groups',
     data: {
       groups: [
-        { id: 'member-org', name: 'Member org' },
-        { id: 'invite-org', name: 'Invited org' }
+        { id: 'member-org', name: 'Member org', members: [{ userId: 'user-1' }], pendingInvites: [], pendingInvite: false },
+        { id: 'invite-org', name: 'Invited org', members: [], pendingInvites: [{ userId: 'user-1' }], pendingInvite: true }
       ]
     }
   }]);

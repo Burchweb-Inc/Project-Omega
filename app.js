@@ -18,6 +18,7 @@ const { discoverAppleCalendar, syncAppleReminders, syncGoogleTasks } = require('
 const { isSyncDue, isSyncSchedule, syncInterval } = require('./utils/task-sync-schedule');
 const { taskSyncConfiguration } = require('./utils/task-sync-config');
 const sharedGroupUserIds = require('./utils/shared-group-users');
+const searchUsers = require('./utils/search-users');
 const registerRenderGateRoutes = require('./beta-tests/routes');
 
 const app = express();
@@ -742,8 +743,8 @@ app.get('/api/users/search', requireUser, (request, response) => {
   const query = String(request.query.q || '').trim().toLowerCase();
   if (query.length < 1) return response.json([]);
   const scopeGroupId = String(request.query.groupId || '');
-  const visibleUserIds = sharedGroupUserIds(orgModel.all(), request.user, scopeGroupId);
-  response.json(users.filter((candidate) => visibleUserIds.has(candidate.id) && (candidate.username.includes(query) || candidate.name.toLowerCase().includes(query))).slice(0, 8).map((candidate) => ({ id: candidate.id, name: candidate.name, username: candidate.username })));
+  const visibleUserIds = scopeGroupId ? sharedGroupUserIds(orgModel.all(), request.user, scopeGroupId) : null;
+  response.json(searchUsers(users, query, visibleUserIds));
 });
 app.post('/site-admin/users', requireUser, requireSiteAdmin, (request, response) => {
   const username = String(request.body.username || '').trim().toLowerCase();

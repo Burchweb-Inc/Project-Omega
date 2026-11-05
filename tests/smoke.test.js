@@ -94,7 +94,7 @@ assert.match(app, /site-admin\/groups\/:id\/delete/, 'Site admins should be able
 assert.match(app, /suspendedAt/, 'Group suspension should persist indefinitely.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Lock this group indefinitely/, 'Site admin groups should expose indefinite locking.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'org.ejs'), 'utf8'), /Delete group/, 'Group admins should be able to delete their group.');
-assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'groups.ejs'), 'utf8'), /JOIN REQUESTED/, 'Pending invitations should appear in All groups.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'groups.ejs'), 'utf8'), /INVITATION/, 'Pending invitations should appear in All groups.');
 assert.match(app, /safeReturnTo/, 'Authentication should preserve safe internal return paths.');
 assert.match(app, /request\.originalUrl/, 'Logged-out invite links should pass their original URL to authentication.');
 assert.match(app, /site-admin\/bad-words/, 'Site admins should be able to add bad words manually.');

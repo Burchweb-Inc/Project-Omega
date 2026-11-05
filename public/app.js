@@ -90,7 +90,7 @@ function bindInteractions() {
           if (!response.ok) throw new Error(`User search returned ${response.status}.`);
           if (!results || input.value.trim() !== query) return;
           const users = await response.json();
-          results.innerHTML = users.map((candidate) => `<button class="lui-menu-action" type="button" role="option" aria-selected="false" data-username="${escapeHtml(candidate.username)}"><strong>${escapeHtml(candidate.name)}</strong><small>@${escapeHtml(candidate.username)}</small></button>`).join('') || '<span class="user-search-empty">No classmates found</span>';
+          results.innerHTML = users.map((candidate) => `<button class="lui-menu-action" type="button" role="option" aria-selected="false" data-username="${escapeHtml(candidate.username)}"><strong>${escapeHtml(candidate.name)}</strong><small>@${escapeHtml(candidate.username)}</small></button>`).join('') || '<span class="user-search-empty">No users found</span>';
           input.setAttribute('aria-expanded', 'true');
           results.querySelectorAll('[data-username]').forEach((option) => option.addEventListener('click', () => { input.value = option.dataset.username; results.innerHTML = ''; input.setAttribute('aria-expanded', 'false'); input.focus(); }));
         } catch (error) {

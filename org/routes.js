@@ -3,7 +3,11 @@ module.exports = ({requireUser, contentPolicyError, orgModel, render, creatorTim
   const router = express.Router();
   const newOrgPage = (request, response) => render(request, response, "new-org");
   const groupsPage = (request, response) => render(request, response, "groups", {
-    groups: orgModel.forUserOrInvite(request.user.id)
+    groups: orgModel.forUserOrInvite(request.user.id).map((group) => ({
+      ...group,
+      pendingInvite: !group.members.some((member) => member.userId === request.user.id) &&
+        group.pendingInvites.some((invite) => invite.userId === request.user.id)
+    }))
   });
 
   router.get(["/org/new", "/group/new"], requireUser, newOrgPage);

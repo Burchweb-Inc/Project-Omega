@@ -9,7 +9,7 @@
         <% groups.forEach(group=> { const isPending = Boolean(group.pendingInvite); %><article class="group-card">
                 <div class="group-card-head">
                     <div><span class="eyebrow">
-                            <%= isPending ? 'JOIN REQUESTED' : group.visibility==='public' ? 'PUBLIC GROUP'
+                            <%= isPending ? 'INVITATION' : group.visibility==='public' ? 'PUBLIC GROUP'
                                 : 'PRIVATE GROUP' %>
                         </span>
                         <h2>
@@ -30,9 +30,9 @@
                 <div class="group-actions">
                     <% if (isPending) { %>
                         <form data-live-form action="/groups/<%= group.id %>/invitation/accept" method="post"><button
-                                class="lui-button lui-button-primary" type="submit"><i data-lucide="check"></i> Accept</button></form>
+                                class="lui-button lui-button-primary" type="submit" aria-label="Accept invitation to <%= group.name %>"><i data-lucide="check"></i> Accept</button></form>
                         <form data-live-form action="/groups/<%= group.id %>/invitation/deny" method="post"><button
-                                class="lui-button lui-button-secondary" type="submit"><i data-lucide="x"></i> Deny</button></form>
+                                class="lui-button lui-button-secondary" type="submit" aria-label="Deny invitation to <%= group.name %>"><i data-lucide="x"></i> Deny</button></form>
                         <% } else { %><a class="lui-button lui-button-secondary" href="/group/<%= group.slug || group.id %>">Open
                                 group</a>
                             <% if (group.members.find(member=> member.userId === user.id)?.role === 'admin') { %><a
