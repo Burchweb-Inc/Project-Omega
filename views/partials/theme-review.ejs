@@ -1,0 +1,16 @@
+<style>
+  .theme-review-page { max-width: 1200px; }
+  .theme-review-frame { width: 100%; height: min(68vh, 680px); min-height: 400px; border: 1px solid var(--line); border-radius: 12px; background: #f3f5f6; }
+  .theme-review-form { display: grid; gap: 14px; margin-top: 18px; }
+  .theme-review-form textarea { min-height: 110px; }
+  .theme-review-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  @media (max-width: 600px) { .theme-review-frame { min-height: 320px; } }
+</style>
+<section class="content-wrap theme-review-page">
+  <div class="page-heading hero-heading"><div><h1>Review “<%= reviewTheme.name %>”</h1><p class="lead">Submission from <%= users.find(account => account.id === reviewTheme.artistId)?.username || 'an artist' %>. This preview uses your admin account and never changes your active theme.</p></div></div>
+  <iframe class="theme-review-frame" src="/dashboard?theme-edit=true&amp;theme-di=<%= themePreviewToken %>" title="Authenticated, read-only LockIn preview of <%= reviewTheme.name %>" sandbox="allow-scripts"></iframe>
+  <form class="theme-review-form" action="/site-admin/themes/<%= reviewTheme.id %>/decision" method="post">
+    <label>Rejection notes (required when rejecting)<textarea name="rejectionNote" maxlength="1000" placeholder="Explain what needs changing so the artist can revise this draft."></textarea></label>
+    <div class="theme-review-actions"><button class="lui-button" name="decision" value="approve" type="submit">Approve and publish</button><button class="lui-button lui-button-danger" name="decision" value="reject" type="submit">Return to artist</button><a class="lui-link" href="/site-admin?tab=themes">Back to review queue</a></div>
+  </form>
+</section>

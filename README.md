@@ -20,6 +20,10 @@ The Todo page can sync each user's personal tasks to Google Tasks and Apple Remi
 
 In production, set `GOOGLE_TASKS_CLIENT_ID` and `GOOGLE_TASKS_REDIRECT_URI` in the deployment environment and register the production callback URL with Google. For the Jenkins deployment, those two values must be available to the Jenkins agent environment; the pipeline injects `GOOGLE_TASKS_CLIENT_SECRET` as a credential, and Docker Compose mounts it as the `google_tasks_client_secret` Docker secret. The app falls back to the environment variable outside that deployment. Apple credentials are per-user and are not shared through environment variables.
 
+## Themes and artist access
+
+Users can choose admin-approved themes from the Theme Marketplace. Site admins grant Artist Mode from User Management. Artists can edit draft themes in a full-screen studio with a live LockIn preview, AI color suggestions (including hover states), CSS copy/paste, and scoped Replace All styling for matching LockIn UI classes. The LockUI gallery is available as a dedicated studio preview, and Shift-clicking safe links lets artists inspect other account-accessible pages. Per-element styling uses the same page-specific selectors in the studio and on the live site. Artists can edit published themes and submit updates for review; the published version remains available until an update is approved, and rejected drafts and their artwork remain available for edits. Artist and admin previews use the signed-in account in a read-only, sandboxed LockIn frame. Preview links require both a short-lived HttpOnly cookie and a matching random URL token scoped to that account.
+
 ## Production privacy and storage
 
 This app currently has no hosted cloud service. For durable cloud storage, deploy it with `DATA_DIR` mapped to a persistent private volume and set `TASK_ENCRYPTION_KEY` to a stable 32-byte base64url-encoded secret managed by the deployment platform. Use HTTPS, restrict access to the database volume, and back up both the database and encryption secret independently. Losing the secret makes encrypted tasks unrecoverable.

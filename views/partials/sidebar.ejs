@@ -13,6 +13,10 @@
       </strong></a>
     <a class="nav-link <%= page === 'calendar' ? 'selected' : '' %>" href="/calendar"><i
           data-lucide="calendar-days"></i><span>Academic calendar</span></a>
+    <a class="nav-link <%= page === 'themes' ? 'selected' : '' %>" href="/themes"><i
+        data-lucide="palette"></i><span>Theme marketplace</span></a>
+    <% if (user.settings?.artistMode) { %><a class="nav-link <%= page === 'artist' ? 'selected' : '' %>" href="/artist"><i
+        data-lucide="paintbrush-vertical"></i><span>LockIn for Artists</span></a><% } %>
     <div class="nav-label space-label">YOUR GROUPS</div>
     <a class="nav-link <%= page === 'groups' ? 'selected' : '' %>" href="/groups"><i
         data-lucide="users-round"></i><span>All groups</span></a>

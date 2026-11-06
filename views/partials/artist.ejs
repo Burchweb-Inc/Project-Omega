@@ -1,0 +1,220 @@
+<style>
+  .artist-page { max-width: 1500px; }
+  .artist-layout { display: grid; grid-template-columns: minmax(210px, 280px) minmax(0, 1fr); gap: 22px; align-items: start; }
+  .artist-list, .artist-editor-panel { padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); }
+  .artist-list { display: grid; gap: 12px; }
+  .artist-list h2, .artist-editor-panel h2 { margin: 0; }
+  .artist-theme-link { display: grid; gap: 3px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; color: inherit; text-decoration: none; }
+  .artist-theme-link.selected { border-color: var(--blue); box-shadow: inset 3px 0 var(--blue); }
+  .artist-theme-link small, .artist-status { color: var(--muted); }
+  .artist-theme-create { margin-top: 4px; }
+  .artist-editor { display: grid; gap: 18px; }
+  .artist-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .artist-fields label, .artist-palette label, .artist-inspector label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
+  .artist-fields label:first-child { grid-column: 1 / -1; }
+  .artist-fields textarea { min-height: 70px; resize: vertical; }
+  .artist-editor-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(245px, .75fr); gap: 16px; }
+  .artist-preview-wrap { min-width: 0; }
+  .artist-preview-toolbar { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 8px; }
+  .artist-preview-toolbar label { display: flex; gap: 8px; align-items: center; font-size: 12px; font-weight: 700; }
+  .artist-preview-frame { display: block; width: 100%; height: 480px; border: 1px solid var(--line); border-radius: 10px; background: #f3f5f6; }
+  .artist-inspector { display: grid; align-content: start; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface, #f8f9f8); }
+  .artist-inspector input[type="color"] { height: 38px; padding: 2px; }
+  .artist-inspector textarea { min-height: 110px; resize: vertical; font: 12px/1.5 ui-monospace, monospace; }
+  .artist-style-states { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--white); }
+  .artist-style-states button { min-height: 38px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ink); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .artist-style-states button.is-active { border-color: var(--blue); background: var(--paper); }
+  .artist-style-hint { margin: -5px 0 0; color: var(--muted); font-size: 11px; }
+  .artist-palette { display: grid; grid-template-columns: repeat(4, minmax(100px, 1fr)); gap: 10px; }
+  .artist-palette input { min-width: 0; }
+  .artist-wallpaper { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; }
+  .artist-wallpaper-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .artist-wallpaper canvas { display: block; max-width: 100%; max-height: 220px; border: 1px solid var(--line); border-radius: 8px; background: #ecefee; object-fit: contain; }
+  .artist-editor-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .artist-save-status { min-height: 1.4em; color: var(--muted); }
+  .artist-rejection { padding: 12px; border-left: 3px solid var(--coral); background: #fff7f4; }
+  .artist-locked { padding: 24px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); }
+  .artist-editor-workspace { position: fixed; z-index: 1000; inset: 0; width: auto; max-width: none; padding: 0; overflow: hidden; border: 0; border-radius: 0; background: var(--paper, #f3f5f6); }
+  .artist-editor-workspace .artist-editor { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 0; width: 100%; height: 100dvh; min-height: 0; }
+  body.artist-studio-active { width: 100%; height: 100dvh; overflow: hidden; }
+  body.artist-studio-active .app-shell { position: static; display: block; width: 100%; height: 100dvh; min-height: 0; }
+  body.artist-studio-active .sidebar,
+  body.artist-studio-active .sidebar-backdrop,
+  body.artist-studio-active .main-content > .topbar,
+  body.artist-studio-active .main-content > .site-footer { display: none !important; }
+  body.artist-studio-active .main-content { width: 100%; height: 100dvh; padding: 0; overflow: hidden; }
+  body.artist-studio-active .page-stage { width: 100%; height: 100%; min-height: 0; animation: none !important; transform: none !important; }
+  body.artist-studio-active .page-stage > .artist-page { width: 100%; max-width: none; height: 100%; margin: 0; padding: 0; }
+  body.artist-studio-active .artist-page > .page-heading,
+  body.artist-studio-active .artist-page > .success-message,
+  body.artist-studio-active .artist-layout > .artist-list { display: none !important; }
+  body.artist-studio-active .artist-layout { display: block; width: 100%; height: 100%; }
+  body.artist-studio-active .artist-layout > div { width: 100%; height: 100%; }
+  body.artist-studio-active .artist-editor-workspace { position: relative; z-index: auto; inset: auto; width: 100%; height: 100%; max-height: 100dvh; }
+  body.artist-studio-active .artist-editor-workspace .artist-editor { height: 100%; }
+  .artist-studio-topbar { display: flex; min-height: 66px; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--white); box-shadow: 0 3px 14px #17212512; }
+  .artist-studio-back { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); text-decoration: none; }
+  .artist-studio-title { display: grid; min-width: 100px; gap: 2px; }
+  .artist-studio-title span, .artist-studio-topbar label { color: var(--muted); font-size: 10px; }
+  .artist-studio-topbar label { display: grid; min-width: 120px; gap: 3px; font-weight: 700; }
+  .artist-studio-name { width: 170px; }
+  .artist-studio-page { width: 140px; }
+  .artist-studio-topbar input, .artist-studio-topbar select { width: 100%; min-width: 0; height: 34px; padding: 5px 8px; font-size: 12px; }
+  .artist-studio-tools { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .artist-studio-tools .lui-button { min-height: 34px; padding: 7px 9px; white-space: nowrap; }
+  .artist-studio-tools .lui-button svg { width: 14px; height: 14px; }
+  .artist-studio-workspace.is-previewing { grid-template-columns: minmax(0, 1fr); }
+  .artist-studio-workspace.is-previewing { grid-template-rows: minmax(0, 1fr); }
+  .artist-studio-workspace.is-previewing .artist-inspector,
+  .artist-studio-workspace.is-previewing .artist-preview-toolbar { display: none; }
+  .artist-studio-workspace.is-previewing .artist-preview-wrap { grid-template-rows: minmax(0, 1fr); padding: 0; }
+  .artist-studio-workspace.is-previewing .artist-preview-frame { border: 0; border-radius: 0; }
+  .artist-save-status { min-width: 110px; max-width: 150px; font-size: 10px; }
+  .artist-studio-workspace { display: grid; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(300px, 350px); }
+  .artist-editor-workspace .artist-preview-wrap { display: grid; min-height: 0; grid-template-rows: 38px minmax(0, 1fr); padding: 10px; }
+  .artist-editor-workspace .artist-preview-toolbar { margin: 0; padding: 0 8px; }
+  .artist-preview-frame { height: 100%; min-height: 0; border-radius: 8px; }
+  .artist-editor-workspace .artist-inspector { min-height: 0; overflow: scroll; gap: 10px; padding: 14px; border: 0; border-left: 1px solid var(--line); border-radius: 0; background: var(--white); }
+  .artist-inspector-section { display: grid; gap: 10px; }
+  .artist-selected-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .artist-selected-heading small { color: var(--muted); font-size: 9px; letter-spacing: .08em; }
+  .artist-selected-heading h2 { overflow-wrap: anywhere; margin: 3px 0 0; font-size: 14px; }
+  .artist-selected-heading .lui-button { flex: 0 0 auto; min-height: 32px; padding: 6px 9px; }
+  .artist-replace-hint { display: block; color: var(--muted); font-size: 10px; line-height: 1.4; }
+  .artist-style-states { margin-bottom: 2px; }
+  .artist-editor-workspace .artist-inspector label { font-size: 11px; }
+  .artist-editor-workspace .artist-inspector textarea { min-height: 82px; }
+  .artist-studio-details { padding: 10px 0; border-top: 1px solid var(--line); }
+  .artist-studio-details summary { font-size: 12px; font-weight: 700; cursor: pointer; }
+  .artist-studio-details > p { margin: 8px 0; font-size: 10px; }
+  .artist-studio-details > label { margin-top: 10px; }
+  .artist-studio-details .artist-palette { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 10px; }
+  .artist-studio-details .artist-wallpaper-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+  .artist-studio-details .artist-wallpaper-controls label:first-child { grid-column: 1 / -1; }
+  .artist-studio-details [data-wallpaper-canvas] { width: 100%; max-height: 160px; margin-top: 10px; }
+  .artist-editor-workspace .artist-rejection { position: absolute; z-index: 2; top: 74px; left: 18px; max-width: min(460px, 60vw); box-shadow: 0 8px 28px #17212524; }
+  .artist-editor-workspace .artist-rejection p { margin: 4px 0 0; }
+  @media (max-width: 1120px) {
+    .artist-studio-topbar { flex-wrap: wrap; }
+    .artist-studio-tools { margin-left: auto; }
+    .artist-save-status { flex: 1 1 100%; min-width: 0; max-width: none; }
+    .artist-studio-workspace { grid-template-columns: minmax(0, 1fr) 310px; }
+  }
+  @media (max-width: 760px) {
+    .artist-studio-topbar { gap: 7px; padding: 7px 9px; }
+    .artist-studio-title { min-width: 86px; font-size: 11px; }
+    .artist-studio-name { width: min(34vw, 170px); }
+    .artist-studio-page { width: min(30vw, 140px); }
+    .artist-studio-tools { width: 100%; order: 4; justify-content: flex-start; overflow-x: auto; }
+    .artist-studio-tools .lui-button { font-size: 10px; }
+    .artist-studio-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(35vh, 1fr) minmax(0, 1.15fr); }
+    .artist-editor-workspace .artist-preview-wrap { grid-template-rows: 30px minmax(0, 1fr); padding: 6px; }
+    .artist-preview-toolbar small { display: none; }
+    .artist-editor-workspace .artist-inspector { border-top: 1px solid var(--line); border-left: 0; padding: 10px 14px; }
+    .artist-editor-workspace .artist-rejection { top: 116px; max-width: calc(100vw - 24px); }
+  }
+  @media (max-width: 430px) {
+    .artist-studio-title span { display: none; }
+    .artist-studio-tools .lui-button { padding: 6px; }
+    .artist-studio-tools .lui-button svg { display: none; }
+    .artist-studio-tools [data-submit-theme] { margin-left: auto; }
+    .artist-selected-heading { align-items: flex-start; }
+  }
+  @media (max-width: 850px) { .artist-layout, .artist-editor-grid { grid-template-columns: 1fr; } .artist-list { order: 2; } .artist-palette { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .artist-fields { grid-template-columns: 1fr; } .artist-fields label:first-child { grid-column: auto; } .artist-preview-frame { height: 380px; } }
+</style>
+<section class="content-wrap artist-page">
+  <div class="page-heading hero-heading"><div><h1>LockIn for Artists</h1><p class="lead">Shape a complete look, preview it in a safe canvas, and send it to the LockIn team for review.</p></div></div>
+  <% if (locals.submitted) { %><p class="success-message" role="status">Your theme is in the review queue. You can continue working on your other drafts.</p><% } %>
+  <div class="artist-layout">
+    <aside class="artist-list" aria-label="Your themes">
+      <h2>Your themes</h2>
+      <% if (artistThemes.length) { artistThemes.forEach(theme => { %>
+        <a class="artist-theme-link <%= editingThemeId === theme.id ? 'selected' : '' %>" href="/artist?edit=<%= theme.id %>">
+          <strong><%= theme.name %></strong><small class="artist-status"><%= theme.status === 'pending' ? (theme.publishedVersion ? 'Update in review' : 'In review') : theme.status === 'approved' ? 'Published' : theme.status === 'rejected' ? (theme.publishedVersion ? 'Update needs changes' : 'Changes requested') : theme.publishedVersion ? 'Update draft' : 'Draft' %></small>
+        </a>
+      <% }) } else { %><p class="muted">Your first theme starts here.</p><% } %>
+      <form class="artist-theme-create" action="/artist/themes" method="post"><button class="lui-button lui-button-secondary" type="submit"><i data-lucide="plus"></i> New theme</button></form>
+    </aside>
+    <div>
+      <% const editorTheme = artistThemes.find(theme => theme.id === editingThemeId); %>
+      <% if (editorTheme) { %>
+        <div class="artist-editor-panel <%= ['draft', 'rejected'].includes(editorTheme.status) ? 'artist-editor-workspace' : '' %>" data-artist-editor data-theme="<%= JSON.stringify(editorTheme) %>">
+          <% if (editorTheme.status === 'pending' || editorTheme.status === 'approved') { %>
+            <div class="artist-locked"><h2><%= editorTheme.status === 'pending' ? 'Under review' : 'Published theme' %></h2><p><%= editorTheme.status === 'pending' ? (editorTheme.publishedVersion ? 'The currently published version stays live while an admin reviews your update.' : 'This theme is locked while an admin reviews it.') : 'This approved theme is live. You can edit it and submit an update for review.' %></p>
+              <% if (editorTheme.status === 'approved') { %><form action="/artist/themes/<%= editorTheme.id %>/edit" method="post"><button class="lui-button" type="submit">Edit published theme</button></form><% } %>
+            </div>
+          <% } else { %>
+            <% if (editorTheme.status === 'rejected') { %><div class="artist-rejection" role="alert"><strong>Changes requested by an admin</strong><p><%= editorTheme.rejectionNote %></p></div><% } %>
+            <div class="artist-editor">
+              <header class="artist-studio-topbar">
+                <a class="artist-studio-back" href="/artist" aria-label="Back to your themes"><i data-lucide="arrow-left"></i></a>
+                <div class="artist-studio-title"><strong>LockIn Studio</strong><span>Theme editor</span></div>
+                <label class="artist-studio-name">Theme name<input data-theme-name maxlength="60" value="<%= editorTheme.name %>" required></label>
+                <label class="artist-studio-page">Preview<select data-preview-page><option value="dashboard">Overview</option><option value="calendar">Academic calendar</option><option value="groups">Groups</option><option value="todo">Personal Todo</option><option value="settings">Settings</option><option value="lockui">LockUI components</option></select></label>
+                <div class="artist-studio-tools" role="toolbar" aria-label="Theme tools">
+                  <button class="lui-button lui-button-secondary" type="button" data-ai-color><i data-lucide="wand-sparkles"></i> AI Color</button>
+                  <button class="lui-button lui-button-secondary" type="button" data-copy-styles title="Copy supported CSS for the selected element"><i data-lucide="copy"></i> Copy CSS</button>
+                  <button class="lui-button lui-button-secondary" type="button" data-paste-styles title="Paste copied CSS onto the selected element"><i data-lucide="clipboard-paste"></i> Paste CSS</button>
+                  <button class="lui-button lui-button-secondary" type="button" data-studio-preview aria-pressed="false" title="Preview the theme without editing overlays"><i data-lucide="eye"></i> Preview</button>
+                  <button class="lui-button" type="button" data-submit-theme><i data-lucide="send"></i> <%= editorTheme.publishedVersion ? 'Submit Update for Review' : 'Submit for Review' %></button>
+                </div>
+                <span class="artist-save-status" data-save-status role="status" aria-live="polite"></span>
+              </header>
+              <div class="artist-studio-workspace">
+                <section class="artist-preview-wrap" aria-label="Live LockIn preview">
+                  <div class="artist-preview-toolbar"><strong>Live preview</strong><small class="muted">Click any element to inspect it. Shift-click a link or safe control to try it.</small></div>
+                  <iframe class="artist-preview-frame" data-theme-preview data-preview-token="<%= themePreviewToken %>" src="/dashboard?theme-edit=true&amp;theme-di=<%= themePreviewToken %>" sandbox="allow-scripts" title="Authenticated, read-only LockIn preview"></iframe>
+                </section>
+                <aside class="artist-inspector" aria-label="Selected element style editor">
+                  <section class="artist-inspector-section">
+                    <div class="artist-selected-heading"><div><small>SELECTED ELEMENT</small><h2 data-selected-element>Choose an element</h2></div><button class="lui-button lui-button-secondary" type="button" data-replace-all disabled title="Apply this style to matching LockIn UI components">Replace All</button></div>
+                    <small class="artist-replace-hint" data-replace-hint>Click a LockIn component to enable shared styling.</small>
+                    <p class="artist-style-hint" data-style-state-hint>Styles are filled from the selected LockIn element.</p>
+                    <div class="artist-style-states" role="group" aria-label="CSS interaction state">
+                      <button type="button" data-style-state="normal" aria-pressed="true">Default</button>
+                      <button type="button" data-style-state="hover" aria-pressed="false">Hover</button>
+                    </div>
+                    <label>Text color<input data-element-style="color" type="color" value="#172125"></label>
+                    <label>Background color<input data-element-style="background-color" type="color" value="#ffffff"></label>
+                    <label>Opacity<input data-element-style="opacity" type="range" min="0" max="1" step="0.05" value="1"></label>
+                    <label>Blur<input data-element-style="filter" type="range" min="0" max="20" step="1" value="0"></label>
+                    <label>Manual CSS declarations<textarea data-manual-css spellcheck="false" aria-label="Manual CSS declarations"></textarea></label>
+                    <small class="muted">Only color, background, opacity, blur, border, and shadow CSS is accepted. Position and transform are excluded.</small>
+                  </section>
+                  <details class="artist-studio-details">
+                    <summary>Theme palette</summary>
+                    <p class="muted">AI Color builds a readable palette from your wallpaper or background.</p>
+                    <div class="artist-palette" aria-label="Theme color palette">
+                      <label>Background<input data-palette="background" type="text" value="<%= editorTheme.palette.background %>" maxlength="160"></label>
+                      <label>Text<input data-palette="text" type="text" value="<%= editorTheme.palette.text %>" maxlength="160"></label>
+                      <label>Surface<input data-palette="surface" type="text" value="<%= editorTheme.palette.surface %>" maxlength="160"></label>
+                      <label>Accent<input data-palette="accent" type="text" value="<%= editorTheme.palette.accent %>" maxlength="160"></label>
+                    </div>
+                  </details>
+                  <details class="artist-studio-details">
+                    <summary>Theme description</summary>
+                    <label>Description<textarea data-theme-description maxlength="240"><%= editorTheme.description %></textarea></label>
+                  </details>
+                  <details class="artist-studio-details">
+                    <summary>Wallpaper and crop</summary>
+                    <p class="muted">Optional. Leave empty to use a flat color or gradient.</p>
+                    <div class="artist-wallpaper-controls">
+                      <label>Artwork<input data-wallpaper-file type="file" accept="image/png,image/jpeg,image/webp"></label>
+                      <label>Fit<select data-wallpaper-fit><option value="cover">Fill and crop</option><option value="contain">Fit whole image</option></select></label>
+                      <label>Shape<select data-wallpaper-shape><option value="16:9">Wide · 16:9</option><option value="4:3">Classic · 4:3</option><option value="1:1">Square · 1:1</option></select></label>
+                      <label>Zoom<input data-wallpaper-zoom type="range" min="1" max="2.5" step="0.05" value="1"></label>
+                      <button class="lui-button lui-button-secondary" type="button" data-smart-resize>AI Resize</button>
+                    </div>
+                    <canvas data-wallpaper-canvas width="960" height="540" aria-label="Wallpaper crop preview"></canvas>
+                    <small data-wallpaper-status class="muted"><%= editorTheme.wallpaper ? 'Current artwork is saved.' : 'No wallpaper uploaded.' %></small>
+                  </details>
+                </aside>
+              </div>
+            </div>
+          <% } %>
+        </div>
+      <% } else { %><div class="artist-locked"><h2>Make something that feels like LockIn.</h2><p>Start with colors, try an optional wallpaper, then refine individual parts of the workspace.</p><form action="/artist/themes" method="post"><button class="lui-button" type="submit">Create a theme</button></form></div><% } %>
+    </div>
+  </div>
+</section>

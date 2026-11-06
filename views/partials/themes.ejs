@@ -1,0 +1,24 @@
+<style>
+  .themes-page { max-width: 1180px; }
+  .theme-marketplace-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 18px; }
+  .theme-marketplace-card { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--white); }
+  .theme-marketplace-card iframe { display: block; width: 100%; height: 245px; border: 0; border-bottom: 1px solid var(--line); background: #f3f5f6; }
+  .theme-marketplace-copy { padding: 18px; }
+  .theme-marketplace-copy h2 { margin: 0 0 5px; font-size: 19px; }
+  .theme-marketplace-copy p { min-height: 42px; margin: 0 0 14px; color: var(--muted); }
+  .theme-marketplace-actions { display: flex; gap: 9px; flex-wrap: wrap; }
+  .theme-palette-swatches { display: flex; gap: 6px; margin: 0 0 14px; }
+  .theme-palette-swatches span { width: 24px; height: 24px; border: 1px solid #0002; border-radius: 50%; }
+  .theme-empty { padding: 32px; border: 1px dashed var(--line); border-radius: 14px; color: var(--muted); }
+  .theme-notice { margin-bottom: 18px; }
+</style>
+<section class="content-wrap themes-page">
+  <div class="page-heading hero-heading"><div><h1>Make the space yours.</h1><p class="lead">Choose a carefully crafted look for your LockIn workspace.</p></div></div>
+  <% if (locals.error) { %><p class="theme-notice error-message" role="alert"><%= error %></p><% } %>
+  <% if (locals.applied) { %><p class="theme-notice success-message" role="status">“<%= applied %>” is now active.</p><% } %>
+  <% if (locals.reset) { %><p class="theme-notice success-message" role="status">Your default LockIn colors are back.</p><% } %>
+  <div class="admin-section-heading"><div><h2>Available themes</h2><p class="muted">Every theme here has been reviewed by a LockIn admin.</p></div>
+    <% if (activeThemeId) { %><form action="/themes/reset" method="post"><button class="lui-button lui-button-secondary" type="submit">Use default colors</button></form><% } %>
+  </div>
+  <%- include('mini/theme-marketplace', { marketplaceThemes, activeThemeId }) %>
+</section>

@@ -1,0 +1,25 @@
+<% if (marketplaceThemes.length) { %>
+  <div class="theme-marketplace-grid">
+    <% marketplaceThemes.forEach(theme => { const artist = users.find(account => account.id === theme.artistId); %>
+      <article class="theme-marketplace-card">
+        <iframe src="/themes/preview/<%= theme.id %>" title="Preview of <%= theme.name %>" sandbox="allow-scripts" aria-label="Theme preview"></iframe>
+        <div class="theme-marketplace-copy">
+          <h2><%= theme.name %></h2>
+          <p><%= theme.description || 'A LockIn theme, made by an artist.' %></p>
+          <div class="theme-palette-swatches" aria-label="Theme colors">
+            <span style="background:<%= theme.palette.background %>" title="Background"></span>
+            <span style="background:<%= theme.palette.surface %>" title="Surface"></span>
+            <span style="background:<%= theme.palette.text %>" title="Text"></span>
+            <span style="background:<%= theme.palette.accent %>" title="Accent"></span>
+          </div>
+          <div class="theme-marketplace-actions">
+            <form action="/themes/<%= theme.id %>/apply" method="post"><button class="lui-button <%= activeThemeId === theme.id ? 'lui-button-secondary' : '' %>" type="submit"><%= activeThemeId === theme.id ? 'Currently active' : 'Use this theme' %></button></form>
+            <small class="muted">By @<%= artist?.username || 'LockIn artist' %></small>
+          </div>
+        </div>
+      </article>
+    <% }) %>
+  </div>
+<% } else { %>
+  <div class="theme-empty"><strong>The marketplace is getting its first colors.</strong><p>Artist-crafted themes will appear here after review.</p></div>
+<% } %>

@@ -51,6 +51,7 @@
     <a class="<%= siteAdminTab === 'feedback' ? 'active' : '' %>" href="/site-admin?tab=feedback"><i data-lucide="messages-square"></i> Feedback</a>
     <a class="<%= siteAdminTab === 'announcements' ? 'active' : '' %>" href="/site-admin?tab=announcements"><i data-lucide="megaphone"></i> Announcements</a>
     <a class="<%= siteAdminTab === 'cache' ? 'active' : '' %>" href="/site-admin?tab=cache"><i data-lucide="database-zap"></i> Cache</a>
+    <a class="<%= siteAdminTab === 'themes' ? 'active' : '' %>" href="/site-admin?tab=themes"><i data-lucide="palette"></i> Theme review</a>
     <a class="<%= siteAdminTab === 'developers' ? 'active' : '' %>" href="/site-admin?tab=developers"><i data-lucide="terminal"></i> Developers</a>
   </nav>
 
@@ -77,6 +78,7 @@
               <label>Account status message<textarea name="moderationMessage" maxlength="500"><%= account.moderationMessage || '' %></textarea></label>
               <label class="user-management-toggle"><input type="checkbox" name="isSiteAdmin" <%= account.isSiteAdmin ? 'checked' : '' %>> Site admin</label>
               <label class="user-management-toggle"><input type="checkbox" name="betaTools" <%= account.settings?.betaTools ? 'checked' : '' %>> Beta tools access</label>
+              <label class="user-management-toggle"><input type="checkbox" name="artistMode" <%= account.settings?.artistMode ? 'checked' : '' %>> Artist Mode · LockIn for Artists</label>
               <div class="user-management-actions">
                 <button class="lui-button lui-button-secondary" type="submit"><i data-lucide="save"></i> Save user</button>
                 <button class="lui-button lui-button-danger" type="submit" form="delete-user-<%= account.id %>"><i data-lucide="trash-2"></i> Delete user</button>
@@ -86,6 +88,11 @@
           </article>
         <% }) %>
       </div>
+    </section>
+  <% } else if (siteAdminTab === 'themes') { %>
+    <section class="admin-panel">
+      <div class="admin-section-heading"><div><h2>Theme review</h2><p class="muted">Preview artist submissions before they become available in the marketplace.</p></div></div>
+      <% if (themeReviews.length) { %><div class="site-admin-group-list"><% themeReviews.forEach(theme => { const artist = users.find(account => account.id === theme.artistId); %><div class="site-admin-row"><div><strong><%= theme.name %></strong><small>By @<%= artist?.username || 'deleted user' %> · Submitted <%= new Date(theme.submittedAt || theme.updatedAt).toLocaleString() %></small></div><div class="site-admin-group-actions"><a class="lui-link" href="/site-admin/themes/<%= theme.id %>/review"><i data-lucide="eye"></i> Preview and review</a></div></div><% }) %></div><% } else { %><p class="muted">No themes are waiting for review.</p><% } %>
     </section>
   <% } else if (siteAdminTab === 'groups') { %>
     <section class="admin-panel">

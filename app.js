@@ -20,6 +20,7 @@ const { taskSyncConfiguration } = require('./utils/task-sync-config');
 const sharedGroupUserIds = require('./utils/shared-group-users');
 const searchUsers = require('./utils/search-users');
 const registerRenderGateRoutes = require('./beta-tests/routes');
+const registerThemeRoutes = require('./themes/routes');
 
 const app = express();
 const taskSyncConfig = taskSyncConfiguration(config);
@@ -35,6 +36,7 @@ const betaGateAttemptModel = require('./beta-tests/model')(db);
 const feedbackModel = require('./feedback/model')(db);
 const announcementModel = require('./announcements/model')(db);
 const badWordModel = require('./bad-words/model')(db);
+const themeModel = require('./themes/model')(db);
 
 userModel.init(); // creates and migrates the user table when needed
 orgModel.init();
@@ -42,6 +44,7 @@ feedbackModel.init();
 badWordModel.init();
 announcementModel.init();
 betaGateAttemptModel.init();
+themeModel.init();
 
 const buildIdModel = require('./utils/build-id').initializeBuildIds(db, path.join(dataDir, '.build-id-key'));
 const buildInfo = buildIdModel.createBuild({
@@ -442,7 +445,7 @@ function renderLinkedText(text, links = []) {
   return output + escapeHtmlServer(value.slice(cursor));
 }
 let consumeRenderGateNotice = () => null;
-function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs: orgModel.all(), canEdit, canManageItem, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), renderLinkedText, buildInfo, renderGateBanner: consumeRenderGateNotice(request.user?.id), ...extra }); }
+function render(request, response, page, extra = {}) { normalizeUserTasks(request.user); if (request.user) request.user.tasks.sort((left, right) => left.position - right.position); response.render('index', { page, view: page, user: request.user, users, orgs: orgModel.all(), canEdit, canManageItem, selectedOrg: null, notifications: request.user?.notifications || [], error: request.query?.error, canonicalUrl: canonicalUrl(request), renderLinkedText, buildInfo, renderGateBanner: consumeRenderGateNotice(request.user?.id), themePreview: request.themePreview || null, ...extra }); }
 function renderPublicPage(request, response, page, extra = {}) { response.render('index', { page, view: page, user: null, users, orgs: orgModel.all(), canEdit, selectedOrg: null, notifications: [], error: null, canonicalUrl: canonicalUrl(request), buildInfo, ...extra }); }
 consumeRenderGateNotice = registerRenderGateRoutes({
   app,
@@ -474,10 +477,11 @@ function siteFeedback() { return db.prepare('SELECT * FROM site_feedback ORDER B
 function siteAnnouncements() { return db.prepare('SELECT * FROM site_announcements ORDER BY created_at DESC').all(); }
 function siteAdminPageData(request) {
   return {
-    siteAdminTab: ['admins', 'users', 'groups', 'moderation', 'feedback', 'announcements', 'cache', 'developers'].includes(request.query.tab) ? request.query.tab : 'admins',
+    siteAdminTab: ['admins', 'users', 'groups', 'moderation', 'feedback', 'announcements', 'cache', 'developers', 'themes'].includes(request.query.tab) ? request.query.tab : 'admins',
     siteAdminComments: globalModerationComments().filter((comment) => !comment.reviewedAt),
     siteAdminReports: globalReports().filter((report) => report.status === 'open'),
     feedback: siteFeedback(),
+    themeReviews: themeModel.byStatus('pending'),
     siteAdminUsers: users.filter((user) => user.isSiteAdmin),
     managedUsers: users.slice().sort((left, right) => left.username.localeCompare(right.username)),
     announcements: siteAnnouncements(),
@@ -693,6 +697,16 @@ app.post('/notifications/read-all', requireUser, (request, response) => {
   return sendMutation(request, response, { readAll: true }, '/dashboard');
 });
 
+registerThemeRoutes({
+  app,
+  themeModel,
+  requireUser,
+  requireSiteAdmin,
+  wallpaperDir: path.join(__dirname, 'public', 'media', 'wallpapers'),
+  render,
+  persistUser: () => persistState()
+});
+
 app.get('/dashboard', requireUser, (request, response) => {
   const dashboardTab = ['overview', 'groups', 'moderate'].includes(request.query.tab) ? request.query.tab : 'overview';
   const orgs = orgModel.all();
@@ -792,7 +806,11 @@ app.post('/site-admin/users/:id/update', requireUser, requireSiteAdmin, (request
     moderationStatus,
     moderationMessage: moderationStatus === 'active' ? '' : moderationMessage,
     moderationUntil: moderationStatus === 'suspended' && moderationUntilInput ? new Date(moderationUntilInput).toISOString() : '',
-    settings: { ...(target.settings || {}), betaTools: request.body.betaTools === 'on' }
+    settings: {
+      ...(target.settings || {}),
+      betaTools: request.body.betaTools === 'on',
+      artistMode: request.body.artistMode === 'on'
+    }
   };
   if (newPassword) {
     updatedUser.passwordHash = passwordHash(newPassword);

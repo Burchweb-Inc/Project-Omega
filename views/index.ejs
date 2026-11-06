@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+<% const themePreview = locals.themePreview || null; %>
 <meta name="google-site-verification" content="A-9BBU__a0HZiJVjbEFYD78vvIYuwE-KaKHBVqLrwQs" />
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <% const pageTitle = page === 'landing' ? 'LockIn' : `LockIn | ${locals.selectedOrg?.name || 'Study space'}`; const pageDescription = locals.selectedOrg?.description || 'LockIn keeps study groups, courses, tasks, and conversations in one focused place.'; const previewUrl = locals.canonicalUrl || 'https://lockedin.burchweb.com/'; %>
@@ -13,9 +14,9 @@
     <link rel="preload" href="/styles.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><link rel="preload" href="/pages.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><link rel="preload" href="/router.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><link rel="preload" href="/ui-overrides.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><link rel="preload" href="/lockui.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/pages.css"><link rel="stylesheet" href="/router.css"><link rel="stylesheet" href="/ui-overrides.css"><link rel="stylesheet" href="/lockui.css"></noscript>
   <% } else { %>
     <link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/pages.css"><link rel="stylesheet" href="/router.css"><link rel="stylesheet" href="/ui-overrides.css"><link rel="stylesheet" href="/lockui.css">
-  <% } %><script src="https://unpkg.com/lucide@latest"></script>
+  <% } %><% if (themePreview) { %><style id="lockin-theme-preview-styles"><%- locals.themePreviewCss || '' %></style><% } else if (user) { %><link rel="stylesheet" href="/themes/active.css"><% } %><script src="https://unpkg.com/lucide@latest"></script>
   <script>
-    if ('serviceWorker' in navigator) {
+    if ('serviceWorker' in navigator && !<%= themePreview ? 'true' : 'false' %>) {
       (async () => {
         const isVanityPage = <%= ['landing', 'about', 'support', 'privacy', 'terms', 'understand', 'beta'].includes(page) ? 'true' : 'false' %>;
         const versionResponse = await fetch('/service-worker-version.json', { cache: 'no-store' });
@@ -46,7 +47,7 @@
     }
   </script>
 </head>
-<body class="<%= page %> <%= ['about', 'support', 'privacy', 'terms', 'understand', 'beta'].includes(page) ? 'page-loading' : '' %>" data-push-enabled="<%= user?.settings?.pushNotifications?.enabled ? 'true' : 'false' %>" data-push-breakout-comments="<%= user?.settings?.pushNotifications?.breakoutComments !== false ? 'true' : 'false' %>" data-push-breakout-tasks="<%= user?.settings?.pushNotifications?.breakoutTasks !== false ? 'true' : 'false' %>" data-push-mentions="<%= user?.settings?.pushNotifications?.mentions !== false ? 'true' : 'false' %>" data-push-announcements="<%= user?.settings?.pushNotifications?.announcements !== false ? 'true' : 'false' %>">
+<body class="<%= page %> <%= page === 'artist' && (locals.artistThemes || []).some(theme => theme.id === locals.editingThemeId && ['draft', 'rejected'].includes(theme.status)) ? 'artist-studio-active' : '' %> <%= ['about', 'support', 'privacy', 'terms', 'understand', 'beta'].includes(page) ? 'page-loading' : '' %>" data-theme-preview="<%= themePreview ? 'true' : 'false' %>" data-push-enabled="<%= user?.settings?.pushNotifications?.enabled ? 'true' : 'false' %>" data-push-breakout-comments="<%= user?.settings?.pushNotifications?.breakoutComments !== false ? 'true' : 'false' %>" data-push-breakout-tasks="<%= user?.settings?.pushNotifications?.breakoutTasks !== false ? 'true' : 'false' %>" data-push-mentions="<%= user?.settings?.pushNotifications?.mentions !== false ? 'true' : 'false' %>" data-push-announcements="<%= user?.settings?.pushNotifications?.announcements !== false ? 'true' : 'false' %>">
 <% if (['about', 'support', 'privacy', 'terms', 'understand', 'beta'].includes(page)) { %>
   <div class="page-loader" data-page-loader aria-label="Loading LockIn" role="status">
     <img class="page-loader-image" src="/media/logo.png" alt="LockIn">
@@ -64,4 +65,4 @@
   <%- include('partials/lockui') %>
 <% } else { %>
   <%- include('partials/app-layout', { view }) %>
-<% } %><script src="/socket.io/socket.io.js"></script><script src="/js/shared-ui.js"></script><script src="/js/course.js"></script><script src="/js/todo.js"></script><script src="/js/live-ui.js"></script><script src="/app.js"></script></body></html>
+<% } %><% if (!themePreview) { %><script src="/socket.io/socket.io.js"></script><script src="/js/shared-ui.js"></script><script src="/js/course.js"></script><script src="/js/todo.js"></script><script src="/js/live-ui.js"></script><% if (user) { %><script src="/js/theme-application.js"></script><% } %><% } %><% if (page === 'artist') { %><script src="/js/artist-themes.js"></script><% } %><% if (!themePreview) { %><script src="/app.js"></script><% } else { %><script src="/js/theme-preview.js"></script><% } %></body></html>
