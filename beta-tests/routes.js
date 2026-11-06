@@ -9,6 +9,21 @@ const FLOW_LIFETIME_MS = 15 * 60 * 1000;
 const FAILURE_WINDOW_MS = 15 * 60 * 1000;
 const MAX_FAILURES = 5;
 const FAILURE_NOTICE = 'That was a cute attempt to dodge your todos. Please get back to work.';
+const RENDER_TEST_PLACEHOLDER = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3D Render test unavailable</title>
+</head>
+<body>
+  <main>
+    <h1>3D Render test unavailable</h1>
+    <p>The render test HTML file was not found. Add it as <code>data/3d-render-test.html</code> and restart the application.</p>
+  </main>
+</body>
+</html>
+`;
 
 function createCaptcha() {
   const left = crypto.randomInt(7, 19);
@@ -31,12 +46,17 @@ function registerRenderGateRoutes({
   refreshModerationStatus,
   gateAttempts,
   render,
-  renderTestPath = process.env.THREE_D_RENDER_TEST_PATH || path.join(rootDir, 'views', 'beta-tests', '3drender', 'index.html'),
+  renderTestPath = process.env.THREE_D_RENDER_TEST_PATH || path.join(rootDir, 'data', '3d-render-test.html'),
   renderTestAccelUri = process.env.THREE_D_RENDER_TEST_ACCEL_URI || null
 }) {
   const flows = new Map();
   const notices = new Map();
   const localFailures = new Map();
+
+  if (!fs.existsSync(renderTestPath)) {
+    fs.mkdirSync(path.dirname(renderTestPath), { recursive: true });
+    fs.writeFileSync(renderTestPath, RENDER_TEST_PLACEHOLDER, { flag: 'wx' });
+  }
 
   if (renderTestAccelUri && (
     !renderTestAccelUri.startsWith('/')

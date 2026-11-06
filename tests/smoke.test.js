@@ -71,7 +71,7 @@ assert.match(app, /pipeline\(fs\.createReadStream\(renderTestPath\)/, 'The beta 
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'sidebar.ejs'), 'utf8'), /Beta access<\/summary><a class="lui-menu-action" href="\/beta-tests\/3drender"><i data-lucide="box"><\/i> 3D Render test<\/a>/, 'Beta tools should be available from a submenu in the account menu.');
 assert.doesNotMatch(app, /eaglercraft-1\.21\.html/, 'The old public app URL should not have a compatibility redirect.');
 assert.equal(fs.existsSync(path.join(__dirname, '..', 'public', 'eaglercraft-1.21.html')), false, 'The protected static HTML should not remain publicly served.');
-assert.equal(fs.existsSync(path.join(__dirname, '..', 'views', 'beta-tests', '3drender', 'index.html')), true, 'The protected static HTML should be moved under views.');
+assert.match(app, /path\.join\(dataDir, '3d-render-test\.html'\)/, 'The protected render HTML should be loaded from the data directory.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'site-admin.ejs'), 'utf8'), /Reports from every group/, 'Site admin moderation should show cross-group reports.');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /Mod Action/, 'Reports should expose removal and moderation actions.');
 assert.match(app, /\['remove', 'remove-moderate', 'warn', 'ban', 'close'\]/, 'Report moderation should support warnings.');

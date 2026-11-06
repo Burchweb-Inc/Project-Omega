@@ -17,7 +17,7 @@ location = /beta-tests/3drender {
 
 location = /_private/3drender/index.html {
     internal;
-    alias /srv/project-omega-private/3drender/index.html;
+    alias /srv/project-omega/data/3d-render-test.html;
     default_type text/html;
     add_header Cache-Control "private, no-store" always;
 }

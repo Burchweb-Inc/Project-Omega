@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const registerRenderGateRoutes = require('../beta-tests/routes');
@@ -77,9 +78,35 @@ test('want access? prove yourself worthy of the holy 3d test', () => {
     flowId: response.rendered.locals.flowId,
     password: '!*^*&^'
   });
-  assert.equal(response.file, path.join(__dirname, '..', 'views', 'beta-tests', '3drender', 'index.html'));
+  assert.equal(response.file, path.join(__dirname, '..', 'data', '3d-render-test.html'));
   assert.equal(response.headers['Cache-Control'], 'private, no-store');
   assert.equal(harness.consumeNotice(harness.user.id), null);
+});
+
+test('creates a placeholder when the render test file is missing', (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'render-gate-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const renderTestPath = path.join(tempDir, 'data', '3d-render-test.html');
+
+  createHarness(undefined, { renderTestPath });
+
+  assert.equal(fs.existsSync(renderTestPath), true);
+  const placeholder = fs.readFileSync(renderTestPath, 'utf8');
+  assert.match(placeholder, /<!doctype html>/i);
+  assert.match(placeholder, /3D Render test unavailable/);
+  assert.match(placeholder, /data\/3d-render-test\.html/);
+});
+
+test('preserves an existing render test file during startup', (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'render-gate-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const renderTestPath = path.join(tempDir, 'data', '3d-render-test.html');
+  fs.mkdirSync(path.dirname(renderTestPath), { recursive: true });
+  fs.writeFileSync(renderTestPath, 'private render content');
+
+  createHarness(undefined, { renderTestPath });
+
+  assert.equal(fs.readFileSync(renderTestPath, 'utf8'), 'private render content');
 });
 
 test('failed captcha redirects home and exposes a one-time notice', () => {

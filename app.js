@@ -453,7 +453,8 @@ consumeRenderGateNotice = registerRenderGateRoutes({
   currentUser,
   refreshModerationStatus,
   gateAttempts: betaGateAttemptModel,
-  render
+  render,
+  renderTestPath: process.env.THREE_D_RENDER_TEST_PATH || path.join(dataDir, '3d-render-test.html')
 });
 function getOrg(request) { return orgModel.for({ id: request.params.id, slug: request.params.slug }); }
 function getCourse(org, courseId) { return org?.courses.find((course) => course.id === courseId); }
