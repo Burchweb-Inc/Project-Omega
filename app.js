@@ -1,5 +1,6 @@
 require('dotenv').config() ;
 
+const pino = require('pino-http')()
 const config = require('./config.js');
 const creators = require('./config/creators');
 const express = require('express');
@@ -25,6 +26,8 @@ const registerSsoRoutes = require('./sso/routes');
 const createRequestProtection = require('./server/request-protection');
 
 const app = express();
+app.use(pino);
+
 const trustProxy = String(process.env.TRUST_PROXY || '').trim();
 if (trustProxy) {
   if (!/^[1-9]\d*$/.test(trustProxy)) throw new Error('TRUST_PROXY must be a positive integer hop count.');
