@@ -48,10 +48,10 @@ function styleTarget(key) {
     }
     return null;
   }
-  const match = target.match(/^element:(dashboard|calendar|groups|todo|lockui|settings|site-admin|org|course|admin|people|breakout|breakout-groups|new-item|new-course|people-new):((?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})$/);
+  const match = target.match(/^element:(dashboard|calendar|groups|todo|lockui|settings|site-admin|org|course|admin|people|breakout|breakout-groups|new-item|new-course|people-new):((?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})(?::class:([a-z][a-z0-9_-]{0,63}))?$/);
   if (!match) return null;
   const nodeId = `${match[1]}-${match[2].replaceAll('.', '-')}`;
-  return { selector: `[data-theme-node="${nodeId}"]`, isHover };
+  return { selector: `[data-theme-node="${nodeId}"]${match[3] ? `.${match[3]}` : ''}`, isHover };
 }
 
 function selectorForThemeStyle(key) {
@@ -164,15 +164,21 @@ function safeThemePayload(input, previous = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
   const name = String(input.name ?? previous.name ?? '').trim();
   const description = String(input.description ?? previous.description ?? '').trim();
+  const wallpaperValue = Object.hasOwn(input, 'wallpaper') ? input.wallpaper : previous.wallpaper;
+  const wallpaper = typeof wallpaperValue === 'string'
+      && /^\/media\/wallpapers\/[a-z0-9-]+\.(?:png|jpe?g|webp)$/i.test(wallpaperValue)
+    ? wallpaperValue
+    : wallpaperValue == null || wallpaperValue === '' ? '' : null;
   const background = String(input.palette?.background ?? previous.palette?.background ?? '#f3f5f6').trim();
   const text = String(input.palette?.text ?? previous.palette?.text ?? '#172125').trim();
   const surface = String(input.palette?.surface ?? previous.palette?.surface ?? '#ffffff').trim();
   const accent = String(input.palette?.accent ?? previous.palette?.accent ?? '#294e58').trim();
-  if (!name || name.length > 60 || description.length > 240
+  if (!name || name.length > 60 || description.length > 240 || wallpaper === null
       || !validColor(background) || !validColor(text) || !validColor(surface) || !validColor(accent)) return null;
   return {
     name,
     description,
+    wallpaper,
     palette: { background, text, surface, accent },
     styles: normalizeStyles(input.styles)
   };

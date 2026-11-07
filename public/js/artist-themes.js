@@ -40,6 +40,8 @@
   let theme = { ...initialTheme };
   let selected = 'body';
   let selectedReplaceAll = null;
+  let selectedVariant = '';
+  let selectedVariants = [];
   let styleState = 'normal';
   let selectedComputed = { normal: {}, hover: {} };
   let selectedImage = null;
@@ -146,8 +148,8 @@
   }
 
   function selectedStyleKey(state = styleState) {
-    const target = selectedReplaceAll?.target || selected;
-    return `${target}${state === 'hover' ? ':hover' : ''}`;
+    const variant = selectedVariant ? `:class:${selectedVariant}` : '';
+    return `${selected}${variant}${state === 'hover' ? ':hover' : ''}`;
   }
 
   function renderInspector() {
@@ -171,13 +173,18 @@
       button.setAttribute('aria-pressed', String(active));
       button.classList.toggle('is-active', active);
     });
+    editor.querySelectorAll('[data-style-variant]').forEach((button) => {
+      const active = button.dataset.styleVariant === selectedVariant;
+      button.setAttribute('aria-pressed', String(active));
+      button.classList.toggle('is-active', active);
+    });
     editor.querySelector('[data-style-state-hint]').textContent = styleState === 'hover'
       ? 'Hover styles are filled from the selected LockIn element.'
       : 'Default styles are filled from the selected LockIn element.';
   }
 
   function setSelectedElement(selector, computed = {}) {
-    const dynamicElement = /^element:(dashboard|calendar|groups|todo):((?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})$/.test(selector);
+    const dynamicElement = /^element:(dashboard|calendar|groups|todo|lockui|settings|site-admin|org|course|admin|people|breakout|breakout-groups|new-item|new-course|people-new):((?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})$/.test(selector);
     const replaceAll = computed.replaceAll;
     const replaceClasses = typeof replaceAll?.target === 'string' && replaceAll.target.length <= 180
       ? replaceAll.target.match(/^class:([a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*){0,3})$/)?.[1].split('.')
@@ -189,6 +196,10 @@
       && Number.isInteger(replaceAll.count) && replaceAll.count > 0 && replaceAll.count <= 10000;
     if (!selectorNames[selector] && !dynamicElement && !validReplaceAll) return;
     selected = selector;
+    selectedVariants = Array.isArray(computed.classes)
+      ? [...new Set(computed.classes.filter((className) => typeof className === 'string' && /^[a-z][a-z0-9_-]{0,63}$/.test(className)))]
+      : [];
+    selectedVariant = '';
     selectedReplaceAll = validReplaceAll
       ? { target: replaceAll.target, label: replaceClasses.join(' + '), count: replaceAll.count }
       : null;
@@ -200,8 +211,19 @@
       : label;
     editor.querySelector('[data-replace-all]').disabled = !selectedReplaceAll;
     editor.querySelector('[data-replace-hint]').textContent = selectedReplaceAll
-      ? `${selectedReplaceAll.count} matching element${selectedReplaceAll.count === 1 ? '' : 's'} on this page. Shared styles apply wherever these LockIn classes appear.`
+      ? `${selectedReplaceAll.count} matching element${selectedReplaceAll.count === 1 ? '' : 's'} on this page. Changes stay on this element until you choose Apply to All.`
       : 'Click a LockIn component to enable shared styling.';
+    const variants = editor.querySelector('[data-style-variants]');
+    variants.replaceChildren(...selectedVariants.map((className) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.styleVariant = className;
+      button.setAttribute('aria-pressed', 'false');
+      button.textContent = className;
+      button.title = `Style this element when it has the ${className} class`;
+      return button;
+    }));
+    variants.hidden = selectedVariants.length === 0;
     renderInspector();
   }
 
@@ -218,7 +240,7 @@
     const baseKey = selectedReplaceAll.target;
     theme.styles ||= {};
     ['normal', 'hover'].forEach((state) => {
-      const currentKey = `${selected}${state === 'hover' ? ':hover' : ''}`;
+      const currentKey = selectedStyleKey(state);
       const targetKey = `${baseKey}${state === 'hover' ? ':hover' : ''}`;
       const currentStyle = theme.styles[currentKey];
       const source = currentStyle && Object.keys(currentStyle).length ? currentStyle : selectedComputed[state] || {};
@@ -226,9 +248,11 @@
         .filter(([property, value]) => styleProperties.has(property) && validStyleValue(property, value)));
       if (Object.keys(current).length) theme.styles[targetKey] = current;
       else delete theme.styles[targetKey];
-      delete theme.styles[currentKey];
+      if (currentKey !== targetKey) delete theme.styles[currentKey];
     });
     selected = baseKey;
+    selectedVariant = '';
+    selectedVariants = [];
     setStatus(`Replace All is on for ${selectedReplaceAll.count} matching elements.`);
     renderInspector();
     queueSave();
@@ -348,7 +372,7 @@
       const base = key.endsWith(':hover') ? key.slice(0, -6) : key;
       if (base.startsWith('element:') || base.startsWith('class:')) hoverTargets.add(base);
     });
-    if (selected.startsWith('element:') || selected.startsWith('class:')) hoverTargets.add(selected);
+    if (selected.startsWith('element:') || selected.startsWith('class:')) hoverTargets.add(selectedStyleKey('normal'));
     hoverTargets.forEach((target) => {
       const key = `${target}:hover`;
       const existing = theme.styles?.[key] || {};
@@ -361,6 +385,28 @@
       theme.styles[key] = { ...existing, ...hoverStyle };
     });
     queueSave();
+  }
+
+  async function randomizeColorPalette() {
+    clearTimeout(wallpaperTimer);
+    await wallpaperUpload;
+    const hue = Math.floor(Math.random() * 360);
+    const saturation = 42 + Math.floor(Math.random() * 24);
+    const lightness = Math.random() < 0.5
+      ? 18 + Math.floor(Math.random() * 15)
+      : 78 + Math.floor(Math.random() * 13);
+    const channel = (n) => {
+      const k = (n + hue / 30) % 12;
+      const a = saturation / 100 * Math.min(lightness / 100, 1 - lightness / 100);
+      return Math.round(255 * (lightness / 100 - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+    };
+    paletteInputs.background.value = `#${[0, 8, 4].map((offset) => channel(offset).toString(16).padStart(2, '0')).join('')}`;
+    selectedImage = null;
+    theme.wallpaper = null;
+    wallpaperData = '';
+    wallpaperChanged = false;
+    updateColorPalette();
+    setStatus('Random palette created with readable text and contrast-checked accents.');
   }
 
   function drawWallpaper(saveForRecovery = true) {
@@ -465,6 +511,7 @@
 
   editor.querySelectorAll('[data-palette], [data-theme-name], [data-theme-description]').forEach((input) => input.addEventListener('input', queueSave));
   editor.querySelector('[data-ai-color]').addEventListener('click', updateColorPalette);
+  editor.querySelector('[data-random-color]').addEventListener('click', randomizeColorPalette);
   editor.querySelector('[data-copy-styles]').addEventListener('click', copyStyles);
   editor.querySelector('[data-paste-styles]').addEventListener('click', pasteStyles);
   editor.querySelector('[data-replace-all]').addEventListener('click', replaceAllStyles);
@@ -504,6 +551,17 @@
     styleState = button.dataset.styleState;
     renderInspector();
   }));
+  editor.querySelector('[data-style-variants]').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-style-variant]');
+    if (!button) return;
+    selectedVariant = button.dataset.styleVariant;
+    preview.contentWindow?.postMessage({
+      type: 'theme-variant-state',
+      selector: selected,
+      className: selectedVariant
+    }, '*');
+    renderInspector();
+  });
   editor.querySelector('[data-manual-css]').addEventListener('input', applyManualCss);
   editor.querySelector('[data-wallpaper-file]').addEventListener('change', (event) => {
     const file = event.target.files?.[0];

@@ -26,6 +26,9 @@
     ? 'groups'
     : bodyPageKey === 'account-settings' ? 'settings' : bodyPageKey || 'dashboard';
   let previewMode = false;
+  let variantElement = null;
+  let variantClass = '';
+  let variantWasPresent = false;
 
   function nodePath(element) {
     const path = [];
@@ -82,6 +85,46 @@
     };
   }
 
+  function elementClasses(element) {
+    const ownClasses = [...element.classList].filter((className) => /^[a-z][a-z0-9_-]{0,63}$/.test(className));
+    const relatedClasses = new Set(ownClasses);
+    document.querySelectorAll('body *').forEach((candidate) => {
+      candidate.classList.forEach((className) => {
+        if (!/^[a-z][a-z0-9_-]{0,63}$/.test(className)) return;
+        if (ownClasses.some((ownClass) => ownClass === className
+            || ownClass.startsWith(`${className}-`)
+            || className.startsWith(`${ownClass}-`))) {
+          relatedClasses.add(className);
+        }
+      });
+    });
+    return [...relatedClasses].filter((className) => ![...relatedClasses]
+      .some((candidate) => candidate.startsWith(`${className}-`)));
+  }
+
+  function elementForKey(key) {
+    const match = key.match(/^element:(dashboard|calendar|groups|todo|lockui|settings|site-admin|org|course|admin|people|breakout|breakout-groups|new-item|new-course|people-new):((?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})$/);
+    if (!match || match[1] !== pageKey) return null;
+    return match[2].split('.').reduce((node, index) => node?.children[Number(index)], document.body) || null;
+  }
+
+  function clearVariantClass() {
+    if (variantElement && variantClass && !variantWasPresent) variantElement.classList.remove(variantClass);
+    variantElement = null;
+    variantClass = '';
+    variantWasPresent = false;
+  }
+
+  function setVariantClass(key, className) {
+    clearVariantClass();
+    const element = elementForKey(key);
+    if (!element || typeof className !== 'string' || !/^[a-z][a-z0-9_-]{0,63}$/.test(className)) return;
+    variantElement = element;
+    variantClass = className;
+    variantWasPresent = element.classList.contains(className);
+    if (!variantWasPresent) element.classList.add(className);
+  }
+
   function safeValue(property, value) {
     if (typeof value !== 'string' || value.length > 160 || /[;{}<>\\]/.test(value) || /\b(url|var|expression)\s*\(/i.test(value)) return false;
     if (['color', 'background-color', 'border-color'].includes(property)) return colorPattern.test(value.trim());
@@ -123,15 +166,19 @@
       document.body.style.backgroundImage = `url("${theme.wallpaper}")`;
       document.body.style.backgroundSize = 'cover';
       document.body.style.backgroundAttachment = 'fixed';
+    } else {
+      document.body.style.backgroundImage = '';
+      document.body.style.backgroundSize = '';
+      document.body.style.backgroundAttachment = '';
     }
     Object.entries(theme.styles || {}).forEach(([key, declarations]) => {
       const isHover = key.endsWith(':hover');
       const baseKey = isHover ? key.slice(0, -6) : key;
       if (baseKey.length > 180) return;
-      const nodeMatch = baseKey.match(/^element:(dashboard|calendar|groups|todo|lockui|settings|site-admin|org|course|admin|people|breakout|breakout-groups|new-item|new-course|people-new):((?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})$/);
+      const nodeMatch = baseKey.match(/^element:(dashboard|calendar|groups|todo|lockui|settings|site-admin|org|course|admin|people|breakout|breakout-groups|new-item|new-course|people-new):((?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})(?::class:([a-z][a-z0-9_-]{0,63}))?$/);
       const classSelector = replaceAllSelector(baseKey);
       const selector = nodeMatch
-        ? `[data-theme-node="${nodeMatch[1]}-${nodeMatch[2].replaceAll('.', '-')}"]`
+        ? `[data-theme-node="${nodeMatch[1]}-${nodeMatch[2].replaceAll('.', '-')}"]${nodeMatch[3] ? `.${nodeMatch[3]}` : ''}`
         : classSelector
           ? classSelector
           : selectors[baseKey];
@@ -154,11 +201,13 @@
     const customStyle = document.getElementById('lockin-theme-custom-styles') || document.createElement('style');
     customStyle.id = 'lockin-theme-custom-styles';
     customStyle.textContent = customCss;
-    if (!customStyle.isConnected) document.head.append(customStyle);
+    customStyle.remove();
+    document.head.append(customStyle);
     const hoverStyle = document.getElementById('lockin-theme-hover-styles') || document.createElement('style');
     hoverStyle.id = 'lockin-theme-hover-styles';
     hoverStyle.textContent = hoverCss;
-    if (!hoverStyle.isConnected) document.head.append(hoverStyle);
+    hoverStyle.remove();
+    document.head.append(hoverStyle);
   }
 
   function closestTarget(target) {
@@ -218,6 +267,7 @@
   }
 
   function showSelection(target) {
+    clearVariantClass();
     document.querySelectorAll('[data-theme-selected]').forEach((element) => delete element.dataset.themeSelected);
     target.element.dataset.themeSelected = 'true';
     const payload = {
@@ -226,7 +276,8 @@
       label: target.label,
       replaceAll: target.group || null,
       styles: computedProperties(target.element),
-      hoverStyles: computedHoverProperties(target.element)
+      hoverStyles: computedHoverProperties(target.element),
+      classes: elementClasses(target.element)
     };
     window.parent.postMessage(payload, '*');
   }
@@ -347,6 +398,7 @@
     if (event.data?.type === 'theme-state') applyTheme(event.data.theme);
     if (event.data?.type === 'theme-inspect') inspectTarget(event.data.selector);
     if (event.data?.type === 'theme-preview-mode') setPreviewMode(event.data.enabled);
+    if (event.data?.type === 'theme-variant-state') setVariantClass(event.data.selector, event.data.className);
   });
 
   const selectionStyle = document.createElement('style');

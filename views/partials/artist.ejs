@@ -24,6 +24,10 @@
   .artist-style-states { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--white); }
   .artist-style-states button { min-height: 38px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ink); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
   .artist-style-states button.is-active { border-color: var(--blue); background: var(--paper); }
+  .artist-style-variants { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 5px; }
+  .artist-style-variants[hidden] { display: none; }
+  .artist-style-variants button { flex: 0 0 auto; max-width: 180px; overflow: hidden; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--white); color: var(--ink); font: inherit; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .artist-style-variants button.is-active { border-color: var(--blue); background: var(--paper); }
   .artist-style-hint { margin: -5px 0 0; color: var(--muted); font-size: 11px; }
   .artist-palette { display: grid; grid-template-columns: repeat(4, minmax(100px, 1fr)); gap: 10px; }
   .artist-palette input { min-width: 0; }
@@ -153,6 +157,7 @@
                 <label class="artist-studio-name">Theme name<input data-theme-name maxlength="60" value="<%= editorTheme.name %>" required></label>
                 <label class="artist-studio-page">Preview<select data-preview-page><option value="dashboard">Overview</option><option value="calendar">Academic calendar</option><option value="groups">Groups</option><option value="todo">Personal Todo</option><option value="settings">Settings</option><option value="lockui">LockUI components</option></select></label>
                 <div class="artist-studio-tools" role="toolbar" aria-label="Theme tools">
+                  <button class="lui-button lui-button-secondary" type="button" data-random-color><i data-lucide="shuffle"></i> Random Color</button>
                   <button class="lui-button lui-button-secondary" type="button" data-ai-color><i data-lucide="wand-sparkles"></i> AI Color</button>
                   <button class="lui-button lui-button-secondary" type="button" data-copy-styles title="Copy supported CSS for the selected element"><i data-lucide="copy"></i> Copy CSS</button>
                   <button class="lui-button lui-button-secondary" type="button" data-paste-styles title="Paste copied CSS onto the selected element"><i data-lucide="clipboard-paste"></i> Paste CSS</button>
@@ -168,13 +173,14 @@
                 </section>
                 <aside class="artist-inspector" aria-label="Selected element style editor">
                   <section class="artist-inspector-section">
-                    <div class="artist-selected-heading"><div><small>SELECTED ELEMENT</small><h2 data-selected-element>Choose an element</h2></div><button class="lui-button lui-button-secondary" type="button" data-replace-all disabled title="Apply this style to matching LockIn UI components">Replace All</button></div>
+                    <div class="artist-selected-heading"><div><small>SELECTED ELEMENT</small><h2 data-selected-element>Choose an element</h2></div><button class="lui-button lui-button-secondary" type="button" data-replace-all disabled title="Apply this style to matching LockIn UI components">Apply to All</button></div>
                     <small class="artist-replace-hint" data-replace-hint>Click a LockIn component to enable shared styling.</small>
                     <p class="artist-style-hint" data-style-state-hint>Styles are filled from the selected LockIn element.</p>
                     <div class="artist-style-states" role="group" aria-label="CSS interaction state">
                       <button type="button" data-style-state="normal" aria-pressed="true">Default</button>
                       <button type="button" data-style-state="hover" aria-pressed="false">Hover</button>
                     </div>
+                    <div class="artist-style-variants" data-style-variants role="group" aria-label="Element class variants" hidden></div>
                     <label>Text color<input data-element-style="color" type="color" value="#172125"></label>
                     <label>Background color<input data-element-style="background-color" type="color" value="#ffffff"></label>
                     <label>Opacity<input data-element-style="opacity" type="range" min="0" max="1" step="0.05" value="1"></label>

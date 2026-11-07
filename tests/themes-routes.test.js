@@ -17,6 +17,7 @@ test('theme CSS only emits allowed selectors and safe declarations', () => {
       'button:active': { color: '#123456' },
       'body } body': { color: 'red' },
       'element:dashboard:0.1.3': { color: '#ffffff', 'background-color': '#123456' },
+      'element:lockui:0.2.1:class:nav-item-selected': { color: '#ffffff' },
       'element:lockui:0.2.1': { color: '#ffffff' },
       'element:dashboard:0.-1': { color: 'red' },
       'element:dashboard:0.1.2.3.4.5.6.7.8.9.10.11.12.13.14.15.16': { color: '#ffffff' },
@@ -39,6 +40,7 @@ test('theme CSS only emits allowed selectors and safe declarations', () => {
   assert.match(css, /\.topbar \.lui-icon-button:hover, \.topbar \.avatar:hover, \.topbar \.notification-menu > summary:hover\{background-color:#123456 !important;filter:blur\(2px\) !important\}/);
   assert.match(css, /\[data-theme-node="dashboard-0-1-3"\]\{color:#ffffff !important;background-color:#123456 !important\}/);
   assert.match(css, /\[data-theme-node="lockui-0-2-1"\]\{color:#ffffff !important\}/);
+  assert.match(css, /\[data-theme-node="lockui-0-2-1"\]\.nav-item-selected\{color:#ffffff !important\}/);
   assert.match(css, /\.lui-button\.lui-button-primary\{background-color:#123456 !important;color:#ffffff !important\}/);
   assert.match(css, /\.lui-button\.lui-button-primary:hover\{background-color:#345678 !important\}/);
   assert.doesNotMatch(css, /:active/);
@@ -50,15 +52,19 @@ test('theme payload rejects invalid colors and retains only visual style propert
   const payload = safeThemePayload({
     name: 'Soft focus',
     description: 'Warm paper and quiet ink.',
+    wallpaper: '',
     palette: { background: '#f4ead8', text: '#231f1a', surface: '#fffaf0', accent: '#7a4435' },
     styles: {
       main: { 'background-color': '#fffaf0', position: 'fixed', transform: 'scale(2)' },
+      'element:dashboard:0.1.3:class:nav-item-selected:hover': { color: '#ffffff' },
       'class:lui-button.lui-button-primary': { 'background-color': '#7a4435', position: 'fixed' }
     }
   });
   assert.equal(payload.name, 'Soft focus');
+  assert.equal(payload.wallpaper, '');
   assert.deepEqual(payload.styles, {
     main: { 'background-color': '#fffaf0' },
+    'element:dashboard:0.1.3:class:nav-item-selected:hover': { color: '#ffffff' },
     'class:lui-button.lui-button-primary': { 'background-color': '#7a4435' }
   });
 });
