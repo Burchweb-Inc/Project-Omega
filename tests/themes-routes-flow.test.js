@@ -234,4 +234,29 @@ test('artists can submit, revise rejected work, and publish only through admin r
   assert.equal(themeModel.get(themeId).status, 'approved');
   assert.equal(themeModel.get(themeId).publishedVersion, undefined);
   assert.match(await (await request('/themes/active.css', 'member')).text(), /#e8d8c8/);
+  assert.equal((await request(`/artist/themes/${themeId}/delete`, 'artist', { method: 'POST' })).status, 409);
+  assert.equal(themeModel.get(themeId).status, 'approved');
+  themeModel.save({
+    id: 'unpublished-draft',
+    artistId: 'artist-1',
+    status: 'draft',
+    name: 'Temporary draft',
+    palette: {},
+    styles: {}
+  });
+  assert.equal((await request('/artist/themes/unpublished-draft/delete', 'other', { method: 'POST' })).status, 404);
+  const deletedDraft = await request('/artist/themes/unpublished-draft/delete', 'artist', { method: 'POST', redirect: 'manual' });
+  assert.equal(deletedDraft.status, 302);
+  assert.equal(themeModel.get('unpublished-draft'), null);
+  themeModel.save({
+    id: 'published-update-draft',
+    artistId: 'artist-1',
+    status: 'draft',
+    name: 'Published update draft',
+    palette: {},
+    styles: {},
+    publishedVersion: { name: 'Published version' }
+  });
+  assert.equal((await request('/artist/themes/published-update-draft/delete', 'artist', { method: 'POST' })).status, 409);
+  assert.equal(themeModel.get('published-update-draft').publishedVersion.name, 'Published version');
 });

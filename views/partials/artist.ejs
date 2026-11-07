@@ -4,6 +4,8 @@
   .artist-list, .artist-editor-panel { padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); }
   .artist-list { display: grid; gap: 12px; }
   .artist-list h2, .artist-editor-panel h2 { margin: 0; }
+  .artist-theme-row { display: grid; grid-template-columns: minmax(0, 1fr) 36px; gap: 6px; align-items: center; }
+  .artist-theme-row form { margin: 0; }
   .artist-theme-link { display: grid; gap: 3px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; color: inherit; text-decoration: none; }
   .artist-theme-link.selected { border-color: var(--blue); box-shadow: inset 3px 0 var(--blue); }
   .artist-theme-link small, .artist-status { color: var(--muted); }
@@ -60,6 +62,13 @@
   .artist-studio-back { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); text-decoration: none; }
   .artist-studio-title { display: grid; min-width: 100px; gap: 2px; }
   .artist-studio-title span, .artist-studio-topbar label { color: var(--muted); font-size: 10px; }
+  .artist-studio-menu { position: relative; flex: none; }
+  .artist-studio-menu > summary { list-style: none; }
+  .artist-studio-menu > summary::-webkit-details-marker { display: none; }
+  .artist-studio-menu-panel { position: fixed; top: 0; right: 0; z-index: 20; display: grid; min-width: 205px; padding: 6px; }
+  .artist-studio-menu-panel form { margin: 0; }
+  .artist-studio-menu-panel kbd { margin-left: auto; }
+  .artist-studio-menu-panel button:disabled { opacity: .48; cursor: not-allowed; }
   .artist-studio-topbar label { display: grid; min-width: 120px; gap: 3px; font-weight: 700; }
   .artist-studio-name { width: 170px; }
   .artist-studio-page { width: 140px; }
@@ -134,9 +143,16 @@
     <aside class="artist-list" aria-label="Your themes">
       <h2>Your themes</h2>
       <% if (artistThemes.length) { artistThemes.forEach(theme => { %>
-        <a class="artist-theme-link <%= editingThemeId === theme.id ? 'selected' : '' %>" href="/artist?edit=<%= theme.id %>">
-          <strong><%= theme.name %></strong><small class="artist-status"><%= theme.status === 'pending' ? (theme.publishedVersion ? 'Update in review' : 'In review') : theme.status === 'approved' ? 'Published' : theme.status === 'rejected' ? (theme.publishedVersion ? 'Update needs changes' : 'Changes requested') : theme.publishedVersion ? 'Update draft' : 'Draft' %></small>
-        </a>
+        <div class="artist-theme-row">
+          <a class="artist-theme-link <%= editingThemeId === theme.id ? 'selected' : '' %>" href="/artist?edit=<%= theme.id %>">
+            <strong><%= theme.name %></strong><small class="artist-status"><%= theme.status === 'pending' ? (theme.publishedVersion ? 'Update in review' : 'In review') : theme.status === 'approved' ? 'Published' : theme.status === 'rejected' ? (theme.publishedVersion ? 'Update needs changes' : 'Changes requested') : theme.publishedVersion ? 'Update draft' : 'Draft' %></small>
+          </a>
+          <% if (['draft', 'rejected'].includes(theme.status) && !theme.publishedVersion) { %>
+            <form action="/artist/themes/<%= theme.id %>/delete" method="post" data-live-form data-confirm-message="Delete this unpublished theme draft? This cannot be undone.">
+              <button class="lui-icon-button" type="submit" aria-label="Delete draft <%= theme.name %>" title="Delete draft"><i data-lucide="trash-2"></i></button>
+            </form>
+          <% } %>
+        </div>
       <% }) } else { %><p class="muted">Your first theme starts here.</p><% } %>
       <form class="artist-theme-create" action="/artist/themes" method="post"><button class="lui-button lui-button-secondary" type="submit"><i data-lucide="plus"></i> New theme</button></form>
     </aside>
@@ -162,6 +178,14 @@
                   <button class="lui-button lui-button-secondary" type="button" data-copy-styles title="Copy supported CSS for the selected element"><i data-lucide="copy"></i> Copy CSS</button>
                   <button class="lui-button lui-button-secondary" type="button" data-paste-styles title="Paste copied CSS onto the selected element"><i data-lucide="clipboard-paste"></i> Paste CSS</button>
                   <button class="lui-button lui-button-secondary" type="button" data-studio-preview aria-pressed="false" title="Preview the theme without editing overlays"><i data-lucide="eye"></i> Preview</button>
+                  <details class="lui-menu artist-studio-menu">
+                    <summary class="lui-icon-button lui-menu-trigger" aria-label="Studio history and draft actions" aria-expanded="false" title="History and draft actions"><i data-lucide="ellipsis"></i></summary>
+                    <div class="lui-menu-panel artist-studio-menu-panel">
+                      <button class="lui-menu-action" type="button" data-undo disabled><i data-lucide="undo-2"></i> Undo <kbd class="lui-kbd" data-undo-shortcut>Ctrl Z</kbd></button>
+                      <button class="lui-menu-action" type="button" data-redo disabled><i data-lucide="redo-2"></i> Redo <kbd class="lui-kbd" data-redo-shortcut>Ctrl Shift Z</kbd></button>
+                      <button class="lui-menu-action lui-menu-action-danger" type="button" data-discard-changes><i data-lucide="rotate-ccw"></i> Discard Changes</button>
+                    </div>
+                  </details>
                   <button class="lui-button" type="button" data-submit-theme><i data-lucide="send"></i> <%= editorTheme.publishedVersion ? 'Submit Update for Review' : 'Submit for Review' %></button>
                 </div>
                 <span class="artist-save-status" data-save-status role="status" aria-live="polite"></span>

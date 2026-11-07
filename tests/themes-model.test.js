@@ -28,5 +28,22 @@ test('theme persistence is repeatable and keeps artist themes isolated', () => {
   assert.equal(model.get('theme-1').name, 'Evening Study Revised');
   assert.equal(model.get('theme-1').rejectionNote, 'Adjust contrast.');
   assert.equal(model.get('theme-2').name, 'Paper');
+  const deletable = { id: 'theme-3', artistId: 'artist-1', status: 'draft', name: 'Unused draft', palette: {}, styles: {} };
+  const publishedDraft = {
+    id: 'theme-4',
+    artistId: 'artist-1',
+    status: 'draft',
+    name: 'Published update',
+    palette: {},
+    styles: {},
+    publishedVersion: { name: 'Published version' }
+  };
+  model.save(deletable);
+  model.save(publishedDraft);
+  assert.equal(model.deleteDraft('theme-3', 'artist-2'), false);
+  assert.equal(model.deleteDraft('theme-3', 'artist-1'), true);
+  assert.equal(model.get('theme-3'), null);
+  assert.equal(model.deleteDraft('theme-4', 'artist-1'), false);
+  assert.equal(model.get('theme-4').name, 'Published update');
   db.close();
 });

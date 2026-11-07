@@ -55,11 +55,18 @@ function byStatus(db, status) {
   return db.prepare('SELECT * FROM themes WHERE status = ? ORDER BY updated_at ASC').all(status).map(mapTheme);
 }
 
+function deleteDraft(db, id, artistId) {
+  return db.prepare(`DELETE FROM themes
+    WHERE id = ? AND artist_id = ? AND status IN ('draft', 'rejected')
+      AND json_type(payload, '$.publishedVersion') IS NULL`).run(id, artistId).changes > 0;
+}
+
 module.exports = (db) => ({
   init: () => initialize(db),
   save: (theme) => save(db, theme),
   get: (id) => get(db, id),
   all: () => all(db),
   byArtist: (artistId) => byArtist(db, artistId),
-  byStatus: (status) => byStatus(db, status)
+  byStatus: (status) => byStatus(db, status),
+  deleteDraft: (id, artistId) => deleteDraft(db, id, artistId)
 });

@@ -50,8 +50,13 @@
   let wallpaperChanged = false;
   let wallpaperData = '';
   let wallpaperUpload = Promise.resolve();
+  let saveQueue = Promise.resolve();
   let copiedStyles = null;
   let previewMode = false;
+  const undoStack = [];
+  const redoStack = [];
+  let lastHistoryState = null;
+  let restoringHistory = false;
 
   function setStatus(message, isError = false) {
     saveStatus.textContent = message;
@@ -79,15 +84,47 @@
       name: editor.querySelector('[data-theme-name]').value,
       description: editor.querySelector('[data-theme-description]').value,
       palette: Object.fromEntries(Object.entries(paletteInputs).map(([key, input]) => [key, input.value])),
-      styles: theme.styles || {},
+      styles: JSON.parse(JSON.stringify(theme.styles || {})),
       wallpaperData,
-      wallpaperChanged
+      wallpaperChanged,
+      wallpaperFit: editor.querySelector('[data-wallpaper-fit]').value,
+      wallpaperShape: editor.querySelector('[data-wallpaper-shape]').value,
+      wallpaperZoom: editor.querySelector('[data-wallpaper-zoom]').value
     };
+  }
+
+  function historySnapshot(state = snapshot()) {
+    return {
+      ...state,
+      palette: { ...state.palette },
+      styles: JSON.parse(JSON.stringify(state.styles || {}))
+    };
+  }
+
+  function updateHistoryControls() {
+    editor.querySelector('[data-undo]').disabled = !undoStack.length || restoringHistory;
+    editor.querySelector('[data-redo]').disabled = !redoStack.length || restoringHistory;
+  }
+
+  function recordHistory() {
+    if (!lastHistoryState || restoringHistory) return;
+    undoStack.push(lastHistoryState);
+    if (undoStack.length > 30) undoStack.shift();
+    redoStack.length = 0;
+    lastHistoryState = historySnapshot();
+    updateHistoryControls();
   }
 
   function postPreviewState() {
     if (!preview.contentWindow) return;
-    const { wallpaperData: _wallpaperData, wallpaperChanged: _wallpaperChanged, ...themeState } = snapshot();
+    const {
+      wallpaperData: _wallpaperData,
+      wallpaperChanged: _wallpaperChanged,
+      wallpaperFit: _wallpaperFit,
+      wallpaperShape: _wallpaperShape,
+      wallpaperZoom: _wallpaperZoom,
+      ...themeState
+    } = snapshot();
     preview.contentWindow.postMessage({ type: 'theme-state', theme: themeState }, '*');
     preview.contentWindow.postMessage({ type: 'theme-preview-mode', enabled: previewMode }, '*');
   }
@@ -296,32 +333,149 @@
     }
   }
 
-  async function saveDraft() {
+  function saveDraft() {
     const current = snapshot();
-    const { wallpaperData: _wallpaperData, wallpaperChanged: _wallpaperChanged, ...serverDraft } = current;
-    try {
-      const response = await fetch(`/artist/themes/${themeId}/save`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(serverDraft)
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'The server could not save this draft.');
-      theme = { ...theme, ...current };
-      setStatus('Saved on this device and to your draft.');
-      postPreviewState();
-      return result.saved === true;
-    } catch (error) {
-      setStatus(`Device copy saved. Server save failed: ${error.message}`, true);
-      return false;
-    }
+    const {
+      wallpaperData: _wallpaperData,
+      wallpaperChanged: _wallpaperChanged,
+      wallpaperFit: _wallpaperFit,
+      wallpaperShape: _wallpaperShape,
+      wallpaperZoom: _wallpaperZoom,
+      ...serverDraft
+    } = current;
+    const save = async () => {
+      try {
+        const response = await fetch(`/artist/themes/${themeId}/save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(serverDraft)
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'The server could not save this draft.');
+        theme = { ...theme, ...current };
+        setStatus('Saved on this device and to your draft.');
+        postPreviewState();
+        return result.saved === true;
+      } catch (error) {
+        setStatus(`Device copy saved. Server save failed: ${error.message}`, true);
+        return false;
+      }
+    };
+    const pending = saveQueue.then(save, save);
+    saveQueue = pending.then(() => undefined, () => undefined);
+    return pending;
   }
 
   function queueSave() {
+    recordHistory();
     persistLocal();
     postPreviewState();
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveDraft, 700);
+  }
+
+  async function restoreHistoryState(state) {
+    if (restoringHistory) return;
+    restoringHistory = true;
+    updateHistoryControls();
+    clearTimeout(saveTimer);
+    clearTimeout(wallpaperTimer);
+    try {
+      await wallpaperUpload;
+      theme = {
+        ...initialTheme,
+        ...state,
+        palette: { ...state.palette },
+        styles: JSON.parse(JSON.stringify(state.styles || {}))
+      };
+      editor.querySelector('[data-theme-name]').value = state.name;
+      editor.querySelector('[data-theme-description]').value = state.description;
+      Object.entries(paletteInputs).forEach(([key, input]) => { input.value = state.palette[key]; });
+      editor.querySelector('[data-wallpaper-fit]').value = state.wallpaperFit || 'cover';
+      editor.querySelector('[data-wallpaper-shape]').value = state.wallpaperShape || '16:9';
+      editor.querySelector('[data-wallpaper-zoom]').value = state.wallpaperZoom || '1';
+      wallpaperData = state.wallpaperData || '';
+      wallpaperChanged = Boolean(state.wallpaperChanged);
+      selectedImage = null;
+      const wallpaperSource = wallpaperData || theme.wallpaper;
+      if (wallpaperSource) {
+        const image = new Image();
+        image.onload = () => {
+          selectedImage = image;
+          if (wallpaperData) {
+            const canvas = editor.querySelector('[data-wallpaper-canvas]');
+            canvas.width = image.width;
+            canvas.height = image.height;
+            canvas.getContext('2d').drawImage(image, 0, 0);
+          } else {
+            drawWallpaper(false);
+          }
+        };
+        image.src = wallpaperSource;
+      } else {
+        const canvas = editor.querySelector('[data-wallpaper-canvas]');
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+      }
+      renderInspector();
+      postPreviewState();
+      persistLocal();
+      if (wallpaperChanged) {
+        wallpaperUpload = uploadWallpaper();
+        if (!await wallpaperUpload) throw new Error('The restored wallpaper could not be uploaded.');
+      }
+      if (!await saveDraft()) throw new Error('The restored draft could not be saved to the server.');
+      let recoveryCopyCleared = true;
+      if (!undoStack.length && !redoStack.length) {
+        try {
+          localStorage.removeItem(editorKey);
+        } catch (error) {
+          recoveryCopyCleared = false;
+          setStatus(`Draft restored, but the device recovery copy could not be cleared: ${error.message}`, true);
+        }
+      }
+      if (recoveryCopyCleared) setStatus('Draft changes restored.');
+    } catch (error) {
+      setStatus(`Could not restore draft changes: ${error.message}`, true);
+    } finally {
+      lastHistoryState = historySnapshot();
+      restoringHistory = false;
+      updateHistoryControls();
+    }
+  }
+
+  async function undo() {
+    if (!undoStack.length || restoringHistory) return;
+    redoStack.push(historySnapshot());
+    const previous = undoStack.pop();
+    updateHistoryControls();
+    await restoreHistoryState(previous);
+  }
+
+  async function redo() {
+    if (!redoStack.length || restoringHistory) return;
+    undoStack.push(historySnapshot());
+    const next = redoStack.pop();
+    updateHistoryControls();
+    await restoreHistoryState(next);
+  }
+
+  async function discardChanges() {
+    if (!window.confirm('Discard all changes made in this studio session and restore the saved draft?')) return;
+    undoStack.length = 0;
+    redoStack.length = 0;
+    const original = historySnapshot({
+      ...initialTheme,
+      name: initialTheme.name,
+      description: initialTheme.description || '',
+      palette: { ...initialTheme.palette },
+      styles: JSON.parse(JSON.stringify(initialTheme.styles || {})),
+      wallpaperData: '',
+      wallpaperChanged: false,
+      wallpaperFit: 'cover',
+      wallpaperShape: '16:9',
+      wallpaperZoom: '1'
+    });
+    await restoreHistoryState(original);
   }
 
   function updateColorPalette() {
@@ -429,12 +583,13 @@
     if (!saveForRecovery) return;
     wallpaperData = canvas.toDataURL('image/jpeg', .82);
     wallpaperChanged = true;
+    recordHistory();
     editor.querySelector('[data-wallpaper-status]').textContent = 'Cropped artwork is ready to upload.';
     persistLocal();
   }
 
   async function uploadWallpaper() {
-    if (!wallpaperData) return;
+    if (!wallpaperData) return !wallpaperChanged;
     try {
       const response = await fetch(`/artist/themes/${themeId}/artwork`, {
         method: 'POST',
@@ -448,8 +603,10 @@
       localStorage.setItem(editorKey, JSON.stringify(snapshot()));
       editor.querySelector('[data-wallpaper-status]').textContent = 'Wallpaper saved to your theme.';
       postPreviewState();
+      return true;
     } catch (error) {
       setStatus(`Device copy saved. Wallpaper upload failed: ${error.message}`, true);
+      return false;
     }
   }
 
@@ -487,6 +644,9 @@
       if (saved.name) editor.querySelector('[data-theme-name]').value = saved.name;
       if (saved.description) editor.querySelector('[data-theme-description]').value = saved.description;
       Object.entries(paletteInputs).forEach(([key, input]) => { if (typeof saved.palette?.[key] === 'string') input.value = saved.palette[key]; });
+      if (saved.wallpaperFit) editor.querySelector('[data-wallpaper-fit]').value = saved.wallpaperFit;
+      if (saved.wallpaperShape) editor.querySelector('[data-wallpaper-shape]').value = saved.wallpaperShape;
+      if (saved.wallpaperZoom) editor.querySelector('[data-wallpaper-zoom]').value = saved.wallpaperZoom;
       theme = { ...theme, ...saved, styles: saved.styles || {} };
       wallpaperData = saved.wallpaperData || '';
       wallpaperChanged = Boolean(saved.wallpaperChanged || (wallpaperData && saved.wallpaper !== initialTheme.wallpaper));
@@ -516,6 +676,42 @@
   editor.querySelector('[data-paste-styles]').addEventListener('click', pasteStyles);
   editor.querySelector('[data-replace-all]').addEventListener('click', replaceAllStyles);
   previewToggle.addEventListener('click', () => setPreviewMode(!previewMode));
+  const historyMenu = editor.querySelector('.artist-studio-menu');
+  const historyMenuTrigger = historyMenu.querySelector('summary');
+  const historyMenuPanel = historyMenu.querySelector('.artist-studio-menu-panel');
+  function positionHistoryMenu() {
+    const bounds = historyMenuTrigger.getBoundingClientRect();
+    const top = Math.max(8, Math.min(bounds.bottom + 6, window.innerHeight - historyMenuPanel.offsetHeight - 8));
+    historyMenuPanel.style.top = `${top}px`;
+    historyMenuPanel.style.right = `${Math.max(8, window.innerWidth - bounds.right)}px`;
+  }
+  historyMenu.addEventListener('toggle', () => {
+    historyMenuTrigger.setAttribute('aria-expanded', String(historyMenu.open));
+    if (historyMenu.open) positionHistoryMenu();
+  });
+  window.addEventListener('resize', () => { if (historyMenu.open) positionHistoryMenu(); });
+  const undoShortcut = editor.querySelector('[data-undo-shortcut]');
+  const redoShortcut = editor.querySelector('[data-redo-shortcut]');
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+  undoShortcut.textContent = isMac ? '⌘ Z' : 'Ctrl Z';
+  redoShortcut.textContent = isMac ? '⌘ ⇧ Z' : 'Ctrl Shift Z';
+  editor.querySelector('[data-undo]').addEventListener('click', () => { historyMenu.open = false; undo(); });
+  editor.querySelector('[data-redo]').addEventListener('click', () => { historyMenu.open = false; redo(); });
+  editor.querySelector('[data-discard-changes]').addEventListener('click', () => { historyMenu.open = false; discardChanges(); });
+  window.addEventListener('keydown', (event) => {
+    if (!editor.contains(event.target) || !(event.metaKey || event.ctrlKey) || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key === 'z' && event.shiftKey) {
+      event.preventDefault();
+      redo();
+    } else if (key === 'z') {
+      event.preventDefault();
+      undo();
+    } else if (key === 'y') {
+      event.preventDefault();
+      redo();
+    }
+  });
   editor.querySelector('[data-preview-page]').addEventListener('change', (event) => {
     const pageUrl = new URL(previewPages[event.target.value] || previewPages.dashboard, window.location.origin);
     pageUrl.searchParams.set('theme-edit', 'true');
@@ -601,11 +797,13 @@
   editor.querySelector('[data-submit-theme]').addEventListener('click', async (event) => {
     event.currentTarget.disabled = true;
     try {
+      clearTimeout(saveTimer);
       if (!persistLocal()) throw new Error('This device could not save a recovery copy. Free some browser storage and try again.');
       if (!await saveDraft()) throw new Error('The latest changes could not be saved to the server. Your local recovery copy is safe; try submitting again.');
       clearTimeout(wallpaperTimer);
       if (wallpaperChanged) wallpaperUpload = uploadWallpaper();
-      await wallpaperUpload;
+      const wallpaperSaved = await wallpaperUpload;
+      if (wallpaperChanged && !wallpaperSaved) throw new Error('The wallpaper could not be uploaded. Your device recovery copy is safe; try submitting again.');
       const response = await fetch(`/artist/themes/${themeId}/submit`, { method: 'POST' });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not submit this theme.');
@@ -618,5 +816,7 @@
   });
 
   applyLocalDraft();
+  lastHistoryState = historySnapshot();
+  updateHistoryControls();
   setSelectedElement('body');
 })();

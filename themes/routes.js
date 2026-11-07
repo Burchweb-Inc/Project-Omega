@@ -373,6 +373,18 @@ function registerThemeRoutes({ app, themeModel, requireUser, requireSiteAdmin, w
     response.json({ saved: true, updatedAt: theme.updatedAt });
   });
 
+  app.post('/artist/themes/:id/delete', requireUser, artistOnly, (request, response) => {
+    const theme = ownsTheme(request, response);
+    if (!theme) return;
+    if (!draftEditable(theme) || theme.publishedVersion) {
+      return response.status(409).send('Only unpublished drafts can be deleted.');
+    }
+    if (!themeModel.deleteDraft(theme.id, request.user.id)) {
+      return response.status(409).send('This draft can no longer be deleted.');
+    }
+    return response.redirect('/artist');
+  });
+
   app.post('/artist/themes/:id/artwork', requireUser, artistOnly, express.json({ limit: '8mb' }), (request, response) => {
     const theme = ownsTheme(request, response);
     if (!theme) return;
