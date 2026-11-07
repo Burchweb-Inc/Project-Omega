@@ -12,4 +12,4 @@ ADD [ ".", "/home/node/app"]
 WORKDIR /home/node/app
 COPY --from=builder /build-stage .
 VOLUME ["/home/node/app/data"]
-CMD ["npm", "run-script", "start"]
+CMD ["sh", "-c", "npm run migrate && npm run start"]

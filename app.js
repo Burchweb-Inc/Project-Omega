@@ -168,10 +168,7 @@ function saveOrg(org) {
 }
 
 function persistOrg(org) {
-  db.prepare(`INSERT INTO orgs (id, payload, updated_at)
-    VALUES (?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = CURRENT_TIMESTAMP`)
-    .run(org.id, JSON.stringify(org));
+  orgModel.save(org);
 }
 
 const users = userModel.all();

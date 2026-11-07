@@ -62,7 +62,10 @@ test('create persists an org with its owner as admin and preserves unrelated row
   assert.equal(created.members[0].role, 'admin');
   assert.equal(model.get(created.id).name, 'Study Group');
   assert.deepEqual(model.all().map((org) => org.id).sort(), ['existing-org', created.id].sort());
-  assert.equal(JSON.parse(db.prepare('SELECT payload FROM orgs WHERE id = ?').get('existing-org').payload).name, 'Existing org');
+  const savedExisting = db.prepare('SELECT * FROM orgs WHERE id = ?').get('existing-org');
+  assert.equal(savedExisting.name, 'Existing org');
+  assert.equal(JSON.parse(savedExisting.payload).name, undefined);
+  assert.equal(JSON.parse(savedExisting.payload).courses.length, 0);
 });
 
 test('assignment past status uses the group date and automatic-move preference', (context) => {
@@ -275,4 +278,45 @@ test('save and delete affect only the selected org', (context) => {
   assert.deepEqual(model.all().map((org) => org.id), ['org-2']);
   assert.equal(db.prepare('SELECT is_active FROM orgs WHERE id = ?').get('org-2').is_active, 1);
   assert.equal(db.prepare('SELECT is_active FROM orgs WHERE id = ?').get('org-1').is_active, 0);
+});
+
+test('save stores direct org properties in columns and keeps them out of payload', (context) => {
+  const { db, model } = createModel(context);
+  model.save(orgData('org-columns', 'Column org', {
+    description: 'Description',
+    createdBy: 'user-1',
+    timezone: 'Asia/Tokyo',
+    autoMovePastAssignments: false,
+    theme: 'blue',
+    visibility: 'public',
+    shareCode: 'share-1',
+    shareUses: 3,
+    sharePermission: 'editor',
+    allowCrossGroupTaskCopy: true,
+    suspendedAt: '2025-01-01T00:00:00.000Z',
+    groups: [{ id: 'nested-group' }]
+  }));
+
+  const row = db.prepare('SELECT * FROM orgs WHERE id = ?').get('org-columns');
+  const payload = JSON.parse(row.payload);
+  assert.equal(row.name, 'Column org');
+  assert.equal(row.description, 'Description');
+  assert.equal(row.created_by, 'user-1');
+  assert.equal(row.timezone, 'Asia/Tokyo');
+  assert.equal(row.auto_move_past_assignments, 0);
+  assert.equal(row.theme, 'blue');
+  assert.equal(row.visibility, 'public');
+  assert.equal(row.share_code, 'share-1');
+  assert.equal(row.share_uses, 3);
+  assert.equal(row.share_permission, 'editor');
+  assert.equal(row.allow_cross_group_task_copy, 1);
+  assert.equal(row.suspended_at, '2025-01-01T00:00:00.000Z');
+  assert.equal(payload.name, undefined);
+  assert.equal(payload.visibility, undefined);
+  assert.deepEqual(payload.groups, [{ id: 'nested-group' }]);
+
+  const loaded = model.get('org-columns');
+  assert.equal(loaded.name, 'Column org');
+  assert.equal(loaded.autoMovePastAssignments, false);
+  assert.equal(loaded.allowCrossGroupTaskCopy, true);
 });
