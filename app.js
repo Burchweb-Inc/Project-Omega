@@ -167,9 +167,6 @@ function saveOrg(org) {
   orgModel.save(org);
 }
 
-function persistOrg(org) {
-  orgModel.save(org);
-}
 
 const users = userModel.all();
 if (userModel.needsEncryptionMigration()) userModel.persistState(users);
@@ -848,7 +845,7 @@ app.post('/site-admin/users/:id/delete', requireUser, requireSiteAdmin, (request
   });
   const deleted = db.transaction(() => {
     if (!userModel.deleteUser(target.id)) return false;
-    changedOrgs.forEach(persistOrg);
+    changedOrgs.forEach((org) => orgModel.save(org));
     return true;
   })();
   if (!deleted) {
