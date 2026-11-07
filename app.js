@@ -167,12 +167,6 @@ function saveOrg(org) {
   orgModel.save(org);
 }
 
-function persistOrg(org) {
-  db.prepare(`INSERT INTO orgs (id, payload, updated_at)
-    VALUES (?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = CURRENT_TIMESTAMP`)
-    .run(org.id, JSON.stringify(org));
-}
 
 const users = userModel.all();
 if (userModel.needsEncryptionMigration()) userModel.persistState(users);
@@ -851,7 +845,7 @@ app.post('/site-admin/users/:id/delete', requireUser, requireSiteAdmin, (request
   });
   const deleted = db.transaction(() => {
     if (!userModel.deleteUser(target.id)) return false;
-    changedOrgs.forEach(persistOrg);
+    changedOrgs.forEach((org) => orgModel.save(org));
     return true;
   })();
   if (!deleted) {

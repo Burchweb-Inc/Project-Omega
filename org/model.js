@@ -5,10 +5,76 @@ const initialize = (db) => {
     id TEXT PRIMARY KEY,
     payload TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1))
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    slug TEXT,
+    name TEXT,
+    description TEXT,
+    created_by TEXT,
+    timezone TEXT NOT NULL DEFAULT 'UTC',
+    auto_move_past_assignments INTEGER NOT NULL DEFAULT 1 CHECK (auto_move_past_assignments IN (0, 1)),
+    theme TEXT,
+    visibility TEXT,
+    share_code TEXT,
+    share_uses INTEGER,
+    share_permission TEXT,
+    allow_cross_group_task_copy INTEGER NOT NULL DEFAULT 0 CHECK (allow_cross_group_task_copy IN (0, 1)),
+    suspended_at TEXT NOT NULL DEFAULT ''
   )`).run();
-  try { db.prepare("ALTER TABLE orgs ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1))").run(); } catch (error) { if (!error.message.includes('duplicate column name')) throw error; }
+  ensureOrgColumn(db, 'is_active', 'INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1))');
+  ensureOrgColumn(db, 'slug', 'TEXT');
+  ensureOrgColumn(db, 'name', 'TEXT');
+  ensureOrgColumn(db, 'description', 'TEXT');
+  ensureOrgColumn(db, 'created_by', 'TEXT');
+  ensureOrgColumn(db, 'timezone', "TEXT NOT NULL DEFAULT 'UTC'");
+  ensureOrgColumn(db, 'auto_move_past_assignments', 'INTEGER NOT NULL DEFAULT 1 CHECK (auto_move_past_assignments IN (0, 1))');
+  ensureOrgColumn(db, 'theme', 'TEXT');
+  ensureOrgColumn(db, 'visibility', 'TEXT');
+  ensureOrgColumn(db, 'share_code', 'TEXT');
+  ensureOrgColumn(db, 'share_uses', 'INTEGER');
+  ensureOrgColumn(db, 'share_permission', 'TEXT');
+  ensureOrgColumn(db, 'allow_cross_group_task_copy', 'INTEGER NOT NULL DEFAULT 0 CHECK (allow_cross_group_task_copy IN (0, 1))');
+  ensureOrgColumn(db, 'suspended_at', "TEXT NOT NULL DEFAULT ''");
 };
+
+function ensureOrgColumn(db, name, definition) {
+  const columns = db.prepare('PRAGMA table_info(orgs)').all();
+  if (!columns.some((column) => column.name === name)) {
+    db.exec(`ALTER TABLE orgs ADD COLUMN ${name} ${definition}`);
+  }
+}
+
+const DIRECT_PROPERTIES = {
+  slug: 'slug',
+  name: 'name',
+  description: 'description',
+  createdBy: 'created_by',
+  timezone: 'timezone',
+  autoMovePastAssignments: 'auto_move_past_assignments',
+  theme: 'theme',
+  visibility: 'visibility',
+  shareCode: 'share_code',
+  shareUses: 'share_uses',
+  sharePermission: 'share_permission',
+  allowCrossGroupTaskCopy: 'allow_cross_group_task_copy',
+  suspendedAt: 'suspended_at'
+};
+
+function serializeOrg(org) {
+  const payload = { ...org };
+  for (const property of Object.keys(DIRECT_PROPERTIES)) delete payload[property];
+  return JSON.stringify(payload);
+}
+
+function orgDatabaseValues(org) {
+  return Object.fromEntries(Object.entries(DIRECT_PROPERTIES).map(([property, column]) => {
+    let value = org[property];
+    if (property === 'timezone') value = isValidTimezone(value) ? value : 'UTC';
+    if (property === 'autoMovePastAssignments') value = value === false ? 0 : 1;
+    if (property === 'allowCrossGroupTaskCopy') value = value === true ? 1 : 0;
+    if (property === 'suspendedAt') value ||= '';
+    return [column, value ?? null];
+  }));
+}
 
 function slug(value) { return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || id(); }
 function secureSlug(value) { return `${slug(value).slice(0, 24)}-${crypto.randomBytes(24).toString('base64url')}`; }
@@ -59,13 +125,52 @@ function normalizeCourseItems(org, course) {
 }
 
 function parseOrgPayload(row) {
-  const org = JSON.parse(row.payload);
-      org.timezone = isValidTimezone(org.timezone) ? org.timezone : 'UTC';
-      org.autoMovePastAssignments = org.autoMovePastAssignments !== false;
-      org.courses = (org.courses || []).map((course) => { normalizeCourseItems(org, course); return { ...course, items: course.items.map((item) => ({ ...item, comments: item.comments || [], verifiedBy: item.verifiedBy || [], downvotedBy: item.downvotedBy || [] })), board: course.board || [], resources: course.resources || [] }; });
-      org.groups = (org.groups || []).map((group) => { const task = group.itemId ? org.courses.flatMap((course) => course.items).find((item) => item.id === group.itemId) : null; return { ...group, members: group.members || [], roles: group.roles || {}, itemId: group.itemId || null, taskSlug: group.taskSlug || (task ? breakoutTaskSlug(task) : null), shareCode: group.shareCode || crypto.randomBytes(12).toString('base64url'), createdBy: group.createdBy || group.members?.[0] || null, tasks: group.tasks || [], resources: group.resources || [], polls: group.polls || [], comments: (group.comments || []).map((comment) => ({ ...comment, parentId: comment.parentId || null })) }; });
-        org.members = (org.members || []).map((member) => ({ ...member, role: member.role === 'writer' ? 'editor' : member.role || 'viewer' }));
-        return { ...org, slug: org.slug || secureSlug(org.name), reports: org.reports || [], groups: org.groups || [], pendingInvites: org.pendingInvites || [], suspendedAt: org.suspendedAt || '', shareCode: org.shareCode || crypto.randomBytes(32).toString('base64url') };
+  const org = { ...JSON.parse(row.payload) };
+  for (const [property, column] of Object.entries(DIRECT_PROPERTIES)) {
+    const value = row[column];
+    if (value !== null && value !== undefined) {
+      org[property] = property === 'autoMovePastAssignments' || property === 'allowCrossGroupTaskCopy'
+        ? Boolean(value)
+        : value;
+    }
+  }
+  org.timezone = isValidTimezone(org.timezone) ? org.timezone : 'UTC';
+  org.autoMovePastAssignments = org.autoMovePastAssignments !== false;
+  org.courses = (org.courses || []).map((course) => {
+    normalizeCourseItems(org, course);
+    return {
+      ...course,
+      items: course.items.map((item) => ({ ...item, comments: item.comments || [], verifiedBy: item.verifiedBy || [], downvotedBy: item.downvotedBy || [] })),
+      board: course.board || [],
+      resources: course.resources || []
+    };
+  });
+  org.groups = (org.groups || []).map((group) => {
+    const task = group.itemId ? org.courses.flatMap((course) => course.items).find((item) => item.id === group.itemId) : null;
+    return {
+      ...group,
+      members: group.members || [],
+      roles: group.roles || {},
+      itemId: group.itemId || null,
+      taskSlug: group.taskSlug || (task ? breakoutTaskSlug(task) : null),
+      shareCode: group.shareCode || crypto.randomBytes(12).toString('base64url'),
+      createdBy: group.createdBy || group.members?.[0] || null,
+      tasks: group.tasks || [],
+      resources: group.resources || [],
+      polls: group.polls || [],
+      comments: (group.comments || []).map((comment) => ({ ...comment, parentId: comment.parentId || null }))
+    };
+  });
+  org.members = (org.members || []).map((member) => ({ ...member, role: member.role === 'writer' ? 'editor' : member.role || 'viewer' }));
+  return {
+    ...org,
+    slug: org.slug || secureSlug(org.name),
+    reports: org.reports || [],
+    groups: org.groups || [],
+    pendingInvites: org.pendingInvites || [],
+    suspendedAt: org.suspendedAt || '',
+    shareCode: org.shareCode || crypto.randomBytes(32).toString('base64url')
+  };
 }
 
 function loadOrgsFromDatabase(db) {
@@ -75,15 +180,23 @@ function loadOrgsFromDatabase(db) {
 }
 
 function saveOrg(db, org) {
-  db.prepare(`INSERT INTO orgs (id, payload, updated_at, is_active)
-    VALUES (@id, @payload, CURRENT_TIMESTAMP, 1)
-    ON CONFLICT(id) DO UPDATE SET
-      payload = excluded.payload,
-      updated_at = CURRENT_TIMESTAMP,
-      is_active = 1`).run({
+  const values = {
     id: org.id,
-    payload: JSON.stringify(org)
-  });
+    payload: serializeOrg(org),
+    ...orgDatabaseValues(org)
+  };
+  const columns = ['id', 'payload', ...Object.values(DIRECT_PROPERTIES)];
+  const parameters = columns.map((column) => `@${column}`).join(', ');
+  const updates = [...Object.values(DIRECT_PROPERTIES), 'payload']
+    .map((column) => `${column} = excluded.${column}`)
+    .join(',\n      ');
+
+  db.prepare(`INSERT INTO orgs (${columns.join(', ')}, updated_at, is_active)
+    VALUES (${parameters}, CURRENT_TIMESTAMP, 1)
+    ON CONFLICT(id) DO UPDATE SET
+      ${updates},
+      updated_at = CURRENT_TIMESTAMP,
+      is_active = 1`).run(values);
 }
 
 function createOrg(db, { userId, name, description, timezone = 'UTC' }) {
@@ -121,7 +234,7 @@ function deleteOrg(db, orgId) {
 
 function loadOrgByIdOrSlug(db, { id: orgId, slug: orgSlug } = {}) {
   if (!orgId && !orgSlug) return null;
-  const row = db.prepare(`SELECT * FROM orgs WHERE is_active = 1 AND (id = ? OR json_extract(payload, '$.slug') = ?) LIMIT 1`).get(orgId || null, orgSlug || null);
+  const row = db.prepare('SELECT * FROM orgs WHERE is_active = 1 AND (id = ? OR slug = ?) LIMIT 1').get(orgId || null, orgSlug || null);
   return row ? parseOrgPayload(row) : null;
 }
 
@@ -136,7 +249,7 @@ function loadOrgByShareCode(db, shareCode) {
 
 function loadOrgByOrgShareCode(db, shareCode) {
   if (!shareCode) return null;
-  const row = db.prepare(`SELECT * FROM orgs WHERE is_active = 1 AND json_extract(payload, '$.shareCode') = ? LIMIT 1`).get(shareCode);
+  const row = db.prepare('SELECT * FROM orgs WHERE is_active = 1 AND share_code = ? LIMIT 1').get(shareCode);
   return row ? parseOrgPayload(row) : null;
 }
 
@@ -148,7 +261,7 @@ function loadOrgsForUser(db, userId) {
     FROM orgs
     WHERE is_active = 1
       AND (
-        json_extract(orgs.payload, '$.visibility') = 'public'
+        orgs.visibility = 'public'
         OR EXISTS (
           SELECT 1
           FROM json_each(orgs.payload, '$.members') AS members

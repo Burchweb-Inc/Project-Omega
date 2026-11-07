@@ -59,6 +59,16 @@ Unless the user *wants* a boring website, don’t give them one. Judging by what
 - Keep schema migrations safe and repeatable. SQLite may require a table rebuild for changes that cannot be applied with `ALTER TABLE ADD COLUMN`, such as adding a non-constant default; perform rebuilds transactionally while preserving existing columns and data.
 - Add or update tests for model initialization/migration and persistence behavior, including that unrelated rows are preserved and only intended entity rows change.
 
+## Schema migration process
+
+- Put database migrations in `migration/` using zero-padded, sequential filenames such as `001-description.js`. Each migration exports a stable `ID` matching its filename and an `up(db)` function.
+- Register migrations in order in `migration/model.js`. The runner creates and uses `schema_migrations` to record applied IDs; never depend on rerunning all migrations or on every migration being idempotent.
+- Implement each migration as a one-time schema/data transition. Run it transactionally through the migration runner, and do not record its ID unless it succeeds. Preserve existing data and scope updates to the intended rows.
+- Keep migration SQL and schema ownership close to the affected entity. Model initialization may ensure its required tables/columns exist for application compatibility, but data backfills and schema transitions belong in tracked migrations.
+- Run pending migrations with `npm run migrate` before deploying or starting an application against an existing database. The command should be safe to rerun because the runner skips IDs already recorded.
+- Test migrations against both a fresh database and a legacy schema containing representative data. Verify the backfill, preservation of unrelated data, and that a second run makes no additional changes.
+- When adding a migration, update the migration tests and the model’s persistence/read queries in the same change. Do not edit an already-applied migration to change its behavior; add a new migration instead.
+
 ALWAYS ask questions if needed. ALWAYS!
 
 ## LockUI templates and documentation
