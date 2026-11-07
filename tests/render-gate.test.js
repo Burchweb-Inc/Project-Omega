@@ -83,18 +83,21 @@ test('want access? prove yourself worthy of the holy 3d test', () => {
   assert.equal(harness.consumeNotice(harness.user.id), null);
 });
 
-test('creates a placeholder when the render test file is missing', (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'render-gate-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-  const renderTestPath = path.join(tempDir, 'data', '3d-render-test.html');
+test('renders an unavailable view when the render test file is missing', () => {
+  const renderTestPath = path.join(os.tmpdir(), 'missing-render-test', '3d-render-test.html');
+  const harness = createHarness(undefined, { renderTestPath });
+  let response = harness.request('GET');
+  response = submitCaptcha(harness, response);
+  response = submitCaptcha(harness, response);
+  response = submitCaptcha(harness, response);
+  response = harness.request('POST', {
+    flowId: response.rendered.locals.flowId,
+    password: '!*^*&^'
+  });
 
-  createHarness(undefined, { renderTestPath });
-
-  assert.equal(fs.existsSync(renderTestPath), true);
-  const placeholder = fs.readFileSync(renderTestPath, 'utf8');
-  assert.match(placeholder, /<!doctype html>/i);
-  assert.match(placeholder, /3D Render test unavailable/);
-  assert.match(placeholder, /data\/3d-render-test\.html/);
+  assert.equal(response.rendered.page, 'render-test-unavailable');
+  assert.equal(response.headers['Cache-Control'], 'private, no-store');
+  assert.equal(fs.existsSync(renderTestPath), false);
 });
 
 test('preserves an existing render test file during startup', (t) => {
