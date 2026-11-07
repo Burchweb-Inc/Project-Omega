@@ -1,4 +1,6 @@
-/** @param {import('better-sqlite3').Database} db */
+/** @typedef {import('better-sqlite3').Database} Database*/
+
+/** @param {Database} db */
 const initialize = (db) => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -10,6 +12,7 @@ const initialize = (db) => {
 
 const migrationFiles = ['001-org-direct-properties'];
 
+/** @param {Database} db */
 function applyPending(db) {
   initialize(db);
   const migrations = migrationFiles.map((file) => require(`./${file}`));
@@ -24,6 +27,7 @@ function applyPending(db) {
   }
 }
 
+/** @param {Database} db */
 module.exports = (db) => ({
   init: () => initialize(db),
   applyPending: () => applyPending(db)

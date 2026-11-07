@@ -1,11 +1,14 @@
 const ID = '001-org-direct-properties';
 
+/** @typedef {import('better-sqlite3').Database} Database */
+
+/** @param {Database} db */
 function up(db) {
   const columns = db.prepare('PRAGMA table_info(orgs)').all();
   if (!columns.length) return;
 
-  const addColumn = (name, definition) => {
-    if (!columns.some((column) => column.name === name)) {
+  const addColumn = (/** @type {string} */ name, /** @type {string} */ definition) => {
+    if (!columns.some((/** @type {any} */ column) => column.name === name)) {
       db.exec(`ALTER TABLE orgs ADD COLUMN ${name} ${definition}`);
     }
   };
