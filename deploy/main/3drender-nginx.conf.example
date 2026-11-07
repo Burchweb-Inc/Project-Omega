@@ -1,9 +1,8 @@
 # Add this limit zone inside nginx's http {} block.
 limit_req_zone $binary_remote_addr zone=render_gate:10m rate=10r/m;
 
-# Add these locations inside the site's server {} block. Adjust the upstream
-# and file path for the host. Set THREE_D_RENDER_TEST_ACCEL_URI to this URI in
-# the app container, and do not expose this file through any public location.
+# Add these locations inside the site's server {} block. Update the upstream
+# and file path for the host. Never expose the data file through any other URL.
 location = /beta-tests/3drender {
     limit_req zone=render_gate burst=5 nodelay;
     limit_req_status 429;
@@ -15,9 +14,21 @@ location = /beta-tests/3drender {
     proxy_set_header X-Forwarded-Proto $scheme;
 }
 
-location = /_private/3drender/index.html {
-    internal;
+location = /beta-tests/3drender/file {
+    auth_request /_render-test-authorize;
     alias /srv/project-omega/data/3d-render-test.html;
     default_type text/html;
     add_header Cache-Control "private, no-store" always;
+}
+
+location = /_render-test-authorize {
+    internal;
+    proxy_pass http://127.0.0.1:8891/beta-tests/3drender/authorize;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_set_header Cookie $http_cookie;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
 }
