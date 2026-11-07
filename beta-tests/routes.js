@@ -1,29 +1,10 @@
 const crypto = require('node:crypto');
-const fs = require('node:fs');
-const path = require('node:path');
-const zlib = require('node:zlib');
-const { pipeline } = require('node:stream');
 
 const CAPTCHA_COUNT = 3;
 const FLOW_LIFETIME_MS = 15 * 60 * 1000;
 const FAILURE_WINDOW_MS = 15 * 60 * 1000;
 const MAX_FAILURES = 5;
 const FAILURE_NOTICE = 'That was a cute attempt to dodge your todos. Please get back to work.';
-const RENDER_TEST_PLACEHOLDER = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>3D Render test unavailable</title>
-</head>
-<body>
-  <main>
-    <h1>3D Render test unavailable</h1>
-    <p>The render test HTML file was not found. Add it as <code>data/3d-render-test.html</code> and restart the application.</p>
-  </main>
-</body>
-</html>
-`;
 
 function createCaptcha() {
   const left = crypto.randomInt(7, 19);
@@ -46,31 +27,22 @@ function registerRenderGateRoutes({
   refreshModerationStatus,
   gateAttempts,
   render,
-  renderTestPath = process.env.THREE_D_RENDER_TEST_PATH || path.join(rootDir, 'data', '3d-render-test.html'),
-  renderTestAccelUri = process.env.THREE_D_RENDER_TEST_ACCEL_URI || null
+  renderTestUrl = process.env.THREE_D_RENDER_TEST_URL || '/beta-tests/3drender/file'
 }) {
   const flows = new Map();
   const notices = new Map();
   const localFailures = new Map();
+  const renderGrants = new Map();
 
-  if (!fs.existsSync(renderTestPath)) {
-    fs.mkdirSync(path.dirname(renderTestPath), { recursive: true });
-    fs.writeFileSync(renderTestPath, RENDER_TEST_PLACEHOLDER, { flag: 'wx' });
-  }
-
-  if (renderTestAccelUri && (
-    !renderTestAccelUri.startsWith('/')
-    || renderTestAccelUri.startsWith('//')
-    || /[?#\\\r\n]/.test(renderTestAccelUri)
-    || renderTestAccelUri.split('/').includes('..')
-  )) {
-    throw new Error('THREE_D_RENDER_TEST_ACCEL_URI must be a safe internal URI path.');
+  if (!renderTestUrl.startsWith('/') || renderTestUrl.startsWith('//') || /[?#\\\r\n]/.test(renderTestUrl) || renderTestUrl.split('/').includes('..')) {
+    throw new Error('THREE_D_RENDER_TEST_URL must be a safe local URL path.');
   }
 
   function pruneExpired() {
     const now = Date.now();
     for (const [userId, flow] of flows) if (flow.expiresAt <= now) flows.delete(userId);
     for (const [userId, notice] of notices) if (notice.expiresAt <= now) notices.delete(userId);
+    for (const [userId, grant] of renderGrants) if (grant.expiresAt <= now) renderGrants.delete(userId);
     if (gateAttempts) {
       gateAttempts.pruneExpired(FAILURE_WINDOW_MS / 1000);
     } else {
@@ -121,37 +93,43 @@ function registerRenderGateRoutes({
     return response.redirect('/');
   }
 
-  function isLocked(user, response) {
+  function isUserLocked(user) {
     const failure = localFailures.get(user.id);
-    const locked = gateAttempts
+    return gateAttempts
       ? gateAttempts.isLocked(user.id)
       : Boolean(failure && failure.lockedUntil > Date.now());
-    if (!locked) return false;
+  }
+
+  function isLocked(user, response) {
+    if (!isUserLocked(user)) return false;
     flows.delete(user.id);
     notices.set(user.id, { message: FAILURE_NOTICE, expiresAt: Date.now() + FLOW_LIFETIME_MS });
     response.redirect('/');
     return true;
   }
 
-  function deliverRenderTest(request, response, next) {
+  function deliverRenderTest(request, response, user) {
+    renderGrants.set(user.id, { expiresAt: Date.now() + 60_000 });
     response.setHeader('Cache-Control', 'private, no-store');
     response.setHeader('Vary', 'Cookie');
-    if (renderTestAccelUri) {
-      response.setHeader('X-Accel-Redirect', renderTestAccelUri);
-      response.type('html');
-      return response.end();
-    }
-    if (request.acceptsEncodings('gzip') && !request.headers.range) {
-      response.type('html');
-      response.setHeader('Content-Encoding', 'gzip');
-      response.vary('Accept-Encoding');
-      pipeline(fs.createReadStream(renderTestPath), zlib.createGzip({ level: zlib.constants.Z_BEST_SPEED }), response, (error) => {
-        if (error && !response.headersSent) next(error);
-      });
-      return;
-    }
-    return response.sendFile(renderTestPath);
+    return response.redirect(303, renderTestUrl);
   }
+
+  app.get('/beta-tests/3drender/authorize', (request, response) => {
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('Vary', 'Cookie');
+    pruneExpired();
+
+    const user = canUseBetaTools(request);
+    const grant = user && renderGrants.get(user.id);
+    if (!user || isUserLocked(user) || !grant || grant.expiresAt <= Date.now()) {
+      if (user) renderGrants.delete(user.id);
+      return response.sendStatus(403);
+    }
+
+    renderGrants.delete(user.id);
+    return response.sendStatus(204);
+  });
 
   app.get('/beta-tests/3drender', (request, response) => {
     pruneExpired();
@@ -169,7 +147,7 @@ function registerRenderGateRoutes({
     return showGate(request, response, flow);
   });
 
-  app.post('/beta-tests/3drender', (request, response, next) => {
+  app.post('/beta-tests/3drender', (request, response) => {
     pruneExpired();
     const user = canUseBetaTools(request);
     if (!user) return response.redirect('/');
@@ -196,7 +174,7 @@ function registerRenderGateRoutes({
     flows.delete(user.id);
     if (gateAttempts) gateAttempts.clear(user.id);
     else localFailures.delete(user.id);
-    return deliverRenderTest(request, response, next);
+    return deliverRenderTest(request, response, user);
   });
 
   return (userId) => {

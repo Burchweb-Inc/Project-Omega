@@ -1,6 +1,5 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const registerRenderGateRoutes = require('../beta-tests/routes');
@@ -19,7 +18,6 @@ function createHarness(user = { id: 'user-1', settings: { betaTools: true }, tas
   };
   const consumeNotice = registerRenderGateRoutes({
     app,
-    rootDir: path.join(__dirname, '..'),
     currentUser: (request) => request.user,
     refreshModerationStatus: () => 'active',
     ...options,
@@ -32,12 +30,13 @@ function createHarness(user = { id: 'user-1', settings: { betaTools: true }, tas
   function request(method, body = {}, overrides = {}) {
     const response = {
       headers: {},
-      setHeader(name, value) { this.headers[name] = value; },
-      redirect(location) { this.redirected = location; return this; },
-      sendFile(file) { this.file = file; return this; },
-      type(value) { this.contentType = value; return this; },
-      vary(value) { this.varyValue = value; return this; },
-      end() { this.ended = true; return this; }
+      setHeader(name, value) { this.headers[name] = value; return this; },
+      sendStatus(status) { this.status = status; return this; },
+      redirect(statusOrLocation, location) {
+        if (location === undefined) this.redirected = statusOrLocation;
+        else { this.statusCode = statusOrLocation; this.redirected = location; }
+        return this;
+      }
     };
     const req = {
       user,
@@ -50,7 +49,17 @@ function createHarness(user = { id: 'user-1', settings: { betaTools: true }, tas
     return response;
   }
 
-  return { request, consumeNotice, user };
+  function authorize(authorizationUser = user) {
+    const response = {
+      headers: {},
+      setHeader(name, value) { this.headers[name] = value; return this; },
+      sendStatus(status) { this.status = status; return this; }
+    };
+    handlers['GET /beta-tests/3drender/authorize']({ user: authorizationUser, headers: {} }, response);
+    return response;
+  }
+
+  return { request, authorize, consumeNotice, user };
 }
 
 function submitCaptcha(harness, response) {
@@ -78,36 +87,15 @@ test('want access? prove yourself worthy of the holy 3d test', () => {
     flowId: response.rendered.locals.flowId,
     password: '!*^*&^'
   });
-  assert.equal(response.file, path.join(__dirname, '..', 'data', '3d-render-test.html'));
+  assert.equal(response.statusCode, 303);
+  assert.equal(response.redirected, '/beta-tests/3drender/file');
+  assert.equal(response.file, undefined);
   assert.equal(response.headers['Cache-Control'], 'private, no-store');
+  assert.equal(harness.authorize().status, 204);
+  assert.equal(harness.authorize().status, 403);
   assert.equal(harness.consumeNotice(harness.user.id), null);
 });
 
-test('creates a placeholder when the render test file is missing', (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'render-gate-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-  const renderTestPath = path.join(tempDir, 'data', '3d-render-test.html');
-
-  createHarness(undefined, { renderTestPath });
-
-  assert.equal(fs.existsSync(renderTestPath), true);
-  const placeholder = fs.readFileSync(renderTestPath, 'utf8');
-  assert.match(placeholder, /<!doctype html>/i);
-  assert.match(placeholder, /3D Render test unavailable/);
-  assert.match(placeholder, /data\/3d-render-test\.html/);
-});
-
-test('preserves an existing render test file during startup', (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'render-gate-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-  const renderTestPath = path.join(tempDir, 'data', '3d-render-test.html');
-  fs.mkdirSync(path.dirname(renderTestPath), { recursive: true });
-  fs.writeFileSync(renderTestPath, 'private render content');
-
-  createHarness(undefined, { renderTestPath });
-
-  assert.equal(fs.readFileSync(renderTestPath, 'utf8'), 'private render content');
-});
 
 test('failed captcha redirects home and exposes a one-time notice', () => {
   const harness = createHarness();
@@ -197,8 +185,9 @@ test('locks gate attempts after five failures during the failure window', () => 
   assert.match(harness.consumeNotice(harness.user.id), /get back to work/);
 });
 
-test('can delegate the authorized file response to an nginx internal location', () => {
-  const harness = createHarness(undefined, { renderTestAccelUri: '/_private/3drender/index.html' });
+test('redirects to the configured reverse-proxy URL and grants one authorization', () => {
+  const proxyUrl = '/protected/render-content';
+  const harness = createHarness(undefined, { renderTestUrl: proxyUrl });
   let response = harness.request('GET');
   response = submitCaptcha(harness, response);
   response = submitCaptcha(harness, response);
@@ -207,14 +196,17 @@ test('can delegate the authorized file response to an nginx internal location', 
     flowId: response.rendered.locals.flowId,
     password: '!*^*&^'
   });
-  assert.equal(response.headers['X-Accel-Redirect'], '/_private/3drender/index.html');
-  assert.equal(response.ended, true);
+
+  assert.equal(response.statusCode, 303);
+  assert.equal(response.redirected, proxyUrl);
   assert.equal(response.file, undefined);
+  assert.equal(harness.authorize().status, 204);
+  assert.equal(harness.authorize().status, 403);
 });
 
-test('rejects unsafe nginx internal redirect URIs', () => {
+test('rejects unsafe reverse-proxy redirect URLs', () => {
   assert.throws(
-    () => createHarness(undefined, { renderTestAccelUri: '//attacker.invalid/file' }),
-    /safe internal URI/
+    () => createHarness(undefined, { renderTestUrl: '//attacker.invalid/file' }),
+    /safe local URL/
   );
 });
