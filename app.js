@@ -1,5 +1,6 @@
 require('dotenv').config() ;
 
+const pino = require('pino-http')()
 const config = require('./config.js');
 const creators = require('./config/creators');
 const express = require('express');
@@ -23,6 +24,8 @@ const registerRenderGateRoutes = require('./beta-tests/routes');
 const registerThemeRoutes = require('./themes/routes');
 
 const app = express();
+app.use(pino);
+
 const taskSyncConfig = taskSyncConfiguration(config);
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || '0.0.0.0';
