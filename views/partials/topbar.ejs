@@ -1,6 +1,6 @@
 <% const userNotifications=typeof notifications==='undefined' ? (user.notifications || []) : notifications; const
     unreadNotifications=userNotifications.filter(notification=> !notification.read); %>
-    <header class="topbar"><button class="mobile-menu lui-icon-button" type="button" data-sidebar-toggle aria-label="Open navigation" aria-expanded="false" title="Open navigation"><i data-lucide="panel-left-open"></i></button>
+    <header class="topbar" data-theme-shared="topbar"><button class="mobile-menu lui-icon-button" type="button" data-sidebar-toggle aria-label="Open navigation" aria-expanded="false" title="Open navigation"><i data-lucide="panel-left-open"></i></button>
         <div class="breadcrumbs"><a href="/dashboard">My desk</a><i data-lucide="chevron-right"></i><strong>
                 <%= locals.selectedOrg?.name || ({ dashboard: 'Overview' , todo: 'Personal Todo' ,
                     calendar: 'Academic calendar' , groups: 'Breakout groups' }[page] || 'Study space' ) %>
@@ -61,6 +61,6 @@
         </div>
     </header>
     <% if (user.moderationStatus==='active' && userNotifications.some(notification=> notification.type === 'warning' &&
-        !notification.read)) { %><div class="conduct-banner" role="alert"><i data-lucide="triangle-alert"></i><span>You
+        !notification.read)) { %><div class="conduct-banner" role="alert" data-theme-shared="conduct-banner"><i data-lucide="triangle-alert"></i><span>You
                 have a conduct warning. Open Notifications to review it.</span></div>
         <% } %>

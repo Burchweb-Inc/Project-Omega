@@ -17,7 +17,7 @@
 </style>
 <% const announcementNotifications = (typeof notifications === 'undefined' ? (user.notifications || []) : notifications).filter(notification => !notification.read && notification.type === 'announcement'); const announcement = announcementNotifications[0]; %>
 <% if (announcement) { %>
-<div class="announcement-modal-backdrop open" data-announcement-modal data-announcement-id="<%= announcement.id %>" role="dialog" aria-modal="true" aria-labelledby="announcement-modal-title">
+<div class="announcement-modal-backdrop open" data-announcement-modal data-theme-shared="announcement-modal" data-announcement-id="<%= announcement.id %>" role="dialog" aria-modal="true" aria-labelledby="announcement-modal-title">
   <article class="announcement-modal announcement-size-<%= announcement.fontSize || 'normal' %>">
     <button class="lui-icon-button modal-close" type="button" data-announcement-close aria-label="Close announcement"><i data-lucide="x"></i></button>
     <p class="kicker">SITE ANNOUNCEMENT</p>

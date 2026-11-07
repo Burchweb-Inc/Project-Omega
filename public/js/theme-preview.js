@@ -13,7 +13,7 @@
     topbar: '.topbar',
     main: '.main-content',
     content: '.content-wrap, .page-stage',
-    footer: '.app-footer',
+    footer: '.site-footer',
     body: document.body
   };
   const properties = ['color', 'background-color', 'border-color', 'opacity', 'filter', 'box-shadow'];
@@ -46,10 +46,45 @@
     if (!path) return null;
     const nodeId = `${pageKey}-${path.join('-')}`;
     element.dataset.themeNode = nodeId;
+    const sharedRoot = element.closest('[data-theme-shared]');
+    if (sharedRoot) {
+      const partial = sharedRoot.dataset.themeShared;
+      const sharedPath = element === sharedRoot
+        ? 'root'
+        : (() => {
+          const indexes = [];
+          let node = element;
+          while (node && node !== sharedRoot) {
+            const parent = node.parentElement;
+            if (!parent) return null;
+            indexes.unshift([...parent.children].indexOf(node));
+            node = parent;
+          }
+          return node === sharedRoot ? indexes.join('.') : null;
+        })();
+      if (sharedPath !== null) element.dataset.themeSharedNode = `${partial}-${sharedPath.replaceAll('.', '-')}`;
+    }
     return nodeId;
   }
 
   function nodeStyleKey(element) {
+    const sharedRoot = element.closest('[data-theme-shared]');
+    if (sharedRoot) {
+      const partial = sharedRoot.dataset.themeShared;
+      if (!/^[a-z][a-z0-9-]{0,40}$/.test(partial)) return null;
+      const path = [];
+      let node = element;
+      while (node && node !== sharedRoot) {
+        const parent = node.parentElement;
+        if (!parent) return null;
+        path.unshift([...parent.children].indexOf(node));
+        node = parent;
+      }
+      if (node !== sharedRoot) return null;
+      const sharedPath = path.length ? path.join('.') : 'root';
+      element.dataset.themeSharedNode = `${partial}-${sharedPath.replaceAll('.', '-')}`;
+      return `element:shared:${partial}:${sharedPath}`;
+    }
     const path = nodePath(element);
     annotateNode(element, path);
     return path ? `element:${pageKey}:${path.join('.')}` : null;
@@ -103,6 +138,11 @@
   }
 
   function elementForKey(key) {
+    const sharedMatch = key.match(/^element:shared:([a-z][a-z0-9-]{0,40}):(root|(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})$/);
+    if (sharedMatch) {
+      const nodeId = `${sharedMatch[1]}-${sharedMatch[2] === 'root' ? 'root' : sharedMatch[2].replaceAll('.', '-')}`;
+      return document.querySelector(`[data-theme-shared-node="${nodeId}"]`);
+    }
     const match = key.match(/^element:(dashboard|calendar|groups|todo|lockui|settings|site-admin|org|course|admin|people|breakout|breakout-groups|new-item|new-course|people-new):((?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})$/);
     if (!match || match[1] !== pageKey) return null;
     return match[2].split('.').reduce((node, index) => node?.children[Number(index)], document.body) || null;
@@ -176,8 +216,11 @@
       const baseKey = isHover ? key.slice(0, -6) : key;
       if (baseKey.length > 180) return;
       const nodeMatch = baseKey.match(/^element:(dashboard|calendar|groups|todo|lockui|settings|site-admin|org|course|admin|people|breakout|breakout-groups|new-item|new-course|people-new):((?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})(?::class:([a-z][a-z0-9_-]{0,63}))?$/);
+      const sharedMatch = baseKey.match(/^element:shared:([a-z][a-z0-9-]{0,40}):(root|(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})(?::class:([a-z][a-z0-9_-]{0,63}))?$/);
       const classSelector = replaceAllSelector(baseKey);
-      const selector = nodeMatch
+      const selector = sharedMatch
+        ? `[data-theme-shared-node="${sharedMatch[1]}-${sharedMatch[2] === 'root' ? 'root' : sharedMatch[2].replaceAll('.', '-')}"]${sharedMatch[3] ? `.${sharedMatch[3]}` : ''}`
+        : nodeMatch
         ? `[data-theme-node="${nodeMatch[1]}-${nodeMatch[2].replaceAll('.', '-')}"]${nodeMatch[3] ? `.${nodeMatch[3]}` : ''}`
         : classSelector
           ? classSelector
@@ -290,6 +333,12 @@
       return;
     }
     const match = key.match(/^element:(dashboard|calendar|groups|todo|lockui|settings|site-admin|org|course|admin|people|breakout|breakout-groups|new-item|new-course|people-new):((?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})$/);
+    const sharedMatch = key.match(/^element:shared:([a-z][a-z0-9-]{0,40}):(root|(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})$/);
+    if (sharedMatch) {
+      const element = elementForKey(key);
+      if (element) showSelection({ key, element, label: elementLabel(element), group: replaceAllGroup(element) });
+      return;
+    }
     if (match) {
       if (match[1] !== pageKey) return;
       const element = match[2].split('.').reduce((node, index) => node?.children[Number(index)], document.body);

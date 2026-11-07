@@ -221,7 +221,7 @@
   }
 
   function setSelectedElement(selector, computed = {}) {
-    const dynamicElement = /^element:(dashboard|calendar|groups|todo|lockui|settings|site-admin|org|course|admin|people|breakout|breakout-groups|new-item|new-course|people-new):((?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})$/.test(selector);
+    const dynamicElement = /^element:(?:(?:dashboard|calendar|groups|todo|lockui|settings|site-admin|org|course|admin|people|breakout|breakout-groups|new-item|new-course|people-new):(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15}|shared:[a-z][a-z0-9-]{0,40}:(?:root|(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15}))$/.test(selector);
     const replaceAll = computed.replaceAll;
     const replaceClasses = typeof replaceAll?.target === 'string' && replaceAll.target.length <= 180
       ? replaceAll.target.match(/^class:([a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*){0,3})$/)?.[1].split('.')

@@ -14,7 +14,7 @@ const SELECTORS = {
   navigation: '.nav-link',
   heading: '.hero-heading, h1, h2',
   content: '.content-wrap, .page-stage',
-  footer: '.app-footer',
+  footer: '.site-footer',
   group: '.group-card, .org-card'
 };
 const COLOR_PROPERTIES = new Set(['color', 'background-color', 'border-color']);
@@ -48,10 +48,15 @@ function styleTarget(key) {
     }
     return null;
   }
-  const match = target.match(/^element:(dashboard|calendar|groups|todo|lockui|settings|site-admin|org|course|admin|people|breakout|breakout-groups|new-item|new-course|people-new):((?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})(?::class:([a-z][a-z0-9_-]{0,63}))?$/);
-  if (!match) return null;
-  const nodeId = `${match[1]}-${match[2].replaceAll('.', '-')}`;
-  return { selector: `[data-theme-node="${nodeId}"]${match[3] ? `.${match[3]}` : ''}`, isHover };
+  const sharedMatch = target.match(/^element:shared:([a-z][a-z0-9-]{0,40}):(root|(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})(?::class:([a-z][a-z0-9_-]{0,63}))?$/);
+  if (sharedMatch) {
+    const nodeId = `${sharedMatch[1]}-${sharedMatch[2] === 'root' ? 'root' : sharedMatch[2].replaceAll('.', '-')}`;
+    return { selector: `[data-theme-shared-node="${nodeId}"]${sharedMatch[3] ? `.${sharedMatch[3]}` : ''}`, isHover };
+  }
+  const pageMatch = target.match(/^element:(dashboard|calendar|groups|todo|lockui|settings|site-admin|org|course|admin|people|breakout|breakout-groups|new-item|new-course|people-new):((?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15})(?::class:([a-z][a-z0-9_-]{0,63}))?$/);
+  if (!pageMatch) return null;
+  const nodeId = `${pageMatch[1]}-${pageMatch[2].replaceAll('.', '-')}`;
+  return { selector: `[data-theme-node="${nodeId}"]${pageMatch[3] ? `.${pageMatch[3]}` : ''}`, isHover };
 }
 
 function selectorForThemeStyle(key) {

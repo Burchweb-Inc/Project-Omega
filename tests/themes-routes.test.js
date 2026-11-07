@@ -19,6 +19,8 @@ test('theme CSS only emits allowed selectors and safe declarations', () => {
       'element:dashboard:0.1.3': { color: '#ffffff', 'background-color': '#123456' },
       'element:lockui:0.2.1:class:nav-item-selected': { color: '#ffffff' },
       'element:lockui:0.2.1': { color: '#ffffff' },
+      'element:shared:sidebar:root': { 'background-color': '#123456' },
+      'element:shared:footer:0.1': { color: '#ffffff' },
       'element:dashboard:0.-1': { color: 'red' },
       'element:dashboard:0.1.2.3.4.5.6.7.8.9.10.11.12.13.14.15.16': { color: '#ffffff' },
       'class:lui-button.lui-button-primary': { 'background-color': '#123456', color: '#ffffff' },
@@ -41,6 +43,8 @@ test('theme CSS only emits allowed selectors and safe declarations', () => {
   assert.match(css, /\[data-theme-node="dashboard-0-1-3"\]\{color:#ffffff !important;background-color:#123456 !important\}/);
   assert.match(css, /\[data-theme-node="lockui-0-2-1"\]\{color:#ffffff !important\}/);
   assert.match(css, /\[data-theme-node="lockui-0-2-1"\]\.nav-item-selected\{color:#ffffff !important\}/);
+  assert.match(css, /\[data-theme-shared-node="sidebar-root"\]\{background-color:#123456 !important\}/);
+  assert.match(css, /\[data-theme-shared-node="footer-0-1"\]\{color:#ffffff !important\}/);
   assert.match(css, /\.lui-button\.lui-button-primary\{background-color:#123456 !important;color:#ffffff !important\}/);
   assert.match(css, /\.lui-button\.lui-button-primary:hover\{background-color:#345678 !important\}/);
   assert.doesNotMatch(css, /:active/);
@@ -57,6 +61,7 @@ test('theme payload rejects invalid colors and retains only visual style propert
     styles: {
       main: { 'background-color': '#fffaf0', position: 'fixed', transform: 'scale(2)' },
       'element:dashboard:0.1.3:class:nav-item-selected:hover': { color: '#ffffff' },
+      'element:shared:topbar:0.1': { 'background-color': '#fffaf0' },
       'class:lui-button.lui-button-primary': { 'background-color': '#7a4435', position: 'fixed' }
     }
   });
@@ -65,6 +70,7 @@ test('theme payload rejects invalid colors and retains only visual style propert
   assert.deepEqual(payload.styles, {
     main: { 'background-color': '#fffaf0' },
     'element:dashboard:0.1.3:class:nav-item-selected:hover': { color: '#ffffff' },
+    'element:shared:topbar:0.1': { 'background-color': '#fffaf0' },
     'class:lui-button.lui-button-primary': { 'background-color': '#7a4435' }
   });
 });
