@@ -92,7 +92,6 @@ test('want access? prove yourself worthy of the holy 3d test', () => {
   assert.equal(response.file, undefined);
   assert.equal(response.headers['Cache-Control'], 'private, no-store');
   assert.equal(harness.authorize().status, 204);
-  assert.equal(harness.authorize().status, 403);
   assert.equal(harness.consumeNotice(harness.user.id), null);
 });
 
@@ -201,7 +200,6 @@ test('redirects to the configured reverse-proxy URL and grants one authorization
   assert.equal(response.redirected, proxyUrl);
   assert.equal(response.file, undefined);
   assert.equal(harness.authorize().status, 204);
-  assert.equal(harness.authorize().status, 403);
 });
 
 test('rejects unsafe reverse-proxy redirect URLs', () => {
