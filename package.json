@@ -2,9 +2,12 @@
   "name": "project-omega",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "A calm, focused study planner for students.",
   "main": "app.js",
   "scripts": {
+    "build": "npm install && npm run lint",
+    "lint": "eslint .",
     "start": "node app.js",
     "dev": "node app.js",
     "migrate": "node migrate.js",

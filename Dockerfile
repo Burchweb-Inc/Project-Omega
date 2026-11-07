@@ -2,7 +2,7 @@ FROM node:alpine AS builder
 WORKDIR /build-stage
 COPY package*.json ./
 RUN apk add --no-cache --virtual .gyp python3 py-setuptools make g++ \
-    && npm install \
+    && npm build \
     && apk del .gyp
 
 FROM node:alpine AS app
