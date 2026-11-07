@@ -109,7 +109,8 @@ function registerRenderGateRoutes({
   }
 
   function deliverRenderTest(request, response, user) {
-    renderGrants.set(user.id, { expiresAt: Date.now() + 60_000 });
+    const oneHourFromNow = Date.now() + 60 * 60 * 1000;
+    renderGrants.set(user.id, { expiresAt: oneHourFromNow });
     response.setHeader('Cache-Control', 'private, no-store');
     response.setHeader('Vary', 'Cookie');
     return response.redirect(303, renderTestUrl);
@@ -127,7 +128,6 @@ function registerRenderGateRoutes({
       return response.sendStatus(403);
     }
 
-    renderGrants.delete(user.id);
     return response.sendStatus(204);
   });
 
