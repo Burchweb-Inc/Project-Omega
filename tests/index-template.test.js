@@ -16,6 +16,7 @@ test('renders ordinary auth pages without a theme preview local', async () => {
   });
 
   assert.match(html, /data-theme-preview="false"/);
+  assert.match(html, /<link rel="icon" href="\/media\/favicon\.ico" type="image\/x-icon">/);
   assert.match(html, /if \('serviceWorker' in navigator && !false\)/);
 });
 
