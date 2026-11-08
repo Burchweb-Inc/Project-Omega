@@ -11,6 +11,104 @@ function formatCourseDate(due, root) {
   const date = new Date(`${due}T12:00:00Z`); if (Number.isNaN(date.getTime())) return due;
   try { return new Intl.DateTimeFormat(root?.dataset.dateLocale || 'en-US', { timeZone: root?.dataset.dateTimezone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date); } catch (error) { return due; }
 }
+function courseItemDue(item, day) {
+  const hasABDates = Object.hasOwn(item, 'dueA') || Object.hasOwn(item, 'dueB');
+  return hasABDates ? item[`due${day}`] || 'No date' : item.due || 'No date';
+}
+function assignmentDueMarkup(item, root) {
+  if (root.dataset.abDaysEnabled !== 'true') return formatCourseDate(item.due, root);
+  const dueA = courseItemDue(item, 'A'); const dueB = courseItemDue(item, 'B');
+  const label = `A day due ${formatCourseDate(dueA, root)}; B day due ${formatCourseDate(dueB, root)}`;
+  return `<span class="assignment-due" tabindex="0" aria-label="${escapeHtml(label)}"><span>${escapeHtml(formatCourseDate(courseItemDue(item, root.dataset.selectedDay || 'A'), root))}</span><span class="assignment-due-tooltip" role="tooltip"><span>A day: ${escapeHtml(formatCourseDate(dueA, root))}</span><span>B day: ${escapeHtml(formatCourseDate(dueB, root))}</span></span></span>`;
+}
+function bindCourseABDateForms() {
+  if (document.documentElement.dataset.abDateFormsBound === 'true') return;
+  document.documentElement.dataset.abDateFormsBound = 'true';
+  const getClarification = (form) => {
+    let input = form.elements.namedItem('dueDateClarified');
+    if (!input) {
+      input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'dueDateClarified';
+      input.value = 'false';
+      form.append(input);
+    }
+    return input;
+  };
+  const getSameForBoth = (form) => {
+    let input = form.elements.namedItem('dueSameForBoth');
+    if (!input) {
+      input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'dueSameForBoth';
+      input.value = 'false';
+      form.append(input);
+    }
+    return input;
+  };
+  const showClarification = (form, missingDates) => {
+    let panel = form.querySelector('[data-due-clarification]');
+    if (!panel) {
+      panel = document.createElement('section');
+      panel.className = 'due-clarification';
+      panel.dataset.dueClarification = '';
+      panel.setAttribute('aria-live', 'polite');
+      const dateFields = form.querySelector('input[name="dueB"]')?.closest('label');
+      (dateFields || form).after(panel);
+    }
+    panel.innerHTML = missingDates
+      ? '<p><strong>Add at least one due date.</strong> Enter an A-day date, a B-day date, or both.</p><button class="lui-button lui-button-secondary" type="button" data-dismiss-due-clarification>Got it</button>'
+      : '<p><strong>Only one due date is set.</strong> Should that date apply to both A and B days, or is the other day’s date unknown?</p><div class="due-clarification-actions"><button class="lui-button lui-button-secondary" type="button" data-due-choice="same">Use for both days</button><button class="lui-button lui-button-secondary" type="button" data-due-choice="unknown">Other date is unknown</button></div>';
+    panel.hidden = false;
+    panel.querySelector('button')?.focus();
+    return panel;
+  };
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || !form.matches('[data-ab-day-form]')) return;
+    const dueA = form.elements.namedItem('dueA'); const dueB = form.elements.namedItem('dueB');
+    if (!dueA?.value && !dueB?.value) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      const panel = showClarification(form, true);
+      (dueA || dueB)?.focus();
+      panel.setAttribute('role', 'alert');
+      return;
+    }
+    if (dueA?.value && dueB?.value) return;
+    if (getClarification(form).value !== 'true') {
+      event.preventDefault(); event.stopImmediatePropagation();
+      showClarification(form, false);
+      return;
+    }
+  }, true);
+  document.addEventListener('click', (event) => {
+    const choice = event.target.closest('[data-due-choice]');
+    if (choice) {
+      const form = choice.closest('form');
+      const clarification = getClarification(form);
+      clarification.value = 'true';
+      getSameForBoth(form).value = String(choice.dataset.dueChoice === 'same');
+      form.querySelector('[data-due-clarification]')?.setAttribute('hidden', '');
+      form.requestSubmit();
+      return;
+    }
+    const dismiss = event.target.closest('[data-dismiss-due-clarification]');
+    if (dismiss) {
+      const panel = dismiss.closest('[data-due-clarification]');
+      panel.hidden = true;
+      panel.removeAttribute('role');
+      panel.closest('form')?.querySelector('input[name="dueA"], input[name="dueB"]')?.focus();
+    }
+  });
+  document.addEventListener('input', (event) => {
+    if (!(event.target instanceof HTMLInputElement) || !event.target.matches('[data-ab-day-form] input[name^="due"]')) return;
+    const form = event.target.form;
+    const clarification = getClarification(form);
+    clarification.value = 'false';
+    delete clarification.dataset.sameForBoth;
+    form.querySelector('[data-due-clarification]')?.setAttribute('hidden', '');
+  });
+}
 function taskLinksMarkup(links) {
   if (!Array.isArray(links) || !links.length) return '';
   const label = (url) => { try { const parsed = new URL(url); return `${parsed.hostname.replace(/^www\./i, '')}${parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/$/, '')}`; } catch (error) { return String(url).replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[?#]/)[0].replace(/\/$/, ''); } };
@@ -169,7 +267,11 @@ function courseItemEditMarkup(item, root, orgId, itemId) {
   const canEdit = root.dataset.canEdit === 'true' && (root.dataset.isAdmin === 'true' || item.createdBy === root.dataset.userId);
   if (!canEdit) return '';
   const selected = (type) => item.type === type ? 'selected' : '';
-  return `<details class="item-edit-details"><summary class="lui-link"><i data-lucide="pencil"></i> Edit</summary><form class="inline-tool-form item-edit-form" data-live-form action="/org/${orgId}/items/${itemId}/update" method="post"><label class="item-title-field">Title<input name="title" value="${escapeHtml(item.title)}" required></label><label>Details<textarea name="details" rows="5" placeholder="Details">${escapeHtml(item.details || '')}</textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Type<select name="type"><option ${selected('Homework')}>Homework</option><option ${selected('Upcoming test')}>Upcoming test</option><option ${selected('Event')}>Event</option><option ${selected('Project')}>Project</option></select></label><label>Date<input name="due" type="date" value="${item.due !== 'No date' ? escapeHtml(item.due) : ''}"></label><button class="lui-button lui-button-secondary" type="submit">Save</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/delete" method="post"><button class="lui-link" type="submit"><i data-lucide="trash-2"></i> Delete</button></form></details>`;
+  const dueFields = root.dataset.abDaysEnabled === 'true'
+    ? `<label>A-day due date<input name="dueA" type="date" value="${escapeHtml(item.dueA || (!Object.hasOwn(item, 'dueA') && !Object.hasOwn(item, 'dueB') ? item.due || '' : ''))}"></label><label>B-day due date<input name="dueB" type="date" value="${escapeHtml(item.dueB || (!Object.hasOwn(item, 'dueA') && !Object.hasOwn(item, 'dueB') ? item.due || '' : ''))}"></label><input type="hidden" name="dueSameForBoth" value="false">`
+    : `<label>Date<input name="due" type="date" value="${item.due !== 'No date' ? escapeHtml(item.due) : ''}"></label>`;
+  const abDayForm = root.dataset.abDaysEnabled === 'true' ? 'data-ab-day-form' : '';
+  return `<details class="item-edit-details"><summary class="lui-link"><i data-lucide="pencil"></i> Edit</summary><form class="inline-tool-form item-edit-form" data-live-form ${abDayForm} action="/org/${orgId}/items/${itemId}/update" method="post"><label class="item-title-field">Title<input name="title" value="${escapeHtml(item.title)}" required></label><label>Details<textarea name="details" rows="5" placeholder="Details">${escapeHtml(item.details || '')}</textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Type<select name="type"><option ${selected('Homework')}>Homework</option><option ${selected('Upcoming test')}>Upcoming test</option><option ${selected('Event')}>Event</option><option ${selected('Project')}>Project</option></select></label>${dueFields}<button class="lui-button lui-button-secondary" type="submit">Save</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/delete" method="post"><button class="lui-link" type="submit"><i data-lucide="trash-2"></i> Delete</button></form></details>`;
 }
 function courseItemCopyActionMarkup(item, root, orgId, itemId) {
   const copyableIds = JSON.parse(root.dataset.copyableItemIds || '[]');
@@ -183,7 +285,7 @@ function itemCard(item) {
   const typeClass = String(item.type || '').toLowerCase().replace(/[^a-z]/g, '-');
   const root = courseRoot(); const orgId = escapeHtml(root.dataset.orgId); const itemId = escapeHtml(item.id); const taskSlug = `${String(item.title || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || itemId}-${itemId.slice(-8)}`; const projectAction = item.type === 'Project' ? `<a class="lui-link breakout-action" href="/org/${orgId}/course/${escapeHtml(root.dataset.courseId)}/task/${escapeHtml(taskSlug)}/breakout-groups"><i data-lucide="users-round"></i> Breakout Groups</a>` : ''; const canModerate = root.dataset.isAdmin === 'true'; const downvoteAction = `<form data-live-form action="/org/${orgId}/items/${itemId}/downvote" method="post"><button class="lui-link" type="submit"><i data-lucide="thumbs-down"></i>${canModerate ? ` <span data-downvote-count>${(item.downvotedBy || []).length}</span>` : ''}</button></form>`;
   const dragHandle = `<button class="lui-icon-button course-drag-handle" type="button" aria-label="Move ${escapeHtml(item.title)}"><i data-lucide="grip-vertical"></i></button>`;
-  return `<article class="feed-card feed-item" id="item-${itemId}" data-item-id="${itemId}" data-position="${Number(item.position) || 0}" data-past="${courseItemPast(item)}" data-type="${escapeHtml(item.type)}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${escapeHtml(formatCourseDate(item.due, root))}</span><h3 data-item-title>${linkedTaskTextMarkup(item.title, item.links)}</h3>${item.details ? `<p class="task-details">${linkedTaskTextMarkup(item.details, item.links)}</p>` : ''}</div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="lui-link" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="lui-link" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}${courseItemEditMarkup(item, root, orgId, itemId)}${courseItemCopyActionMarkup(item, root, orgId, itemId)}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${(item.comments || []).filter((comment) => !comment.reported).length}</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><small class="form-error" data-form-error hidden></small><button class="lui-button lui-button-primary" type="submit">Reply</button></form></div></details></div></article>`;
+  return `<article class="feed-card feed-item" id="item-${itemId}" data-item-id="${itemId}" data-position="${Number(item.position) || 0}" data-past="${courseItemPast(item)}" data-type="${escapeHtml(item.type)}"><div class="feed-card-head"><span class="category-dot category-${typeClass}"></span><div><span class="feed-source">${escapeHtml(item.type)} · ${assignmentDueMarkup(item, root)}</span><h3 data-item-title>${linkedTaskTextMarkup(item.title, item.links)}</h3>${item.details ? `<p class="task-details">${linkedTaskTextMarkup(item.details, item.links)}</p>` : ''}</div><span class="confidence"><i data-lucide="shield-check"></i> <span data-verify-count>${(item.verifiedBy || []).length}</span></span>${dragHandle}</div><div class="feed-card-foot"><div class="feed-card-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="lui-link" type="submit"><i data-lucide="badge-check"></i> Confirm details</button></form><form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="lui-link" type="submit"><i data-lucide="inbox"></i> Add to My Todo</button></form>${projectAction}${downvoteAction}${courseItemEditMarkup(item, root, orgId, itemId)}${courseItemCopyActionMarkup(item, root, orgId, itemId)}</div><details class="comment-details"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${(item.comments || []).filter((comment) => !comment.reported).length}</span> comments</summary><div class="comments"><div class="comment-list" data-comment-list></div><form data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><input name="comment" placeholder="Ask a question or share a note..." required><small class="form-error" data-form-error hidden></small><button class="lui-button lui-button-primary" type="submit">Reply</button></form></div></details></div></article>`;
 }
 
 function commentMenuMarkup(comment, context) {

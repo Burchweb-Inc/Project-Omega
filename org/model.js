@@ -111,10 +111,12 @@ function currentDateInTimezone(timezone, now = new Date()) {
 function isPastAssignment(org, item, now = new Date()) {
   if (typeof item.pastOverride === 'boolean') return item.pastOverride;
   if (org.autoMovePastAssignments === false) return item.past === true;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(item.due || '')) return false;
-  const dueDate = new Date(`${item.due}T00:00:00.000Z`);
-  if (Number.isNaN(dueDate.getTime()) || dueDate.toISOString().slice(0, 10) !== item.due) return false;
-  return item.due < currentDateInTimezone(org.timezone, now);
+  const abDates = [item.dueA, item.dueB].filter((due) => /^\d{4}-\d{2}-\d{2}$/.test(due || ''));
+  const due = abDates.length ? abDates.sort().at(-1) : item.due;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(due || '')) return false;
+  const dueDate = new Date(`${due}T00:00:00.000Z`);
+  if (Number.isNaN(dueDate.getTime()) || dueDate.toISOString().slice(0, 10) !== due) return false;
+  return due < currentDateInTimezone(org.timezone, now);
 }
 
 function normalizeCourseItems(org, course) {
@@ -140,6 +142,7 @@ function parseOrgPayload(row) {
     normalizeCourseItems(org, course);
     return {
       ...course,
+      abDayEnabled: course.abDayEnabled === true,
       items: course.items.map((item) => ({ ...item, comments: item.comments || [], verifiedBy: item.verifiedBy || [], downvotedBy: item.downvotedBy || [] })),
       board: course.board || [],
       resources: course.resources || []

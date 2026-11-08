@@ -4,7 +4,8 @@
     data-copy-available="<%= copyDestinations?.length > 0 %>"
     data-copyable-item-ids="<%= JSON.stringify(course.items.filter(item => canManageItem(selectedOrg, item, user)).map(item => item.id)) %>"
     data-date-timezone="<%= courseTimezone || 'UTC' %>" data-date-locale="<%= courseDateLocale || 'en-US' %>"
-    data-can-edit="<%= canEdit(member) %>">
+    data-can-edit="<%= canEdit(member) %>" data-ab-days-enabled="<%= course.abDayEnabled ? 'true' : 'false' %>"
+    data-selected-day="<%= selectedCourseDay || 'A' %>">
     <a class="back-link" href="/org/<%= selectedOrg.id %>">
         <i data-lucide="arrow-left">
         </i>
@@ -28,6 +29,15 @@
                 Create item
             </button>
             <% } %>
+        <% if (course.abDayEnabled) { %>
+            <details class="task-menu course-day-menu">
+                <summary class="lui-button lui-button-secondary" aria-label="Choose your A/B day"><i data-lucide="calendar-days"></i> My day: <%= selectedCourseDay || 'A' %></summary>
+                <div class="task-menu-popover">
+                    <form action="/org/<%= selectedOrg.id %>/course/<%= course.id %>/day" method="post"><button class="lui-menu-action" type="submit" name="day" value="A" <%= selectedCourseDay === 'A' ? 'aria-current="true"' : '' %>><i data-lucide="calendar"></i> A day</button></form>
+                    <form action="/org/<%= selectedOrg.id %>/course/<%= course.id %>/day" method="post"><button class="lui-menu-action" type="submit" name="day" value="B" <%= selectedCourseDay === 'B' ? 'aria-current="true"' : '' %>><i data-lucide="calendar"></i> B day</button></form>
+                </div>
+            </details>
+        <% } %>
     </div>
     <div class="course-tabs" role="tablist">
         <a class="active" href="#feed" data-course-tab="feed">Feed</a>
@@ -55,6 +65,7 @@
                     </div>
                     <% if (canEdit(member)) { %>
                         <form class="inline-create-form page-form hidden" data-live-form
+                            <%= course.abDayEnabled ? 'data-ab-day-form' : '' %>
                             action="/org/<%= selectedOrg.id %>/courses/<%= course.id %>/items" method="post">
                             <button class="lui-button lui-icon-button inline-create-close" type="button" data-inline-create-close
                                 aria-label="Close create form" title="Close"><i data-lucide="x"></i></button>
@@ -68,8 +79,12 @@
                                         <option>Project</option>
                                     </select>
                                 </label>
-                                <label>Date<input name="due" type="date">
-                                </label>
+                                <% if (course.abDayEnabled) { %>
+                                    <label>A-day due date<input name="dueA" type="date"></label>
+                                    <label>B-day due date<input name="dueB" type="date"></label>
+                                <% } else { %>
+                                    <label>Date<input name="due" type="date"></label>
+                                <% } %>
                                 <button class="lui-button lui-button-primary" type="submit">Add to feed</button>
                             </div>
                             <a class="lui-link"
@@ -122,8 +137,12 @@
                                                             </span>
                                                             <div>
                                                                 <span class="feed-source">
-                                                                    <%= item.type %> · <%= formatCourseDate(item.due,
-                                                                            courseTimezone, courseDateLocale) %>
+                                                                    <%= item.type %> ·
+                                                                    <% if (course.abDayEnabled) { const dueA = Object.hasOwn(item, 'dueA') || Object.hasOwn(item, 'dueB') ? item.dueA : item.due; const dueB = Object.hasOwn(item, 'dueA') || Object.hasOwn(item, 'dueB') ? item.dueB : item.due; %>
+                                                                        <span class="assignment-due" tabindex="0" aria-label="A day due <%= formatCourseDate(dueA || 'No date', courseTimezone, courseDateLocale) %>; B day due <%= formatCourseDate(dueB || 'No date', courseTimezone, courseDateLocale) %>"><span><%= formatCourseDate(item.displayDue || item.due, courseTimezone, courseDateLocale) %></span><span class="assignment-due-tooltip" role="tooltip"><span>A day: <%= formatCourseDate(dueA || 'No date', courseTimezone, courseDateLocale) %></span><span>B day: <%= formatCourseDate(dueB || 'No date', courseTimezone, courseDateLocale) %></span></span></span>
+                                                                    <% } else { %>
+                                                                        <%= formatCourseDate(item.due, courseTimezone, courseDateLocale) %>
+                                                                    <% } %>
                                                                 </span>
                                                                 <h3 data-item-title>
                                                                     <%- renderLinkedText(item.title, item.links) %>
@@ -207,8 +226,10 @@
                                                                                 <form
                                                                                     class="inline-tool-form item-edit-form"
                                                                                     data-live-form
+                                                                                    <%= course.abDayEnabled ? 'data-ab-day-form' : '' %>
                                                                                     action="/org/<%= selectedOrg.id %>/items/<%= item.id %>/update"
                                                                                     method="post">
+                                                                                    <% if (course.abDayEnabled) { %><input type="hidden" name="dueSameForBoth" value="false"><% } %>
                                                                                     <label
                                                                                         class="item-title-field">Title<input
                                                                                             name="title"
@@ -238,9 +259,13 @@
                                                                                                 ? 'selected' : '' %>
                                                                                                 >Project</option>
                                                                                         </select></label>
-                                                                                    <label>Date<input name="due"
-                                                                                            type="date"
-                                                                                            value="<%= item.due !== 'No date' ? item.due : '' %>"></label>
+                                                                                    <% if (course.abDayEnabled) { %>
+                                                                                        <label>A-day due date<input name="dueA" type="date" value="<%= item.dueA || (!Object.hasOwn(item, 'dueA') && !Object.hasOwn(item, 'dueB') ? item.due : '') %>"></label>
+                                                                                        <label>B-day due date<input name="dueB" type="date" value="<%= item.dueB || (!Object.hasOwn(item, 'dueA') && !Object.hasOwn(item, 'dueB') ? item.due : '') %>"></label>
+                                                                                    <% } else { %>
+                                                                                        <label>Date<input name="due" type="date" value="<%= item.due !== 'No date' ? item.due : '' %>"></label>
+                                                                                    <% } %>
+                                                                                    <% if (course.abDayEnabled) { %><input type="hidden" name="dueSameForBoth" value="false"><% } %>
                                                                                     <button class="lui-button lui-button-secondary"
                                                                                         type="submit">Save</button>
                                                                                 </form>

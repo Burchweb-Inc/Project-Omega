@@ -81,6 +81,31 @@ test('assignment past status uses the group date and automatic-move preference',
   assert.equal(model.isPastAssignment({ timezone: 'UTC' }, { due: 'No date' }, afterMidnightUtc), false);
 });
 
+test('A/B-day assignments stay current until their later due date passes', (context) => {
+  const { model } = createModel(context);
+  const org = { timezone: 'UTC', autoMovePastAssignments: true };
+  const now = new Date('2025-02-01T12:00:00Z');
+
+  assert.equal(model.isPastAssignment(org, { due: '2025-01-20', dueA: '2025-01-20', dueB: '2025-02-05' }, now), false);
+  assert.equal(model.isPastAssignment(org, { due: '2025-01-20', dueA: '2025-01-20', dueB: '2025-01-25' }, now), true);
+});
+
+test('A/B-day course settings and task dates persist', (context) => {
+  const { model } = createModel(context);
+  model.save(orgData('ab-org', 'A/B Group', {
+    courses: [{
+      id: 'course-ab',
+      abDayEnabled: true,
+      items: [{ id: 'ab-task', due: '2025-02-05', dueA: '2025-02-05', dueB: '2025-02-06' }]
+    }]
+  }));
+  const savedCourse = model.get('ab-org').courses[0];
+
+  assert.equal(savedCourse.abDayEnabled, true);
+  assert.equal(savedCourse.items[0].dueA, '2025-02-05');
+  assert.equal(savedCourse.items[0].dueB, '2025-02-06');
+});
+
 test('org settings persist and past assignments stay put when automatic moving is disabled', (context) => {
   const { model } = createModel(context);
   model.save(orgData('auto-org', 'Automatic', {
