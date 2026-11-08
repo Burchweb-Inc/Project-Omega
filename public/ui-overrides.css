@@ -15,6 +15,29 @@
 .private-task[data-priority="high"]{border-left:4px solid #d9574e}
 .private-task .task-due{color:var(--ink);font-size:11px;font-weight:700;letter-spacing:.01em}
 .private-task.is-done .task-due{color:var(--muted)}
+.assignment-due{position:relative;display:inline-flex;align-items:center;outline-offset:3px}
+.assignment-due-tooltip{position:absolute;z-index:7;top:calc(100% + 7px);left:0;display:grid;gap:4px;min-width:150px;padding:9px 11px;background:white;border:1px solid var(--line);border-radius:7px;box-shadow:0 10px 24px rgba(29,48,61,.14);color:var(--ink);font-size:10px;font-weight:600;line-height:1.4;opacity:0;pointer-events:none;transform:translateY(4px);visibility:hidden;transition:opacity .18s ease,transform .18s ease,visibility .18s}
+.assignment-due:hover .assignment-due-tooltip,.assignment-due:focus .assignment-due-tooltip{opacity:1;pointer-events:auto;transform:translateY(0);visibility:visible}
+.course-day-menu{align-self:flex-start}
+.course-day-menu>summary{display:flex;align-items:center;gap:7px;list-style:none;cursor:pointer}
+.course-day-menu>summary::-webkit-details-marker{display:none}
+.course-day-menu>summary svg{width:15px;height:15px}
+.course-day-menu .task-menu-popover{min-width:132px}
+.course-settings-list{display:grid;gap:10px;max-width:850px}
+.course-setting-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,1.2fr) auto;align-items:center;gap:16px;padding:17px;background:white;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.course-setting-card h3{font-size:14px}
+.course-setting-card p{margin-top:4px;font-size:11px}
+.course-setting-card .toggle-row{border:0}
+.course-setting-card>button{white-space:nowrap}
+.inline-create-form[data-ab-day-form]{box-sizing:border-box;width:calc(100% + 28px);max-width:calc(100vw - 32px);margin-left:-14px;padding:18px}
+.inline-create-form[data-ab-day-form] .inline-create-fields{grid-template-columns:minmax(180px,1.5fr) repeat(3,minmax(125px,1fr)) auto;gap:12px}
+.due-clarification{grid-column:1/-1;display:grid;gap:10px;padding:12px 14px;background:#fff;border:1px solid #d6e0e5;border-radius:8px;color:var(--ink);font-size:12px;line-height:1.5}
+.due-clarification[hidden]{display:none}
+.due-clarification p{margin:0}
+.due-clarification-actions{display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:850px){.inline-create-form[data-ab-day-form] .inline-create-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.inline-create-form[data-ab-day-form] .inline-create-fields label:first-child,.inline-create-form[data-ab-day-form] .inline-create-fields .lui-button{grid-column:1/-1}}
+@media(max-width:700px){.course-setting-card{grid-template-columns:1fr}.course-setting-card>button{justify-self:start}.inline-create-form[data-ab-day-form]{width:100%;max-width:100%;margin-left:0;padding:14px}.inline-create-form[data-ab-day-form] .inline-create-fields{grid-template-columns:1fr 1fr}.inline-create-form[data-ab-day-form] .inline-create-fields label:first-child,.inline-create-form[data-ab-day-form] .inline-create-fields .lui-button{grid-column:1/-1}}
+@media(prefers-reduced-motion:reduce){.assignment-due-tooltip{transition:none}}
 .private-task.task-completing{animation:task-human-complete .58s cubic-bezier(.22,.8,.32,1)}
 .task-confetti{position:absolute;inset:-10px;pointer-events:none}
 .task-confetti i{position:absolute;top:50%;left:50%;width:5px;height:8px;border-radius:1px;background:var(--confetti-color);animation:task-confetti-pop .55s cubic-bezier(.16,.84,.34,1) both;transform:rotate(var(--confetti-angle)) translateY(-13px)}

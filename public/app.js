@@ -114,7 +114,7 @@ function bindInteractions() {
   });
   const hash = window.location.hash.slice(1); if (courseRoot() && ['feed', 'board', 'resources'].includes(hash)) setCourseTab(hash, false);
   syncTodoSummary(); bindPushNotifications();
-  lucide.createIcons(); bindLinkComposers(); bindTodoControls(); bindDashboardInteractions(); bindCourseFeedControls(courseRoot()); bindCourseItemEditing(courseRoot()); bindCourseReorder(courseRoot()); bindTaskCopyModal(); bindTutorial(); connectLiveCourse(); connectLiveBreakout(); connectLiveTodo(); connectLiveNotifications(); connectLiveDashboard();
+  lucide.createIcons(); bindLinkComposers(); bindTodoControls(); bindDashboardInteractions(); bindCourseABDateForms(); bindCourseFeedControls(courseRoot()); bindCourseItemEditing(courseRoot()); bindCourseReorder(courseRoot()); bindTaskCopyModal(); bindTutorial(); connectLiveCourse(); connectLiveBreakout(); connectLiveTodo(); connectLiveNotifications(); connectLiveDashboard();
 }
 
 function bindTutorial() {

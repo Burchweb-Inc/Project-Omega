@@ -336,6 +336,30 @@ function dueImportance(due) {
   const dueDate = new Date(`${due}T00:00:00`); const days = Math.round((dueDate - today) / 86400000);
   if (days < 0) return 'Overdue'; if (days === 0) return 'Today'; if (days <= 3) return 'Soon'; return 'Later';
 }
+function courseDayForUser(user, course) {
+  return user?.settings?.courseDays?.[course.id] === 'B' ? 'B' : 'A';
+}
+function courseItemDue(item, day) {
+  const hasABDates = Object.hasOwn(item, 'dueA') || Object.hasOwn(item, 'dueB');
+  if (!hasABDates) return item.due || 'No date';
+  return item[`due${day}`] || 'No date';
+}
+function parseCourseDueDates(body, course) {
+  if (!course.abDayEnabled) return { due: String(body.due || '').trim() || 'No date' };
+  let dueA = String(body.dueA || '').trim();
+  let dueB = String(body.dueB || '').trim();
+  for (const due of [dueA, dueB]) {
+    if (due && (!/^\d{4}-\d{2}-\d{2}$/.test(due) || Number.isNaN(new Date(`${due}T00:00:00.000Z`).getTime()) || new Date(`${due}T00:00:00.000Z`).toISOString().slice(0, 10) !== due)) {
+      return { error: 'Enter valid A-day and B-day due dates.' };
+    }
+  }
+  if (!dueA && !dueB) return { error: 'Enter at least one A-day or B-day due date.' };
+  if (body.dueSameForBoth === 'true') {
+    dueA ||= dueB;
+    dueB ||= dueA;
+  }
+  return { dueA, dueB, due: dueA || dueB || 'No date' };
+}
 function fallbackIpLocation() { return { timezone: 'UTC', locale: 'en-US' }; }
 function courseDateLocale(countryCode) { return countryCode === 'US' ? 'en-US' : 'en-GB'; }
 async function ipLocation(ip) {
@@ -1125,6 +1149,7 @@ app.get('/org/:id/course/:courseId', requireUser, async (request, response) => {
   const org = getOrg(request); const course = getCourse(org, request.params.courseId);
   if (!course || !canAccess(org, request.user)) return response.redirect(`/org/${request.params.id}`);
   const location = await userDateLocation(request.user, request);
+  const selectedCourseDay = courseDayForUser(request.user, course);
   const copyDestinations = orgModel.all()
     .filter((destinationOrg) => destinationOrg.id === org.id || org.allowCrossGroupTaskCopy !== false)
     .filter((destinationOrg) => canAccess(destinationOrg, request.user) && canEdit(membership(destinationOrg, request.user)))
@@ -1136,7 +1161,33 @@ app.get('/org/:id/course/:courseId', requireUser, async (request, response) => {
         .map((destinationCourse) => ({ id: destinationCourse.id, name: destinationCourse.name, code: destinationCourse.code || '' }))
     }))
     .filter((destinationOrg) => destinationOrg.courses.length);
-  renderOrgPage(request, response, 'course', { course: { ...course, items: [...course.items].sort((left, right) => left.position - right.position) }, courseTimezone: location.timezone, courseDateLocale: location.locale, formatCourseDate, copyDestinations });
+  renderOrgPage(request, response, 'course', { course: { ...course, items: [...course.items].sort((left, right) => left.position - right.position).map((item) => ({ ...item, displayDue: course.abDayEnabled ? courseItemDue(item, selectedCourseDay) : item.due })) }, selectedCourseDay, courseTimezone: location.timezone, courseDateLocale: location.locale, formatCourseDate, copyDestinations });
+});
+
+app.post('/org/:id/course/:courseId/day', requireUser, (request, response) => {
+  const org = getOrg(request); const course = getCourse(org, request.params.courseId);
+  if (!org || !course || !course.abDayEnabled || !canAccess(org, request.user)) return response.redirect(`/org/${request.params.id}/course/${request.params.courseId}`);
+  if (!['A', 'B'].includes(request.body.day)) return response.redirect(`/org/${org.id}/course/${course.id}`);
+  request.user.settings ||= {};
+  request.user.settings.courseDays ||= {};
+  const previousDay = request.user.settings.courseDays[course.id];
+  const changedTasks = [];
+  request.user.settings.courseDays[course.id] = request.body.day;
+  for (const task of request.user.tasks || []) {
+    const item = task.sourceId && course.items.find((entry) => entry.id === task.sourceId);
+    if (!item || task.linked === false) continue;
+    changedTasks.push({ task, due: task.due, importance: task.importance });
+    task.due = courseItemDue(item, request.body.day);
+    task.importance = dueImportance(task.due);
+  }
+  if (!userModel.updateUser(request.user)) {
+    if (previousDay) request.user.settings.courseDays[course.id] = previousDay;
+    else delete request.user.settings.courseDays[course.id];
+    changedTasks.forEach(({ task, due, importance }) => { task.due = due; task.importance = importance; });
+    return response.status(500).send('Could not save your A/B-day preference. Please try again.');
+  }
+  changedTasks.forEach(({ task }) => emitTodo(request.user.id, 'todo:task-updated', { task: normalizeTask(task) }));
+  response.redirect(`/org/${org.id}/course/${course.id}`);
 });
 
 app.get('/org/:id/course/:courseId/items/new', requireUser, (request, response) => {
@@ -1163,7 +1214,7 @@ app.get('/org/:id/settings', requireUser, (request, response) => response.redire
 app.get('/org/:id/admin/:tab?', requireUser, (request, response) => {
   const org = getOrg(request); const member = membership(org, request.user);
   if (!org || !isOrgModerator(org, request.user)) return response.redirect(`/org/${request.params.id}`);
-  const requestedTab = ['mod', 'report', 'settings', 'share'].includes(request.params.tab) ? request.params.tab : 'mod';
+  const requestedTab = ['mod', 'report', 'settings', 'courses', 'share'].includes(request.params.tab) ? request.params.tab : 'mod';
   const adminTab = member && member.role === 'moderator' && !['mod', 'report'].includes(requestedTab) ? 'mod' : requestedTab;
   const comments = moderationComments(org || { courses: [], groups: [] });
   const timezones = adminTab === 'settings' ? ['UTC', ...Intl.supportedValuesOf('timeZone')] : [];
@@ -1187,15 +1238,17 @@ app.post('/org/:id/courses', requireUser, async (request, response) => {
   const org = getOrg(request); if (!org || !canEdit(membership(org, request.user))) return response.redirect(`/org/${request.params.id}`);
   const name = String(request.body.name || '').trim(); const code = String(request.body.code || '').trim().toUpperCase();
   if (await contentPolicyError({ type: 'course', text: `${name} ${code}` })) return response.redirect(`/org/${org.id}/courses/new?error=policy`);
-  org.courses.push({ id: id(), name, code, color: request.body.color || '#ef8354', items: [], board: [], resources: [] }); saveOrg(org); response.redirect(`/org/${org.id}/course/${org.courses.at(-1).id}`);
+  org.courses.push({ id: id(), name, code, color: request.body.color || '#ef8354', abDayEnabled: false, items: [], board: [], resources: [] }); saveOrg(org); response.redirect(`/org/${org.id}/course/${org.courses.at(-1).id}`);
 });
 
 app.post('/org/:id/courses/:courseId/items', requireUser, async (request, response) => {
   const org = getOrg(request); const course = org && org.courses.find((entry) => entry.id === request.params.courseId);
   if (!course || !canEdit(membership(org, request.user))) return sendMutation(request, response, { error: 'You cannot edit this course.' }, `/org/${request.params.id}/course/${request.params.courseId}`);
+  const dueDates = parseCourseDueDates(request.body, course);
+  if (dueDates.error) return sendMutation(request, response, { error: dueDates.error }, `/org/${request.params.id}/course/${request.params.courseId}`);
   const policyError = await contentPolicyError({ type: 'course-item', text: request.body.title });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${request.params.id}/course/${request.params.courseId}`);
-  const item = { id: id(), title: String(request.body.title || '').trim(), details: String(request.body.details || '').trim(), links: await fetchLinkPreviews(`${request.body.title || ''}\n${request.body.details || ''}`), type: request.body.type, due: request.body.due || 'No date', done: request.body.type !== 'Event' ? false : null, comments: [], verifiedBy: [], downvotedBy: [], createdBy: request.user.id, position: course.items.length, past: false };
+  const item = { id: id(), title: String(request.body.title || '').trim(), details: String(request.body.details || '').trim(), links: await fetchLinkPreviews(`${request.body.title || ''}\n${request.body.details || ''}`), type: request.body.type, ...dueDates, done: request.body.type !== 'Event' ? false : null, comments: [], verifiedBy: [], downvotedBy: [], createdBy: request.user.id, position: course.items.length, past: false };
   item.past = orgModel.isPastAssignment(org, item);
   if (!item.title) return sendMutation(request, response, { error: 'A title is required.' }, `/org/${org.id}/course/${course.id}`);
   course.items.push(item); saveOrg(org); emitCourse(org, course, 'course:item-created', { item });
@@ -1267,10 +1320,14 @@ app.post('/org/:id/items/:itemId/update', requireUser, async (request, response)
   const org = getOrg(request); const item = canAccess(org, request.user) ? org.courses.flatMap((course) => course.items).find((entry) => entry.id === request.params.itemId) : null;
   if (!item || !canManageItem(org, item, request.user)) return sendMutation(request, response, { error: 'You cannot edit this item.' }, `/org/${org?.id || ''}`);
   const title = String(request.body.title || '').trim(); const course = org.courses.find((entry) => entry.items.includes(item)); if (!title) return sendMutation(request, response, { error: 'A title is required.' }, `/org/${org.id}`);
+  const dueDates = parseCourseDueDates(request.body, course);
+  if (dueDates.error) return sendMutation(request, response, { error: dueDates.error }, `/org/${org.id}/course/${course.id}`);
   const nextType = request.body.type || item.type; const policyError = nextType === 'Event' ? null : await contentPolicyError({ type: 'course-item', text: title });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/course/${course.id}`);
-  item.title = title; item.details = String(request.body.details || '').trim(); item.links = await fetchLinkPreviews(`${title}\n${item.details}`); item.type = nextType; item.due = request.body.due || 'No date'; item.past = orgModel.isPastAssignment(org, item);
-  users.forEach((user) => { const task = (user.tasks || []).find((entry) => entry.sourceId === item.id && entry.linked !== false); if (task) { task.title = item.title; task.details = item.details; task.links = item.links; task.due = item.due; task.source = `${course.name} · ${org.name}`; task.importance = dueImportance(task.due); emitTodo(user.id, 'todo:task-updated', { task: normalizeTask(task) }); } });
+  item.title = title; item.details = String(request.body.details || '').trim(); item.links = await fetchLinkPreviews(`${title}\n${item.details}`); item.type = nextType; item.due = dueDates.due;
+  if (course.abDayEnabled) { item.dueA = dueDates.dueA; item.dueB = dueDates.dueB; } else { delete item.dueA; delete item.dueB; }
+  item.past = orgModel.isPastAssignment(org, item);
+  users.forEach((user) => { const task = (user.tasks || []).find((entry) => entry.sourceId === item.id && entry.linked !== false); if (task) { task.title = item.title; task.details = item.details; task.links = item.links; task.due = course.abDayEnabled ? courseItemDue(item, courseDayForUser(user, course)) : item.due; task.source = `${course.name} · ${org.name}`; task.importance = dueImportance(task.due); emitTodo(user.id, 'todo:task-updated', { task: normalizeTask(task) }); } });
   saveOrg(org); emitCourse(org, course, 'item:updated', { item });
   return sendMutation(request, response, { item }, `/org/${org.id}/course/${course.id}`);
 });
@@ -1333,7 +1390,7 @@ app.post('/org/:id/items/:itemId/delete', requireUser, (request, response) => {
 app.post('/org/:id/items/:itemId/todo', requireUser, (request, response) => {
   const org = getOrg(request); const course = canAccess(org, request.user) ? org.courses.find((entry) => entry.items.some((entryItem) => entryItem.id === request.params.itemId)) : null; const item = course?.items.find((entry) => entry.id === request.params.itemId);
   let task;
-  if (org && course && item) { request.user.tasks ||= []; task = request.user.tasks.find((entry) => entry.sourceId === item.id); if (!task) { task = normalizeTask({ id: id(), title: item.title, details: item.details, links: item.links, sourceId: item.id, source: `${course.name} · ${org.name}`, due: item.due, priority: 'Normal', done: false, position: request.user.tasks.length }); request.user.tasks.push(task); persistState(); emitCourse(org, course, 'task:added', { userId: request.user.id, task }); emitTodo(request.user.id, 'todo:task-added', { task }); } }
+  if (org && course && item) { request.user.tasks ||= []; task = request.user.tasks.find((entry) => entry.sourceId === item.id); if (!task) { task = normalizeTask({ id: id(), title: item.title, details: item.details, links: item.links, sourceId: item.id, source: `${course.name} · ${org.name}`, due: course.abDayEnabled ? courseItemDue(item, courseDayForUser(request.user, course)) : item.due, priority: 'Normal', done: false, position: request.user.tasks.length }); request.user.tasks.push(task); persistState(); emitCourse(org, course, 'task:added', { userId: request.user.id, task }); emitTodo(request.user.id, 'todo:task-added', { task }); } }
   return sendMutation(request, response, { task: task || null, todoPendingCount: (request.user.tasks || []).filter((entry) => !entry.done).length }, `/org/${org?.id || ''}/course/${course?.id || ''}`);
 });
 
@@ -1509,6 +1566,14 @@ app.post('/org/:id/admin/settings', requireUser, async (request, response) => {
   const timezone = String(request.body.timezone || '');
   if (!orgModel.isValidTimezone(timezone)) return response.redirect(`/org/${org.id}/admin/settings?error=timezone`);
   org.name = name; org.description = description; org.theme = ['coral', 'green', 'blue', 'gold'].includes(request.body.theme) ? request.body.theme : 'coral'; org.allowCrossGroupTaskCopy = request.body.allowCrossGroupTaskCopy === 'on'; org.timezone = timezone; org.autoMovePastAssignments = request.body.autoMovePastAssignments === 'on'; saveOrg(org); response.redirect(`/org/${org.id}/admin/settings?saved=settings`);
+});
+
+app.post('/org/:id/admin/courses/:courseId', requireUser, (request, response) => {
+  const org = getOrg(request); const member = membership(org, request.user); const course = getCourse(org, request.params.courseId);
+  if (!org || member?.role !== 'admin' || !course) return response.redirect(`/org/${request.params.id}/admin/courses`);
+  course.abDayEnabled = request.body.abDayEnabled === 'on';
+  saveOrg(org);
+  response.redirect(`/org/${org.id}/admin/courses?saved=${course.id}`);
 });
 
 app.post('/org/:id/admin/share', requireUser, (request, response) => {

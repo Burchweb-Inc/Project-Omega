@@ -9,6 +9,7 @@
     <a class="<%= adminTab === 'mod' ? 'active' : '' %>" href="/org/<%= adminOrg.id || '' %>/admin/mod"><i data-lucide="message-square-more"></i> Moderate <span><%= adminStatsData.comments %></span></a>
     <a class="<%= adminTab === 'report' ? 'active' : '' %>" href="/org/<%= adminOrg.id || '' %>/admin/report"><i data-lucide="flag"></i> Reports <span><%= adminStatsData.openReports %></span></a>
     <% if (member?.role === 'admin') { %><a class="<%= adminTab === 'settings' ? 'active' : '' %>" href="/org/<%= adminOrg.id || '' %>/admin/settings"><i data-lucide="sliders-horizontal"></i> Settings</a>
+    <a class="<%= adminTab === 'courses' ? 'active' : '' %>" href="/org/<%= adminOrg.id || '' %>/admin/courses"><i data-lucide="book-open"></i> Courses</a>
     <a class="<%= adminTab === 'share' ? 'active' : '' %>" href="/org/<%= adminOrg.id || '' %>/admin/share"><i data-lucide="link-2"></i> Share</a><% } %>
   </nav>
 
@@ -62,6 +63,19 @@
       </section>
       <div class="group-settings-actions"><button class="lui-button lui-button-primary" type="submit">Save changes</button></div>
     </form>
+  <% } else if (adminTab === 'courses') { %>
+    <div class="admin-section-heading"><div><h2>Course settings</h2><p class="muted">Enable A/B-day due dates for courses that rotate between A and B days.</p></div></div>
+    <section class="course-settings-list" aria-label="Course settings">
+      <% if ((adminOrg.courses || []).length) { adminOrg.courses.forEach(course => { %>
+        <form class="course-setting-card" action="/org/<%= adminOrg.id %>/admin/courses/<%= course.id %>" method="post">
+          <div><h3><%= course.name %></h3><p class="muted"><%= course.code || 'Course' %></p></div>
+          <label class="toggle-row"><span><strong>A/B-day schedule</strong><small>Use separate A-day and B-day due dates for tasks in this course.</small></span><input type="checkbox" name="abDayEnabled" <%= course.abDayEnabled ? 'checked' : '' %>></label>
+          <button class="lui-button lui-button-secondary" type="submit">Save course</button>
+        </form>
+      <% }) } else { %>
+        <div class="empty-panel"><i data-lucide="book-open"></i><h3>No courses yet</h3><p>Add a course before setting up A/B days.</p></div>
+      <% } %>
+    </section>
   <% } else { %>
     <div class="admin-section-heading"><div><h2>Sharing and access</h2><p class="muted">Control who can find this group and how invitations work.</p></div></div>
     <form action="/org/<%= adminOrg.id || '' %>/admin/share" method="post" class="admin-panel page-form admin-form">
