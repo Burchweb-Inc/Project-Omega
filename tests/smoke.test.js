@@ -47,6 +47,7 @@ assert.match(client, /response\.redirected/, 'Client navigation should not rende
 assert.match(app, /\/org\/:id\/admin\/:tab\?/, 'Groups should expose tabbed admin routes.');
 const timezonePicker = fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'mini', 'timezone-select.ejs'), 'utf8');
 assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /include\('mini\/timezone-select'/, 'Group settings should use the dedicated time-zone picker partial.');
+assert.match(fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'admin.ejs'), 'utf8'), /name="assignmentPastTime" type="time"/, 'Group settings should expose the assignment past time.');
 assert.match(timezonePicker, /data-timezone-search/, 'The time-zone picker should provide a search field.');
 assert.match(timezonePicker, /role="listbox"/, 'The time-zone picker should render accessible listbox options.');
 assert.match(timezonePicker, /timezones\.forEach/, 'The time-zone picker should render every available time zone.');

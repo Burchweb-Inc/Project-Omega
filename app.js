@@ -1565,7 +1565,9 @@ app.post('/org/:id/admin/settings', requireUser, async (request, response) => {
   if (!name || await contentPolicyError({ type: 'text', text: `${name} ${description}` })) return response.redirect(`/org/${request.params.id}/admin/settings?error=policy`);
   const timezone = String(request.body.timezone || '');
   if (!orgModel.isValidTimezone(timezone)) return response.redirect(`/org/${org.id}/admin/settings?error=timezone`);
-  org.name = name; org.description = description; org.theme = ['coral', 'green', 'blue', 'gold'].includes(request.body.theme) ? request.body.theme : 'coral'; org.allowCrossGroupTaskCopy = request.body.allowCrossGroupTaskCopy === 'on'; org.timezone = timezone; org.autoMovePastAssignments = request.body.autoMovePastAssignments === 'on'; saveOrg(org); response.redirect(`/org/${org.id}/admin/settings?saved=settings`);
+  const assignmentPastTime = String(request.body.assignmentPastTime || '');
+  if (!orgModel.isValidAssignmentPastTime(assignmentPastTime)) return response.redirect(`/org/${org.id}/admin/settings?error=past-time`);
+  org.name = name; org.description = description; org.theme = ['coral', 'green', 'blue', 'gold'].includes(request.body.theme) ? request.body.theme : 'coral'; org.allowCrossGroupTaskCopy = request.body.allowCrossGroupTaskCopy === 'on'; org.timezone = timezone; org.assignmentPastTime = assignmentPastTime; org.autoMovePastAssignments = request.body.autoMovePastAssignments === 'on'; saveOrg(org); response.redirect(`/org/${org.id}/admin/settings?saved=settings`);
 });
 
 app.post('/org/:id/admin/courses/:courseId', requireUser, (request, response) => {

@@ -97,26 +97,42 @@ function isValidTimezone(timezone) {
   }
 }
 
-function currentDateInTimezone(timezone, now = new Date()) {
+function isValidAssignmentPastTime(time) {
+  if (typeof time !== 'string' || !/^\d{2}:\d{2}$/.test(time)) return false;
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours <= 23 && minutes <= 59;
+}
+
+function currentDateTimeInTimezone(timezone, now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: isValidTimezone(timezone) ? timezone : 'UTC',
     year: 'numeric',
     month: '2-digit',
-    day: '2-digit'
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
   }).formatToParts(now);
   const date = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${date.year}-${date.month}-${date.day}`;
+  return {
+    date: `${date.year}-${date.month}-${date.day}`,
+    time: `${date.hour}:${date.minute}`
+  };
 }
 
 function isPastAssignment(org, item, now = new Date()) {
-  if (typeof item.pastOverride === 'boolean') return item.pastOverride;
+  if (item.pastOverride === true) return true;
   if (org.autoMovePastAssignments === false) return item.past === true;
   const abDates = [item.dueA, item.dueB].filter((due) => /^\d{4}-\d{2}-\d{2}$/.test(due || ''));
   const due = abDates.length ? abDates.sort().at(-1) : item.due;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(due || '')) return false;
   const dueDate = new Date(`${due}T00:00:00.000Z`);
   if (Number.isNaN(dueDate.getTime()) || dueDate.toISOString().slice(0, 10) !== due) return false;
-  return due < currentDateInTimezone(org.timezone, now);
+  dueDate.setUTCDate(dueDate.getUTCDate() + 1);
+  const pastDate = dueDate.toISOString().slice(0, 10);
+  const pastTime = isValidAssignmentPastTime(org.assignmentPastTime) ? org.assignmentPastTime : '00:00';
+  const current = currentDateTimeInTimezone(org.timezone, now);
+  return current.date > pastDate || (current.date === pastDate && current.time >= pastTime);
 }
 
 function normalizeCourseItems(org, course) {
@@ -137,6 +153,7 @@ function parseOrgPayload(row) {
     }
   }
   org.timezone = isValidTimezone(org.timezone) ? org.timezone : 'UTC';
+  org.assignmentPastTime = isValidAssignmentPastTime(org.assignmentPastTime) ? org.assignmentPastTime : '00:00';
   org.autoMovePastAssignments = org.autoMovePastAssignments !== false;
   org.courses = (org.courses || []).map((course) => {
     normalizeCourseItems(org, course);
@@ -215,6 +232,7 @@ function createOrg(db, { userId, name, description, timezone = 'UTC' }) {
     description,
     createdBy: userId,
     timezone,
+    assignmentPastTime: '00:00',
     autoMovePastAssignments: true,
     theme: 'coral',
     visibility: 'private',
@@ -305,6 +323,7 @@ module.exports = (db) => ({
   copyCandidatesForUser: (userId) => loadCopyCandidatesForUser(db, userId),
   feedFor: (userId) => loadOrgsForUser(db, userId).flatMap((org) => org.courses.flatMap((course) => course.items.map((item) => ({ ...item, org, course })))),
   isValidTimezone,
+  isValidAssignmentPastTime,
   isPastAssignment,
   create: (data) => createOrg(db, data),
   save: (org) => saveOrg(db, org),
