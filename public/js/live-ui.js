@@ -11,6 +11,80 @@ function pushCategoryEnabled(notification) {
   if (notification.type === 'announcement') return settings.pushAnnouncements !== 'false';
   return false;
 }
+function bindSiteAdminUserManagement() {
+  const search = document.querySelector('[data-user-management-search]');
+  const list = document.querySelector('[data-user-management-list]');
+  const count = document.querySelector('[data-user-management-count]');
+  const empty = document.querySelector('[data-user-management-empty]');
+  const loadMore = document.querySelector('[data-user-management-load-more]');
+  if (!search || !list || !count || !empty || !loadMore) return;
+
+  let loaded = list.querySelectorAll('[data-user-management-user]').length;
+  let loadedQuery = '';
+  let requestId = 0;
+  let activeController;
+  let searchTimer;
+
+  const loadPage = async (append = false) => {
+    const currentRequestId = ++requestId;
+    activeController?.abort();
+    activeController = new AbortController();
+    const controller = activeController;
+    const query = search.value.trim();
+    const shouldAppend = append && query === loadedQuery;
+    const offset = shouldAppend ? loaded : 0;
+    const params = new URLSearchParams({ offset: String(offset), q: query });
+    list.setAttribute('aria-busy', 'true');
+    loadMore.disabled = true;
+
+    try {
+      const response = await fetch(`/site-admin/users/page?${params}`, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+      const result = await response.json();
+      if (typeof result.html !== 'string' || !Number.isInteger(result.total) || typeof result.hasMore !== 'boolean') {
+        throw new Error('The server returned an invalid user page.');
+      }
+
+      const template = document.createElement('template');
+      template.innerHTML = result.html;
+      const pageUsers = template.content.querySelectorAll('[data-user-management-user]');
+      if (pageUsers.length > 50) throw new Error('The server returned more than 50 users.');
+      if (shouldAppend) list.append(template.content);
+      else list.replaceChildren(template.content);
+      loaded = offset + pageUsers.length;
+      loadedQuery = query;
+      count.textContent = `Showing ${loaded} of ${result.total} users`;
+      empty.textContent = query ? 'No users match that search.' : 'No user accounts to manage.';
+      empty.hidden = loaded > 0;
+      loadMore.hidden = !result.hasMore;
+      bindLiveForms(list);
+      lucide.createIcons();
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      console.error('[LockIn] Could not load site admin users.', error);
+      showLiveError('Could not load users. Please try again.');
+    } finally {
+      if (currentRequestId === requestId) {
+        list.setAttribute('aria-busy', 'false');
+        loadMore.disabled = false;
+      }
+    }
+  };
+
+  search.addEventListener('input', () => {
+    window.clearTimeout(searchTimer);
+    activeController?.abort();
+    searchTimer = window.setTimeout(() => loadPage(), 200);
+  });
+  loadMore.addEventListener('click', () => {
+    window.clearTimeout(searchTimer);
+    void loadPage(true);
+  });
+}
+bindSiteAdminUserManagement();
 async function showBrowserNotification(notification) {
   if (!pushCategoryEnabled(notification) || !('Notification' in window) || Notification.permission !== 'granted') return;
   const options = { body: notification.message, icon: '/media/logo.png', tag: notification.type };
@@ -254,4 +328,3 @@ function bindDashboardInteractions() {
     });
   });
 }
-
