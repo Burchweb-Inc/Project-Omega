@@ -1,1 +1,58 @@
-<section class="content-wrap wide-page"><a class="back-link" href="/dashboard"><i data-lucide="arrow-left"></i> Overview</a><div class="page-heading compact-heading"><div><p class="kicker">NEW GROUP</p><h1>Create a group</h1><p class="muted">A group holds your people, settings, visibility, and courses.</p></div></div><div class="form-split"><div class="form-context"><span class="context-icon"><i data-lucide="users-round"></i></span><h2>One clear place for everyone.</h2><p>Start with the group basics. Add courses as folders, invite people, and set access rules after this.</p><ul><li><i data-lucide="check"></i> Keep every course together</li><li><i data-lucide="check"></i> Manage people and permissions</li><li><i data-lucide="check"></i> Share with privacy in mind</li></ul></div><form class="page-form" action="/groups/new" method="post"><label>Group name<input name="name" placeholder="ACME High School Freshmen" required></label><label>Short description<textarea name="description" placeholder="Everything for our freshman year"></textarea></label><div class="form-actions"><a class="lui-button lui-button-secondary" href="/dashboard">Cancel</a><button class="lui-button lui-button-primary">Create group <i data-lucide="arrow-up-right"></i></button></div></form></div></section>
+<section class="content-wrap create-group-page">
+    <a class="back-link" href="/groups"><i data-lucide="arrow-left"></i> All groups</a>
+    <header class="create-group-heading">
+        <h1>Create a group</h1>
+        <p>Bring your people and courses together in one shared space.</p>
+    </header>
+
+    <div class="create-group-layout">
+        <aside class="create-group-intro lui-panel" aria-label="What your group includes">
+            <span class="create-group-icon" aria-hidden="true"><i data-lucide="users-round"></i></span>
+            <h2>A home for your class or project.</h2>
+            <p>Start with the basics. You can add courses, invite people, and adjust access after your group is created.</p>
+            <div class="create-group-preview" data-create-group-preview aria-hidden="true">
+                <span class="create-group-preview-label">Your group</span>
+                <div class="create-group-preview-card">
+                    <span class="create-group-avatar" data-create-group-avatar>G</span>
+                    <span class="create-group-preview-copy">
+                        <strong data-create-group-preview-name>Your group name</strong>
+                        <span data-create-group-preview-description>Your group description will appear here.</span>
+                    </span>
+                    <i data-lucide="arrow-up-right"></i>
+                </div>
+                <span class="create-group-private"><i data-lucide="lock-keyhole"></i> Private by default</span>
+            </div>
+            <ul class="create-group-features">
+                <li><i data-lucide="book-open"></i><span>Keep courses and work together</span></li>
+                <li><i data-lucide="users"></i><span>Bring the right people in</span></li>
+                <li><i data-lucide="shield-check"></i><span>Manage access as a group admin</span></li>
+            </ul>
+        </aside>
+
+        <form class="create-group-form lui-panel" action="/groups/new" method="post" data-create-group-form>
+            <div class="create-group-form-heading">
+                <h2>Group details</h2>
+                <p>A few details to get your new space started.</p>
+            </div>
+            <label class="lui-field">
+                Group name
+                <input class="lui-input" name="name" placeholder="e.g. Biology 101" autocomplete="organization" aria-describedby="create-group-name-help" required>
+                <span class="lui-help" id="create-group-name-help">Choose a name everyone will recognize.</span>
+            </label>
+            <label class="lui-field">
+                <span>Short description <span class="lui-help">(optional)</span></span>
+                <textarea class="lui-textarea" name="description" rows="4" placeholder="What is this group for?" aria-describedby="create-group-description-help"></textarea>
+                <span class="lui-help" id="create-group-description-help">A sentence is plenty. You can add more context later.</span>
+            </label>
+            <div class="create-group-submit-row">
+                <a class="lui-button lui-button-quiet" href="/groups">Cancel</a>
+                <button class="lui-button lui-button-primary create-group-submit" type="submit">
+                    <span data-create-group-submit-label>Create group</span>
+                    <i class="create-group-submit-arrow" data-lucide="arrow-right" data-create-group-submit-arrow></i>
+                    <span class="create-group-spinner" data-create-group-spinner aria-hidden="true"></span>
+                </button>
+            </div>
+            <p class="create-group-submit-status" data-create-group-submit-status role="status" hidden>Creating your group. This should only take a moment.</p>
+        </form>
+    </div>
+</section>
