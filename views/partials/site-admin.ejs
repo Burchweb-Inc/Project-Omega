@@ -28,16 +28,41 @@
   .build-id-form input { width: 100%; font-variant-numeric: tabular-nums; letter-spacing: .08em; }
   .build-id-result { margin-top: 20px; }
   .build-id-error { margin: 16px 0 0; color: var(--coral); }
-  .user-management-list { display: grid; gap: 14px; }
-  .user-management-card { padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); }
-  .user-management-card h3 { margin: 0 0 14px; }
+  .user-management-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 14px; margin: 18px 0 12px; }
+  .user-management-search { display: grid; flex: 1; gap: 5px; max-width: 460px; font-size: 12px; font-weight: 700; }
+  .user-management-count { margin: 0 0 8px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .user-management-list { display: grid; gap: 6px; }
+  .user-management-card { overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: var(--white); }
+  .user-management-card > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; cursor: pointer; list-style: none; }
+  .user-management-card > summary::-webkit-details-marker { display: none; }
+  .user-management-summary-identity { display: flex; min-width: 0; align-items: baseline; gap: 10px; }
+  .user-management-summary-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .user-management-summary-identity small { flex: 0 0 auto; color: var(--muted); }
+  .user-management-summary-status { flex: 0 0 auto; color: var(--muted); font-size: 12px; }
+  .user-management-summary-toggle { display: inline-flex; align-items: center; gap: 5px; color: var(--blue); font-size: 12px; font-weight: 700; }
+  .user-management-summary-toggle i { width: 15px; height: 15px; transition: transform .18s ease; }
+  .user-management-card[open] .user-management-summary-toggle i { transform: rotate(180deg); }
+  .user-management-body { padding: 12px; border-top: 1px solid var(--line); }
+  .user-management-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 16px; margin: 0 0 16px; }
+  .user-management-details div { min-width: 0; }
+  .user-management-details dt { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .user-management-details dd { margin: 3px 0 0; overflow-wrap: anywhere; font-size: 12px; }
+  .user-management-pagination { display: flex; justify-content: center; padding-top: 12px; }
+  .user-management-pagination [hidden] { display: none !important; }
   .user-management-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; align-items: end; }
   .user-management-form label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
   .user-management-form .user-management-toggle { display: flex; align-items: center; gap: 9px; }
   .user-management-form .user-management-toggle input { width: auto; }
   .user-management-form textarea { min-height: 72px; resize: vertical; }
   .user-management-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
-  @media (max-width: 700px) { .user-management-form { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) {
+    .user-management-toolbar { align-items: stretch; flex-direction: column; gap: 8px; }
+    .user-management-search { max-width: none; }
+    .user-management-count { margin-bottom: 0; }
+    .user-management-card > summary { flex-wrap: wrap; gap: 5px 10px; }
+    .user-management-summary-identity { flex-wrap: wrap; gap: 2px 8px; }
+    .user-management-form { grid-template-columns: 1fr; }
+  }
   @media (max-width: 800px) { .moderation-tools { grid-template-columns: 1fr; } }
   @media (max-width: 700px) { .announcement-form .form-grid, .build-id-form { grid-template-columns: 1fr; } }
 </style>
@@ -64,29 +89,16 @@
   <% } else if (siteAdminTab === 'users') { %>
     <section class="admin-panel">
       <div class="admin-section-heading"><div><h2>User Management</h2><p class="muted">Edit account details and access, reset passwords, or remove accounts. Passwords and private integration credentials are never displayed.</p></div></div>
-      <div class="user-management-list">
-        <% managedUsers.forEach(account => { const moderationUntil = account.moderationUntil && Number.isFinite(Date.parse(account.moderationUntil)) ? new Date(account.moderationUntil).toISOString().slice(0, 16) : ''; %>
-          <article class="user-management-card">
-            <h3><%= account.name %> <small class="muted">@<%= account.username %></small></h3>
-            <form data-live-form action="/site-admin/users/<%= account.id %>/update" method="post" class="user-management-form">
-              <label>Display name<input name="name" value="<%= account.name %>" maxlength="80" required></label>
-              <label>Username<input name="username" value="<%= account.username %>" minlength="3" maxlength="24" pattern="[a-z0-9_]+" required></label>
-              <label>Age<input name="age" type="number" min="13" max="120" value="<%= account.age %>" required></label>
-              <label>Set a new password<input name="newPassword" type="password" minlength="8" autocomplete="new-password" placeholder="Leave blank to keep current"></label>
-              <label>Account status<select name="moderationStatus"><option value="active" <%= account.moderationStatus === 'active' ? 'selected' : '' %>>Active</option><option value="suspended" <%= account.moderationStatus === 'suspended' ? 'selected' : '' %>>Suspended</option><option value="banned" <%= account.moderationStatus === 'banned' ? 'selected' : '' %>>Banned</option></select></label>
-              <label>Suspension ends<input name="moderationUntil" type="datetime-local" value="<%= moderationUntil %>"></label>
-              <label>Account status message<textarea name="moderationMessage" maxlength="500"><%= account.moderationMessage || '' %></textarea></label>
-              <label class="user-management-toggle"><input type="checkbox" name="isSiteAdmin" <%= account.isSiteAdmin ? 'checked' : '' %>> Site admin</label>
-              <label class="user-management-toggle"><input type="checkbox" name="betaTools" <%= account.settings?.betaTools ? 'checked' : '' %>> Beta tools access</label>
-              <label class="user-management-toggle"><input type="checkbox" name="artistMode" <%= account.settings?.artistMode ? 'checked' : '' %>> Artist Mode · LockIn for Artists</label>
-              <div class="user-management-actions">
-                <button class="lui-button lui-button-secondary" type="submit"><i data-lucide="save"></i> Save user</button>
-                <button class="lui-button lui-button-danger" type="submit" form="delete-user-<%= account.id %>"><i data-lucide="trash-2"></i> Delete user</button>
-              </div>
-            </form>
-            <form id="delete-user-<%= account.id %>" data-live-form action="/site-admin/users/<%= account.id %>/delete" method="post" data-confirm-message="Delete @<%= account.username %>? This cannot be undone."></form>
-          </article>
-        <% }) %>
+      <div class="user-management-toolbar">
+        <label class="user-management-search">Search users
+          <input type="search" data-user-management-search maxlength="100" placeholder="Name or username" aria-label="Search users by name or username">
+        </label>
+        <p class="user-management-count" data-user-management-count role="status" aria-live="polite" aria-atomic="true">Showing <%= managedUsers.length %> of <%= managedUserTotal %> users</p>
+      </div>
+      <div class="user-management-list" data-user-management-list aria-busy="false"><%- include('site-admin-user-rows', { managedUsers }) %></div>
+      <p class="muted" data-user-management-empty <%= managedUserTotal ? 'hidden' : '' %>><%= managedUserTotal ? 'No users match that search.' : 'No user accounts to manage.' %></p>
+      <div class="user-management-pagination">
+        <button class="lui-button lui-button-secondary" type="button" data-user-management-load-more <%= managedUserTotal > 50 ? '' : 'hidden' %>>Load more users</button>
       </div>
     </section>
   <% } else if (siteAdminTab === 'themes') { %>

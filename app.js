@@ -20,6 +20,7 @@ const { isSyncDue, isSyncSchedule, syncInterval } = require('./utils/task-sync-s
 const { taskSyncConfiguration } = require('./utils/task-sync-config');
 const sharedGroupUserIds = require('./utils/shared-group-users');
 const searchUsers = require('./utils/search-users');
+const siteAdminUserPage = require('./utils/site-admin-user-page');
 const registerRenderGateRoutes = require('./beta-tests/routes');
 const registerThemeRoutes = require('./themes/routes');
 
@@ -505,7 +506,7 @@ function siteAdminPageData(request) {
     feedback: siteFeedback(),
     themeReviews: themeModel.byStatus('pending'),
     siteAdminUsers: users.filter((user) => user.isSiteAdmin),
-    managedUsers: users.slice().sort((left, right) => left.username.localeCompare(right.username)),
+    ...siteAdminUserPage(users),
     announcements: siteAnnouncements(),
     badWordReviewLogs: db.prepare('SELECT * FROM bad_word_review_logs ORDER BY created_at DESC LIMIT 20').all().map((entry) => ({
       ...entry,
@@ -742,6 +743,19 @@ app.get('/dashboard', requireUser, (request, response) => {
   });
 });
 app.get('/site-admin', requireUser, requireSiteAdmin, (request, response) => render(request, response, 'site-admin', siteAdminPageData(request)));
+app.get('/site-admin/users/page', requireUser, requireSiteAdmin, (request, response, next) => {
+  const requestedOffset = Number(request.query.offset);
+  const offset = Number.isFinite(requestedOffset) ? Math.max(0, Math.floor(requestedOffset)) : 0;
+  const { managedUsers, managedUserTotal, hasMore } = siteAdminUserPage(users, String(request.query.q || '').slice(0, 100), offset);
+  response.render('partials/site-admin-user-rows', { managedUsers }, (error, html) => {
+    if (error) return next(error);
+    return response.json({
+      html,
+      total: managedUserTotal,
+      hasMore
+    });
+  });
+});
 
 app.post('/site-admin/build-id/decrypt', requireUser, requireSiteAdmin, (request, response) => {
   const buildIdInput = String(request.body.buildId || '').trim();

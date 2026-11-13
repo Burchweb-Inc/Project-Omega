@@ -1,0 +1,35 @@
+<% managedUsers.forEach(account => { const moderationUntil = account.moderationUntil && Number.isFinite(Date.parse(account.moderationUntil)) ? new Date(account.moderationUntil).toISOString().slice(0, 16) : ''; %>
+  <details class="user-management-card" data-user-management-user>
+    <summary aria-label="Manage <%= account.name %>, @<%= account.username %>">
+      <span class="user-management-summary-identity"><strong><%= account.name %></strong><small>@<%= account.username %></small></span>
+      <span class="user-management-summary-status"><%= account.moderationStatus %></span>
+      <span class="user-management-summary-toggle">Manage <i data-lucide="chevron-down" aria-hidden="true"></i></span>
+    </summary>
+    <div class="user-management-body">
+      <dl class="user-management-details">
+        <div><dt>Account ID</dt><dd><%= account.id %></dd></div>
+        <div><dt>Age</dt><dd><%= account.age %></dd></div>
+        <div><dt>Account status</dt><dd><%= account.moderationStatus %></dd></div>
+        <div><dt>Access</dt><dd><%= account.isSiteAdmin ? 'Site admin' : 'Standard user' %></dd></div>
+        <div><dt>Features</dt><dd><%= [account.settings?.betaTools ? 'Beta tools' : '', account.settings?.artistMode ? 'Artist Mode' : ''].filter(Boolean).join(', ') || 'Standard access' %></dd></div>
+      </dl>
+      <form data-live-form action="/site-admin/users/<%= account.id %>/update" method="post" class="user-management-form">
+        <label>Display name<input name="name" value="<%= account.name %>" maxlength="80" required></label>
+        <label>Username<input name="username" value="<%= account.username %>" minlength="3" maxlength="24" pattern="[a-z0-9_]+" required></label>
+        <label>Age<input name="age" type="number" min="13" max="120" value="<%= account.age %>" required></label>
+        <label>Set a new password<input name="newPassword" type="password" minlength="8" autocomplete="new-password" placeholder="Leave blank to keep current"></label>
+        <label>Account status<select name="moderationStatus"><option value="active" <%= account.moderationStatus === 'active' ? 'selected' : '' %>>Active</option><option value="suspended" <%= account.moderationStatus === 'suspended' ? 'selected' : '' %>>Suspended</option><option value="banned" <%= account.moderationStatus === 'banned' ? 'selected' : '' %>>Banned</option></select></label>
+        <label>Suspension ends<input name="moderationUntil" type="datetime-local" value="<%= moderationUntil %>"></label>
+        <label>Account status message<textarea name="moderationMessage" maxlength="500"><%= account.moderationMessage || '' %></textarea></label>
+        <label class="user-management-toggle"><input type="checkbox" name="isSiteAdmin" <%= account.isSiteAdmin ? 'checked' : '' %>> Site admin</label>
+        <label class="user-management-toggle"><input type="checkbox" name="betaTools" <%= account.settings?.betaTools ? 'checked' : '' %>> Beta tools access</label>
+        <label class="user-management-toggle"><input type="checkbox" name="artistMode" <%= account.settings?.artistMode ? 'checked' : '' %>> Artist Mode · LockIn for Artists</label>
+        <div class="user-management-actions">
+          <button class="lui-button lui-button-secondary" type="submit"><i data-lucide="save"></i> Save user</button>
+          <button class="lui-button lui-button-danger" type="submit" form="delete-user-<%= account.id %>"><i data-lucide="trash-2"></i> Delete user</button>
+        </div>
+      </form>
+      <form id="delete-user-<%= account.id %>" data-live-form action="/site-admin/users/<%= account.id %>/delete" method="post" data-confirm-message="Delete @<%= account.username %>? This cannot be undone."></form>
+    </div>
+  </details>
+<% }) %>
