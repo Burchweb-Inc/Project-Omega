@@ -1,4 +1,50 @@
+function bindCreateGroupForm() {
+  const form = document.querySelector('[data-create-group-form]');
+  if (!form) return;
+
+  const nameInput = form.querySelector('input[name="name"]');
+  const descriptionInput = form.querySelector('textarea[name="description"]');
+  if (!nameInput || !descriptionInput) return;
+  const preview = document.querySelector('[data-create-group-preview]');
+  const previewName = preview?.querySelector('[data-create-group-preview-name]');
+  const previewDescription = preview?.querySelector('[data-create-group-preview-description]');
+  const previewAvatar = preview?.querySelector('[data-create-group-avatar]');
+
+  const updatePreview = () => {
+    const name = nameInput.value.trim();
+    const description = descriptionInput.value.trim();
+    if (previewName) previewName.textContent = name || 'Your group name';
+    if (previewDescription) previewDescription.textContent = description || 'Your group description will appear here.';
+    if (previewAvatar) {
+      previewAvatar.textContent = name
+        ? name.split(/\s+/).slice(0, 2).map((word) => [...word][0]).join('').toLocaleUpperCase()
+        : 'G';
+    }
+    preview?.setAttribute('data-has-name', String(Boolean(name)));
+  };
+
+  nameInput?.addEventListener('input', updatePreview);
+  descriptionInput?.addEventListener('input', updatePreview);
+  form.addEventListener('submit', (event) => {
+    if (form.dataset.submitting === 'true') {
+      event.preventDefault();
+      return;
+    }
+    form.dataset.submitting = 'true';
+    form.setAttribute('aria-busy', 'true');
+    const submitButton = form.querySelector('button[type="submit"]');
+    const submitLabel = submitButton?.querySelector('[data-create-group-submit-label]');
+    const status = form.querySelector('[data-create-group-submit-status]');
+    if (submitLabel) submitLabel.textContent = 'Creating group...';
+    if (submitButton) submitButton.disabled = true;
+    if (status) status.hidden = false;
+  });
+
+  updatePreview();
+}
+
 function bindInteractions() {
+  bindCreateGroupForm();
   bindLockUiComponentDecoration();
   bindTransientBanners();
   bindSidebarToggle();

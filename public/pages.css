@@ -1301,3 +1301,471 @@
     .render-gate-card { padding: 18px; }
     .transient-banner { top: 12px; right: 12px; }
 }
+
+.create-group-page {
+    max-width: 1120px;
+}
+
+.create-group-page > .back-link {
+    margin-bottom: 27px;
+    animation: create-group-rise .5s .03s both;
+}
+
+.create-group-heading {
+    margin-bottom: 30px;
+    animation: create-group-rise .55s .09s both;
+}
+
+.create-group-heading h1 {
+    margin: 0;
+    color: var(--ink);
+    font-size: clamp(30px, 4vw, 40px);
+    letter-spacing: -.04em;
+}
+
+.create-group-heading p {
+    max-width: 52ch;
+    margin: 10px 0 0;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.55;
+}
+
+.create-group-layout {
+    display: grid;
+    grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr);
+    align-items: stretch;
+    gap: 20px;
+}
+
+.create-group-intro.lui-panel,
+.create-group-form.lui-panel {
+    display: grid;
+    align-content: start;
+    gap: 20px;
+    min-width: 0;
+    padding: clamp(24px, 3.2vw, 38px);
+    border-radius: 16px;
+}
+
+.create-group-intro.lui-panel {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    align-content: center;
+    background:
+        radial-gradient(ellipse at 92% 8%, rgba(86, 155, 146, .35), transparent 38%),
+        linear-gradient(145deg, #173b58, #102d44 74%);
+    border-color: #173b58;
+    color: #fff;
+    box-shadow: none;
+    animation: create-group-card-in .72s .2s cubic-bezier(.2, .75, .25, 1) both;
+}
+
+.create-group-intro.lui-panel::before,
+.create-group-intro.lui-panel::after {
+    position: absolute;
+    z-index: -1;
+    border: 1px solid rgba(185, 225, 214, .13);
+    border-radius: 50%;
+    content: "";
+    pointer-events: none;
+}
+
+.create-group-intro.lui-panel::before {
+    top: -154px;
+    right: -112px;
+    width: 330px;
+    height: 330px;
+    animation: create-group-orbit-in 1.1s .35s cubic-bezier(.2, .75, .25, 1) both;
+}
+
+.create-group-intro.lui-panel::after {
+    top: -112px;
+    right: -70px;
+    width: 245px;
+    height: 245px;
+    border-color: rgba(185, 225, 214, .1);
+    animation: create-group-orbit-in 1.1s .45s cubic-bezier(.2, .75, .25, 1) both;
+}
+
+.create-group-icon {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    border: 1px solid rgba(255, 255, 255, .18);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .1);
+    color: white;
+    animation: create-group-icon-in .6s .45s cubic-bezier(.2, .8, .25, 1) both;
+}
+
+.create-group-icon svg {
+    width: 23px;
+    height: 23px;
+}
+
+.create-group-intro h2,
+.create-group-form-heading h2 {
+    margin: 0;
+    font-size: 22px;
+    letter-spacing: -.02em;
+}
+
+.create-group-intro.lui-panel h2 {
+    max-width: 17ch;
+    color: #fff;
+    font-size: clamp(23px, 2.5vw, 29px);
+    line-height: 1.14;
+}
+
+.create-group-intro.lui-panel > p {
+    max-width: 44ch;
+    margin: -8px 0 0;
+    color: rgba(255, 255, 255, .77);
+    font-size: 13px;
+    line-height: 1.65;
+}
+
+.create-group-preview {
+    display: grid;
+    gap: 9px;
+    margin: 2px 0;
+    animation: create-group-rise .6s .45s both;
+}
+
+.create-group-preview-label {
+    color: rgba(255, 255, 255, .62);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.create-group-preview-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 13px;
+    border: 1px solid rgba(255, 255, 255, .16);
+    border-radius: 11px;
+    background: rgba(255, 255, 255, .085);
+    backdrop-filter: blur(8px);
+    transition: background .25s ease, border-color .25s ease, transform .25s ease;
+}
+
+.create-group-preview-card svg {
+    width: 15px;
+    height: 15px;
+    flex: none;
+    color: rgba(255, 255, 255, .68);
+    transition: transform .25s ease;
+}
+
+.create-group-preview-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, .27);
+    background: rgba(255, 255, 255, .12);
+}
+
+.create-group-preview-card:hover > svg {
+    transform: translate(2px, -2px);
+}
+
+.create-group-avatar {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    flex: none;
+    border-radius: 10px;
+    background: #a9d8c8;
+    color: #12364a;
+    font-family: var(--display-font, "Space Grotesk"), sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    transition: transform .28s cubic-bezier(.2, .8, .25, 1), background .25s ease;
+}
+
+.create-group-preview[data-has-name="true"] .create-group-avatar {
+    background: #f0ad8e;
+    transform: rotate(-4deg) scale(1.04);
+}
+
+.create-group-preview-copy {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+}
+
+.create-group-preview-copy strong,
+.create-group-preview-copy > span {
+    overflow: hidden;
+    color: #fff;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.create-group-preview-copy strong {
+    font-size: 12px;
+}
+
+.create-group-preview-copy > span {
+    color: rgba(255, 255, 255, .68);
+    font-size: 10px;
+}
+
+.create-group-private {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: max-content;
+    color: rgba(255, 255, 255, .72);
+    font-size: 10px;
+}
+
+.create-group-private svg {
+    width: 13px;
+    height: 13px;
+    color: #a9d8c8;
+}
+
+.create-group-features {
+    display: grid;
+    gap: 11px;
+    margin: 0;
+    padding: 17px 0 0;
+    border-top: 1px solid rgba(255, 255, 255, .18);
+    list-style: none;
+    animation: create-group-rise .6s .55s both;
+}
+
+.create-group-features li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(255, 255, 255, .92);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.create-group-features svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    color: #a9d8c8;
+}
+
+.create-group-form.lui-panel {
+    gap: 24px;
+    background:
+        radial-gradient(ellipse at 100% 0, rgba(233, 243, 244, .6), transparent 38%),
+        #fff;
+    animation: create-group-card-in .72s .12s cubic-bezier(.2, .75, .25, 1) both;
+}
+
+.create-group-form-heading {
+    display: grid;
+    gap: 6px;
+    padding-bottom: 19px;
+    border-bottom: 1px solid var(--line);
+}
+
+.create-group-form-heading h2 {
+    color: var(--ink);
+    font-family: var(--display-font, "Space Grotesk"), sans-serif;
+    font-size: 23px;
+}
+
+.create-group-form-heading p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.create-group-form .lui-field {
+    gap: 8px;
+    font-size: 12px;
+}
+
+.create-group-form .lui-field > span:first-child {
+    color: var(--ink);
+}
+
+.create-group-form .lui-field .lui-help {
+    font-size: 11px;
+}
+
+.create-group-form .lui-input,
+.create-group-form .lui-textarea {
+    border-color: #d3e0e5;
+    background: #fbfdfe;
+    transition: border-color .2s ease, box-shadow .2s ease, background .2s ease, transform .2s ease;
+}
+
+.create-group-form .lui-input {
+    min-height: 47px;
+}
+
+.create-group-form .lui-textarea {
+    min-height: 116px;
+}
+
+.create-group-form .lui-input:focus,
+.create-group-form .lui-textarea:focus {
+    border-color: #6e9a9d;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(110, 154, 157, .14);
+    transform: translateY(-1px);
+}
+
+.create-group-submit-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 2px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+}
+
+.create-group-submit-row .lui-button {
+    min-height: 44px;
+}
+
+.create-group-submit {
+    min-width: 157px;
+    padding-inline: 17px;
+    box-shadow: 0 7px 16px rgba(211, 95, 70, .2);
+}
+
+.create-group-submit:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(211, 95, 70, .25);
+}
+
+.create-group-submit-arrow {
+    transition: transform .2s ease;
+}
+
+.create-group-submit:hover:not(:disabled) .create-group-submit-arrow {
+    transform: translateX(3px);
+}
+
+.create-group-spinner {
+    display: none;
+    width: 15px;
+    height: 15px;
+    border: 2px solid rgba(255, 255, 255, .45);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: create-group-spin .7s linear infinite;
+}
+
+.create-group-form[data-submitting="true"] .create-group-submit-arrow {
+    display: none;
+}
+
+.create-group-form[data-submitting="true"] .create-group-spinner {
+    display: inline-block;
+}
+
+.create-group-submit-status {
+    margin: -13px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+    text-align: right;
+}
+
+.create-group-submit-status[hidden] {
+    display: none;
+}
+
+@keyframes create-group-rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes create-group-card-in {
+    from { opacity: 0; transform: translateY(18px) scale(.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes create-group-icon-in {
+    from { opacity: 0; transform: translateY(9px) rotate(-8deg) scale(.85); }
+    to { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
+}
+
+@keyframes create-group-orbit-in {
+    from { opacity: 0; transform: scale(.88) rotate(-8deg); }
+    to { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+@keyframes create-group-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 760px) {
+    .create-group-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .create-group-intro.lui-panel {
+        grid-row: 2;
+    }
+
+    .create-group-form.lui-panel {
+        grid-row: 1;
+    }
+
+    .create-group-intro.lui-panel {
+        align-content: start;
+    }
+}
+
+@media (max-width: 480px) {
+    .create-group-heading {
+        margin-bottom: 22px;
+    }
+
+    .create-group-form.lui-panel,
+    .create-group-intro.lui-panel {
+        padding: 20px;
+    }
+
+    .create-group-submit-row {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .create-group-submit-row .lui-button {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .create-group-page > .back-link,
+    .create-group-heading,
+    .create-group-intro.lui-panel,
+    .create-group-intro.lui-panel::before,
+    .create-group-intro.lui-panel::after,
+    .create-group-icon,
+    .create-group-preview,
+    .create-group-features,
+    .create-group-form.lui-panel {
+        animation: none;
+    }
+
+    .create-group-preview-card,
+    .create-group-preview-card > svg,
+    .create-group-avatar,
+    .create-group-form .lui-input,
+    .create-group-form .lui-textarea,
+    .create-group-submit,
+    .create-group-submit-arrow {
+        transition: none;
+    }
+}
