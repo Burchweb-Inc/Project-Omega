@@ -1,0 +1,40 @@
+<main class="sso-consent-page" aria-labelledby="sso-consent-title">
+  <section class="sso-consent-card">
+    <header class="sso-consent-brand">
+      <a href="/" aria-label="LockIn home"><img src="/media/logo-text.png" alt="LockIn"></a>
+      <span>Single sign-on</span>
+    </header>
+
+    <% if (ssoError) { %>
+      <div class="auth-page-alert" role="alert"><i data-lucide="circle-alert"></i><span><%= ssoError %></span></div>
+      <p class="sso-consent-return"><a class="lui-button lui-button-secondary" href="/dashboard">Return to LockIn</a></p>
+    <% } else { %>
+      <p class="auth-page-kicker">LOCKIN SINGLE SIGN-ON</p>
+      <h1 id="sso-consent-title">Continue to <%= ssoClient.name %>?</h1>
+      <p class="auth-page-lead"><%= ssoClient.name %> wants to use your LockIn account. LockIn will share only the details listed below. Your password, tasks, and groups stay here.</p>
+
+      <dl class="sso-consent-details">
+        <div>
+          <dt>Signed in as</dt>
+          <dd><strong><%= user.name %></strong><span>@<%= user.username %></span></dd>
+        </div>
+        <div>
+          <dt>Returns to</dt>
+          <dd><code><%= redirectHost %></code></dd>
+        </div>
+        <div>
+          <dt>Shares</dt>
+          <dd><%= scopes.includes('profile') ? 'Name and username' : 'Account identifier only' %></dd>
+        </div>
+      </dl>
+
+      <form class="sso-consent-actions" action="/oauth/authorize" method="post">
+        <input type="hidden" name="request_id" value="<%= authorizationRequest.id %>">
+        <button class="lui-button lui-button-primary" type="submit" name="decision" value="allow"><i data-lucide="shield-check"></i> Allow <%= ssoClient.name %></button>
+        <button class="lui-button lui-button-secondary" type="submit" name="decision" value="deny">Cancel</button>
+      </form>
+
+      <p class="sso-consent-note"><i data-lucide="lock-keyhole"></i> Only continue if you started this sign-in from <%= ssoClient.name %>.</p>
+    <% } %>
+  </section>
+</main>

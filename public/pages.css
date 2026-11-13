@@ -1301,3 +1301,32 @@
     .render-gate-card { padding: 18px; }
     .transient-banner { top: 12px; right: 12px; }
 }
+
+.sso-consent-page { min-height: 100vh; display: grid; place-items: center; padding: 32px 18px; background: var(--paper, #f4f7fa); }
+.sso-consent-card { width: min(100%, 540px); display: grid; gap: 18px; padding: clamp(22px, 5vw, 38px); border: 1px solid var(--line); border-radius: 18px; background: var(--white); box-shadow: var(--shadow); }
+.sso-consent-brand { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.sso-consent-brand img { width: min(180px, 50vw); height: auto; }
+.sso-consent-brand span { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.sso-consent-card h1 { margin: 0; font-size: clamp(28px, 5vw, 40px); line-height: 1.05; }
+.sso-consent-card .auth-page-lead { margin: 0; color: var(--ink-soft); line-height: 1.6; }
+.sso-consent-details { display: grid; gap: 0; margin: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; }
+.sso-consent-details > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.sso-consent-details > div:last-child { border-bottom: 0; }
+.sso-consent-details dt { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.sso-consent-details dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0; }
+.sso-consent-details dd span { color: var(--muted); }
+.sso-consent-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.sso-consent-actions .lui-button-primary { flex: 1 1 220px; }
+.sso-consent-note { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.sso-secret-page { max-width: 900px; }
+.sso-secret-panel { display: grid; gap: 18px; }
+.sso-secret-value { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper, #f6f8fb); }
+.sso-secret-value code { overflow-wrap: anywhere; font-size: 13px; }
+.sso-secret-redirects h2 { margin-bottom: 8px; font-size: 20px; }
+.sso-secret-redirects ul { display: grid; gap: 6px; margin: 0; padding-left: 18px; }
+.sso-secret-page .form-success { margin: 0; }
+@media (max-width: 640px) {
+    .sso-consent-brand { align-items: flex-start; flex-direction: column; }
+    .sso-consent-details > div { grid-template-columns: 1fr; gap: 4px; }
+    .sso-secret-value { grid-template-columns: 1fr; }
+}

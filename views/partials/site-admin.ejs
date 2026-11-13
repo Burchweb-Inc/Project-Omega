@@ -28,6 +28,36 @@
   .build-id-form input { width: 100%; font-variant-numeric: tabular-nums; letter-spacing: .08em; }
   .build-id-result { margin-top: 20px; }
   .build-id-error { margin: 16px 0 0; color: var(--coral); }
+  .sso-developer-list { display: grid; gap: 16px; margin-top: 18px; }
+  .sso-client-card { display: grid; gap: 16px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--white); }
+  .sso-client-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .sso-client-head h3 { margin: 0 0 4px; }
+  .sso-client-head p { margin: 0; }
+  .sso-client-badge { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 5px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-soft); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .sso-credential { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+  .sso-credential > span, .sso-secret-value > span { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .sso-credential code, .sso-secret-value code, .sso-redirects code { min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
+  .sso-credential form { display: flex; justify-content: flex-end; }
+  .sso-redirects { display: grid; gap: 12px; padding-top: 4px; }
+  .sso-redirects h4 { margin: 0; }
+  .sso-redirects ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .sso-redirects li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+  .sso-redirect-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+  .sso-redirect-form label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
+  .sso-client-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .sso-client-foot small { color: var(--muted); }
+  .sso-client-empty { padding: 18px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); }
+  .sso-new-client { display: grid; gap: 14px; margin-top: 24px; }
+  .sso-new-client .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .sso-new-client label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
+  .sso-new-client input, .sso-new-client textarea { width: 100%; }
+  .sso-new-client textarea { min-height: 92px; resize: vertical; }
+  .sso-endpoints { margin-top: 18px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); }
+  .sso-endpoints summary { cursor: pointer; font-weight: 700; }
+  .sso-endpoints dl { display: grid; gap: 10px; margin: 14px 0 0; }
+  .sso-endpoints dt { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .sso-endpoints dd { margin: 3px 0 0; overflow-wrap: anywhere; }
+  @media (max-width: 700px) { .sso-client-head, .sso-client-foot { align-items: flex-start; flex-direction: column; } .sso-credential { grid-template-columns: 1fr; } .sso-credential form { justify-content: flex-start; } .sso-redirect-form, .sso-new-client .form-grid { grid-template-columns: 1fr; } }
   .user-management-list { display: grid; gap: 14px; }
   .user-management-card { padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); }
   .user-management-card h3 { margin: 0 0 14px; }
@@ -135,6 +165,65 @@
     </section>
     <section class="admin-panel announcement-history"><div class="admin-section-heading"><div><h2>Announcement history</h2><p class="muted">Previously broadcast announcements.</p></div></div><% if (announcements.length) { announcements.forEach(announcement => { %><article><h3><%= announcement.title %></h3><small><%= new Date(announcement.created_at).toLocaleString() %> · <%= announcement.media_type === 'none' ? 'No media' : announcement.media_type %></small></article><% }) } else { %><p class="muted">No announcements yet.</p><% } %></section>
   <% } else if (siteAdminTab === 'developers') { %>
+    <% const developerDraft = developerForm || { name: '', description: '', redirectUris: '' }; %>
+    <section class="admin-panel">
+      <div class="admin-section-heading"><div><h2>LockIn SSO</h2><p class="muted">Create OpenID Connect integrations for Burchweb apps. Each integration gets an issuer, a client ID, a one-time secret, and an exact list of approved redirect URLs.</p></div><a class="lui-link" href="#new-sso-client"><i data-lucide="plus"></i> New integration</a></div>
+      <% if (developerNotice) { %><div class="<%= developerNotice.tone === 'error' ? 'form-alert' : 'form-success' %>" role="<%= developerNotice.tone === 'error' ? 'alert' : 'status' %>"><i data-lucide="<%= developerNotice.tone === 'error' ? 'circle-alert' : 'circle-check' %>"></i> <span><%= developerNotice.message %></span></div><% } %>
+      <% if (developerError) { %><div class="form-alert" role="alert"><i data-lucide="circle-alert"></i> <span><%= developerError %></span></div><% } %>
+      <div class="sso-developer-list">
+        <% if (ssoClients.length) { ssoClients.forEach(client => { %>
+          <article class="sso-client-card">
+            <div class="sso-client-head">
+              <div><h3><%= client.name %></h3><p class="muted"><%= client.description || 'No description yet.' %></p></div>
+              <span class="sso-client-badge"><i data-lucide="key-round"></i> OAuth 2.0</span>
+            </div>
+            <div class="sso-credential">
+              <span>Client ID</span>
+              <code><%= client.clientId %></code>
+              <button class="lui-icon-button" type="button" data-copy-value="<%= client.clientId %>" aria-label="Copy client ID for <%= client.name %>"><i data-lucide="copy"></i></button>
+            </div>
+            <div class="sso-credential">
+              <span>Client secret</span>
+              <code>Hidden after creation</code>
+              <form action="/site-admin/developers/clients/<%= client.clientId %>/rotate-secret" method="post" data-confirm-message="Rotate the secret for <%= client.name %>? Existing codes and access tokens will stop working."><button class="lui-button lui-button-secondary" type="submit"><i data-lucide="refresh-cw"></i> Rotate secret</button></form>
+            </div>
+            <section class="sso-redirects" aria-labelledby="redirects-<%= client.clientId %>">
+              <h4 id="redirects-<%= client.clientId %>">Approved redirect URLs</h4>
+              <ul>
+                <% client.redirectUris.forEach((uri) => { %>
+                  <li><code><%= uri %></code><form action="/site-admin/developers/clients/<%= client.clientId %>/redirects/remove" method="post" data-confirm-message="Remove this approved redirect URL?"><input type="hidden" name="redirectUri" value="<%= uri %>"><button class="lui-icon-button" type="submit" aria-label="Remove <%= uri %>"><i data-lucide="x"></i></button></form></li>
+                <% }) %>
+              </ul>
+              <form class="sso-redirect-form" action="/site-admin/developers/clients/<%= client.clientId %>/redirects" method="post"><label>Add another approved URL<input type="url" name="redirectUri" placeholder="https://app.example.com/auth/callback" required></label><button class="lui-button lui-button-secondary" type="submit"><i data-lucide="check"></i> Approve URL</button></form>
+            </section>
+            <footer class="sso-client-foot">
+              <small>Created <%= new Date(client.createdAt).toLocaleDateString() %><% if (client.lastUsedAt) { %> · Last token issued <%= new Date(client.lastUsedAt).toLocaleString() %><% } else { %> · No tokens issued yet<% } %></small>
+              <form action="/site-admin/developers/clients/<%= client.clientId %>/delete" method="post" data-confirm-message="Delete <%= client.name %>? Apps using this integration will stop working."><button class="lui-link lui-link-danger" type="submit"><i data-lucide="trash-2"></i> Delete integration</button></form>
+            </footer>
+          </article>
+        <% }) } else { %>
+          <div class="sso-client-empty"><strong>No integrations yet.</strong><p>Create one below to get a client ID and secret.</p></div>
+        <% } %>
+      </div>
+      <form id="new-sso-client" class="admin-panel sso-new-client" action="/site-admin/developers/clients" method="post">
+        <div class="admin-section-heading"><div><h2>New integration</h2><p class="muted">Use the client secret only from a server. Redirect URLs are matched exactly, including any path or query string.</p></div></div>
+        <div class="form-grid"><label>Integration name<input name="name" maxlength="80" value="<%= developerDraft.name %>" placeholder="Burchweb Notes" required></label><label>Description <span class="muted">optional</span><input name="description" maxlength="300" value="<%= developerDraft.description %>" placeholder="What this app does"></label></div>
+        <label>Approved redirect URLs <span class="muted">one per line</span><textarea name="redirectUris" rows="4" placeholder="https://notes.burchweb.com/auth/lockin/callback" required><%= developerDraft.redirectUris %></textarea></label>
+        <p class="muted">HTTPS is required outside localhost. Add no more than 10 URLs.</p>
+        <div><button class="lui-button lui-button-primary" type="submit"><i data-lucide="key-round"></i> Create integration</button></div>
+      </form>
+      <details class="sso-endpoints">
+        <summary>Connection details</summary>
+        <dl>
+          <div><dt>Issuer</dt><dd><code><%= ssoIssuer %></code></dd></div>
+          <div><dt>Discovery</dt><dd><code><%= ssoIssuer %>/.well-known/openid-configuration</code></dd></div>
+          <div><dt>Authorization</dt><dd><code><%= ssoIssuer %>/oauth/authorize</code></dd></div>
+          <div><dt>Token</dt><dd><code><%= ssoIssuer %>/oauth/token</code></dd></div>
+          <div><dt>User info</dt><dd><code><%= ssoIssuer %>/oauth/userinfo</code></dd></div>
+          <div><dt>Supported scopes</dt><dd><code>openid profile</code>. PKCE with S256 is supported alongside client secrets.</dd></div>
+        </dl>
+      </details>
+    </section>
     <section class="admin-panel">
       <div class="admin-section-heading"><div><h2>Decrypt build</h2><p class="muted">Build IDs are generated when a development or production server starts. Enter a recorded ID to inspect its build details.</p></div></div>
       <div class="build-id-current" aria-label="Current server build">

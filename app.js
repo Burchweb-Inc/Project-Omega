@@ -5,7 +5,6 @@ const creators = require('./config/creators');
 const express = require('express');
 const http = require('http');
 const crypto = require('crypto');
-const fs = require('fs');
 const path = require('path');
 const packageInfo = require('./package.json');
 const { marked } = require('marked');
@@ -19,15 +18,39 @@ const { isSyncDue, isSyncSchedule, syncInterval } = require('./utils/task-sync-s
 const { taskSyncConfiguration } = require('./utils/task-sync-config');
 const sharedGroupUserIds = require('./utils/shared-group-users');
 const searchUsers = require('./utils/search-users');
+const { encrypt: encryptData, decrypt: decryptData } = require('./utils/task-encryption');
 const registerRenderGateRoutes = require('./beta-tests/routes');
 const registerThemeRoutes = require('./themes/routes');
+const registerSsoRoutes = require('./sso/routes');
+const createRequestProtection = require('./server/request-protection');
 
 const app = express();
+const trustProxy = String(process.env.TRUST_PROXY || '').trim();
+if (trustProxy) {
+  if (!/^[1-9]\d*$/.test(trustProxy)) throw new Error('TRUST_PROXY must be a positive integer hop count.');
+  app.set('trust proxy', Number(trustProxy));
+}
 const taskSyncConfig = taskSyncConfiguration(config);
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || '0.0.0.0';
 const serviceWorkerVersion = 'lockin-sw-20261004-1';
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
+const publicBaseUrl = (() => {
+  const value = String(process.env.PUBLIC_URL || process.env.ORIGIN || '').trim();
+  if (!value) {
+    if (process.env.NODE_ENV === 'production') throw new Error('PUBLIC_URL is required in production.');
+    return '';
+  }
+  let parsed;
+  try { parsed = new URL(value); } catch (error) { throw new Error('PUBLIC_URL must be an absolute URL.'); }
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('PUBLIC_URL must use http or https.');
+  if (parsed.username || parsed.password || parsed.search || parsed.hash || (parsed.pathname !== '/' && parsed.pathname !== '')) {
+    throw new Error('PUBLIC_URL must be a bare origin without a path, query, or fragment.');
+  }
+  if (process.env.NODE_ENV === 'production' && parsed.protocol !== 'https:') throw new Error('PUBLIC_URL must use https in production.');
+  return parsed.origin;
+})();
+const oidcSigner = require('./sso/oidc')(dataDir);
 const db = require('./server/database')(dataDir);
 
 const userModel = require('./users/model')(db); // user table and functions to access it are imported here
@@ -37,6 +60,7 @@ const feedbackModel = require('./feedback/model')(db);
 const announcementModel = require('./announcements/model')(db);
 const badWordModel = require('./bad-words/model')(db);
 const themeModel = require('./themes/model')(db);
+const ssoModel = require('./sso/model')(db);
 
 userModel.init(); // creates and migrates the user table when needed
 orgModel.init();
@@ -45,6 +69,7 @@ badWordModel.init();
 announcementModel.init();
 betaGateAttemptModel.init();
 themeModel.init();
+ssoModel.init();
 
 const buildIdModel = require('./utils/build-id').initializeBuildIds(db, path.join(dataDir, '.build-id-key'));
 const buildInfo = buildIdModel.createBuild({
@@ -62,7 +87,16 @@ require('./server/configure-web')(app, {
   serviceWorkerVersion
 });
 
+app.use(createRequestProtection({
+  getOrigin: (request) => publicOrigin(request),
+  mutationLimit: process.env.MUTATION_RATE_LIMIT,
+  authLimit: process.env.AUTH_RATE_LIMIT,
+  windowMs: process.env.MUTATION_RATE_WINDOW_MS
+}));
+
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const sessions = new Map();
+const sessionExpiry = new Map();
 const snarkyTypePending = new Map();
 const snarkyTypeLinkRequests = new Map();
 const googleTasksOAuthStates = new Map();
@@ -72,37 +106,6 @@ const courseReorderWindows = new Map();
 const ipLocationCache = new Map();
 const breakoutPresence = new Map();
 const breakoutPingWindows = new Map();
-
-function loadTaskEncryptionKey() {
-  if (process.env.TASK_ENCRYPTION_KEY) {
-    const key = Buffer.from(process.env.TASK_ENCRYPTION_KEY, 'base64url');
-    if (key.length !== 32) throw new Error('TASK_ENCRYPTION_KEY must decode to exactly 32 bytes.');
-    return key;
-  }
-  const keyPath = path.join(dataDir, '.task-encryption-key');
-  if (!fs.existsSync(keyPath)) fs.writeFileSync(keyPath, crypto.randomBytes(32), { mode: 0o600 });
-  fs.chmodSync(keyPath, 0o600);
-  const key = fs.readFileSync(keyPath);
-  if (key.length !== 32) throw new Error(`${keyPath} must contain exactly 32 bytes.`);
-  return key;
-}
-
-const taskEncryptionKey = loadTaskEncryptionKey();
-
-function encryptData(value) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', taskEncryptionKey, iv);
-  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(value), 'utf8'), cipher.final()]);
-  return `v1:${iv.toString('base64url')}:${cipher.getAuthTag().toString('base64url')}:${ciphertext.toString('base64url')}`;
-}
-
-function decryptData(storedValue) {
-  if (!storedValue?.startsWith('v1:')) return JSON.parse(storedValue || 'null');
-  const [, encodedIv, encodedTag, encodedCiphertext] = storedValue.split(':');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', taskEncryptionKey, Buffer.from(encodedIv, 'base64url'));
-  decipher.setAuthTag(Buffer.from(encodedTag, 'base64url'));
-  return JSON.parse(Buffer.concat([decipher.update(Buffer.from(encodedCiphertext, 'base64url')), decipher.final()]).toString('utf8'));
-}
 
 async function syncUserTaskIntegrations(user, providers = ['googleTasks', 'appleReminders']) {
   if (!taskSyncConfig.enabled) return { busy: false, disabled: true, synced: [], errors: [] };
@@ -171,6 +174,25 @@ function saveOrg(org) {
 const users = userModel.all();
 if (userModel.needsEncryptionMigration()) userModel.persistState(users);
 
+function bootstrapFirstSiteAdmin() {
+  const username = String(process.env.BOOTSTRAP_ADMIN_USERNAME || '').trim().toLowerCase();
+  const password = String(process.env.BOOTSTRAP_ADMIN_PASSWORD || '');
+  if (!username && !password) return;
+  if (!username || !password) throw new Error('BOOTSTRAP_ADMIN_USERNAME and BOOTSTRAP_ADMIN_PASSWORD must be set together.');
+  if (!/^[a-z0-9_]{3,24}$/.test(username)) throw new Error('BOOTSTRAP_ADMIN_USERNAME must be 3 to 24 lowercase letters, numbers, or underscores.');
+  if (password.length < 12) throw new Error('BOOTSTRAP_ADMIN_PASSWORD must be at least 12 characters.');
+  const userCount = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
+  if (userCount > 0) {
+    console.warn('BOOTSTRAP_ADMIN_* is ignored because the database already contains users.');
+    return;
+  }
+  const name = String(process.env.BOOTSTRAP_ADMIN_NAME || 'Site Admin').trim().slice(0, 80) || 'Site Admin';
+  users.push({ id: id(), name, username, age: 18, passwordHash: passwordHash(password), isSiteAdmin: true, tasks: [], settings: {} });
+  persistState();
+  console.log(`Created the first site admin @${username}. Remove BOOTSTRAP_ADMIN_PASSWORD from the environment.`);
+}
+
+bootstrapFirstSiteAdmin();
 
 function id() { return crypto.randomBytes(4).toString('hex'); }
 function slug(value) { return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || id(); }
@@ -178,22 +200,41 @@ function secureSlug(value) { return `${slug(value).slice(0, 24)}-${crypto.random
 function parseCookies(request) {
   return Object.fromEntries((request.headers.cookie || '').split(';').filter(Boolean).map((part) => {
     const [key, ...value] = part.trim().split('=');
-    return [key, decodeURIComponent(value.join('='))];
+    let decoded = '';
+    try {
+      decoded = decodeURIComponent(value.join('='));
+    } catch (error) {
+      decoded = '';
+    }
+    return [key, decoded];
   }));
 }
+function secureCookieSuffix() {
+  return process.env.NODE_ENV === 'production' || publicBaseUrl.startsWith('https:') ? '; Secure' : '';
+}
 function setSession(response, userId) {
-  const token = id() + id();
+  const token = crypto.randomBytes(32).toString('base64url');
   sessions.set(token, userId);
-  response.setHeader('Set-Cookie', `session=${token}; HttpOnly; Path=/; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+  sessionExpiry.set(token, Date.now() + SESSION_TTL_MS);
+  response.setHeader('Set-Cookie', `session=${token}; HttpOnly; Path=/; SameSite=Lax${secureCookieSuffix()}`);
+}
+function clearSession(token) {
+  sessions.delete(token);
+  sessionExpiry.delete(token);
 }
 function passwordHash(password, salt = crypto.randomBytes(16).toString('hex')) {
   return `${salt}:${crypto.scryptSync(password, salt, 64).toString('hex')}`;
 }
 function passwordMatches(password, storedHash) {
-  if (!storedHash) return false;
+  if (typeof storedHash !== 'string') return false;
   const [salt, expected] = storedHash.split(':');
-  const actual = crypto.scryptSync(password, salt, 64).toString('hex');
-  return crypto.timingSafeEqual(Buffer.from(actual, 'hex'), Buffer.from(expected, 'hex'));
+  if (!salt || !expected || !/^[a-f0-9]{128}$/i.test(expected)) return false;
+  try {
+    const actual = crypto.scryptSync(String(password || ''), salt, 64);
+    return crypto.timingSafeEqual(actual, Buffer.from(expected, 'hex'));
+  } catch (error) {
+    return false;
+  }
 }
 function loginAllowed(request) {
   const key = request.ip || 'local'; const now = Date.now(); const attempts = (loginAttempts.get(key) || []).filter((time) => now - time < 10 * 60 * 1000);
@@ -203,7 +244,13 @@ function recordLoginFailure(request) {
   const key = request.ip || 'local'; loginAttempts.set(key, [...(loginAttempts.get(key) || []), Date.now()]);
 }
 function currentUser(request) {
-  const userId = sessions.get(parseCookies(request).session);
+  const token = parseCookies(request).session;
+  const expiresAt = sessionExpiry.get(token);
+  if (!token || !expiresAt || expiresAt <= Date.now()) {
+    if (token) clearSession(token);
+    return null;
+  }
+  const userId = sessions.get(token);
   return users.find((user) => user.id === userId);
 }
 function snarkyTypeConfigured() {
@@ -213,8 +260,7 @@ function snarkyTypeIdentity(user) {
   return user?.settings?.snarkyType || null;
 }
 function snarkyTypeCallbackUrl(request, state = '') {
-  const origin = process.env.PUBLIC_URL || `${request.protocol}://${request.get('host')}`;
-  const callback = new URL('/auth/snarkytype/callback', origin);
+  const callback = new URL('/auth/snarkytype/callback', publicOrigin(request));
   if (state) callback.searchParams.set('state', state);
   return callback.toString();
 }
@@ -408,7 +454,13 @@ function refreshModerationStatus(user) {
   return user?.moderationStatus || 'active';
 }
 function safeReturnTo(value) {
-  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') ? value : '/dashboard';
+  return typeof value === 'string'
+    && value.startsWith('/')
+    && !value.startsWith('//')
+    && !value.includes('\\')
+    && !/[\u0000-\u001f\u007f]/.test(value)
+    ? value
+    : '/dashboard';
 }
 function authRedirect(path, error, next) {
   const params = new URLSearchParams();
@@ -425,7 +477,10 @@ function requireUser(request, response, next) {
 }
 function membership(org, user) { return org && user ? org.members.find((member) => member.userId === user.id) : null; }
 function pendingInvite(org, user) { return org && user ? (org.pendingInvites || []).find((invite) => invite.userId === user.id) : null; }
-function canonicalUrl(request) { return `${process.env.PUBLIC_URL || 'https://lockedin.burchweb.com'}${request.path}`; }
+function canonicalUrl(request) { return `${publicOrigin(request)}${request.path}`; }
+function publicOrigin(request) {
+  return (publicBaseUrl || `${request.protocol}://${request.get('host')}`).replace(/\/+$/, '');
+}
 function escapeHtmlServer(value) { return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character])); }
 function trimmedLinkLabel(url) { try { const parsed = new URL(url); return `${parsed.hostname.replace(/^www\./i, '')}${parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/$/, '')}`; } catch (error) { return String(url).replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[?#]/)[0].replace(/\/$/, ''); } }
 function renderLinkedText(text, links = []) {
@@ -488,9 +543,33 @@ function siteAdminPageData(request) {
     buildInfo,
     buildIdInput: '',
     buildDecodeResult: null,
-    buildDecodeError: ''
+    buildDecodeError: '',
+    ssoClients: ssoModel.all(),
+    ssoIssuer: publicOrigin(request),
+    developerNotice: {
+      'redirect-added': { tone: 'success', message: 'Redirect URL approved.' },
+      'redirect-removed': { tone: 'success', message: 'Redirect URL removed.' },
+      'integration-deleted': { tone: 'success', message: 'Integration deleted.' },
+      'integration-missing': { tone: 'error', message: 'That integration no longer exists.' },
+      'redirect-invalid': { tone: 'error', message: 'Enter a valid HTTPS redirect URL. HTTP is allowed only for localhost.' },
+      'redirect-last': { tone: 'error', message: 'Keep at least one approved redirect URL. Delete the integration instead.' }
+    }[request.query.notice] || null,
+    developerError: '',
+    developerForm: null
   };
 }
+registerSsoRoutes({
+  app,
+  ssoModel,
+  oidcSigner,
+  users,
+  publicOrigin,
+  requireUser,
+  requireSiteAdmin,
+  render,
+  sendMutation,
+  parseCookies
+});
 function renderAnnouncementMarkdown(markdown) {
   const rendered = marked.parse(String(markdown || ''), { breaks: true, gfm: true });
   return sanitizeHtml(rendered, {
@@ -606,7 +685,6 @@ app.get('/auth/snarkytype/callback', async (request, response) => {
     const linkRequest = stateLinkRequest || takeSnarkyTypeLink(linkId);
     const linkUser = linkRequest && users.find((user) => user.id === linkRequest.userId);
     const linkNext = linkRequest?.next || next;
-    const activeUser = currentUser(request);
     if (mode === 'link' && linkUser) {
       if (linkedUser && linkedUser.id !== linkUser.id) return response.redirect('/settings?error=snarkytype-linked');
       linkUser.settings = { ...(linkUser.settings || {}), snarkyType: profile };
@@ -619,7 +697,7 @@ app.get('/auth/snarkytype/callback', async (request, response) => {
       return response.redirect(next);
     }
     const pendingId = rememberSnarkyTypePending(profile, mode, next);
-    response.setHeader('Set-Cookie', `snarky_pending=${pendingId}; HttpOnly; Path=/; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+    response.setHeader('Set-Cookie', `snarky_pending=${pendingId}; HttpOnly; Path=/; SameSite=Lax${secureCookieSuffix()}`);
     return response.redirect(`/signup?snarky=1&next=${encodeURIComponent(next)}`);
   } catch (error) {
     console.error('SnarkyType authentication failed', error.message);
@@ -641,7 +719,7 @@ app.post('/signup', (request, response) => {
   const next = safeReturnTo(request.body.next);
   if (!name || !username || !password || password.length < 8 || !age || Number(age) < 13 || users.some((user) => user.username === username.trim().toLowerCase())) return response.redirect(authRedirect('/signup', 'signup', next));
   const normalizedUsername = username.trim().toLowerCase();
-  const user = { id: id(), name: name.trim(), username: normalizedUsername, age: Number(age), passwordHash: passwordHash(password), isSiteAdmin: normalizedUsername === 'admin', tasks: [], settings: {} };
+  const user = { id: id(), name: name.trim(), username: normalizedUsername, age: Number(age), passwordHash: passwordHash(password), isSiteAdmin: process.env.NODE_ENV === 'development' && normalizedUsername === 'admin', tasks: [], settings: {} };
   users.push(user); persistState(); setSession(response, user.id); response.redirect(next);
 });
 
@@ -668,8 +746,8 @@ app.post('/login', (request, response) => {
 });
 
 app.post('/logout', (request, response) => {
-  sessions.delete(parseCookies(request).session);
-  response.setHeader('Set-Cookie', 'session=; HttpOnly; Max-Age=0; Path=/'); response.redirect('/');
+  clearSession(parseCookies(request).session);
+  response.setHeader('Set-Cookie', `session=; HttpOnly; Max-Age=0; Path=/; SameSite=Lax${secureCookieSuffix()}`); response.redirect('/');
 });
 
 app.post('/notifications/:notificationId/read', requireUser, (request, response) => {
@@ -820,7 +898,7 @@ app.post('/site-admin/users/:id/update', requireUser, requireSiteAdmin, (request
   if (newPassword || moderationStatus !== 'active') {
     const currentToken = parseCookies(request).session;
     for (const [token, userId] of sessions) {
-      if (userId === target.id && (moderationStatus !== 'active' || token !== currentToken)) sessions.delete(token);
+      if (userId === target.id && (moderationStatus !== 'active' || token !== currentToken)) clearSession(token);
     }
   }
   return sendMutation(request, response, { successMessage: `@${target.username} was updated.`, redirectTo }, redirectTo);
@@ -851,7 +929,7 @@ app.post('/site-admin/users/:id/delete', requireUser, requireSiteAdmin, (request
   if (!deleted) {
     return sendMutation(request, response, { error: 'The user could not be deleted.' }, '/site-admin?tab=users');
   }
-  for (const [token, userId] of sessions) if (userId === target.id) sessions.delete(token);
+  for (const [token, userId] of sessions) if (userId === target.id) clearSession(token);
   users.splice(targetIndex, 1);
   return sendMutation(request, response, { successMessage: `@${target.username} was deleted.`, redirectTo: '/site-admin?tab=users' }, '/site-admin?tab=users');
 });
@@ -1063,8 +1141,8 @@ app.post('/settings/delete', requireUser, (request, response) => {
   const deletedUserId = request.user.id;
   const orgs = orgModel.all();
   orgs.forEach((org) => { org.members = (org.members || []).filter((member) => member.userId !== deletedUserId); org.pendingInvites = (org.pendingInvites || []).filter((invite) => invite.userId !== deletedUserId); org.groups = (org.groups || []).filter((group) => group.createdBy !== deletedUserId).map((group) => ({ ...group, members: (group.members || []).filter((memberId) => memberId !== deletedUserId) })); saveOrg(org); });
-  for (const [token, userId] of sessions) if (userId === deletedUserId) sessions.delete(token);
-  users.splice(users.findIndex((user) => user.id === deletedUserId), 1); persistState(); response.setHeader('Set-Cookie', 'session=; HttpOnly; Max-Age=0; Path=/'); return sendMutation(request, response, { deletedAccount: true, successMessage: 'Your account has been deleted.' }, '/');
+  for (const [token, userId] of sessions) if (userId === deletedUserId) clearSession(token);
+  users.splice(users.findIndex((user) => user.id === deletedUserId), 1); persistState(); response.setHeader('Set-Cookie', `session=; HttpOnly; Max-Age=0; Path=/; SameSite=Lax${secureCookieSuffix()}`); return sendMutation(request, response, { deletedAccount: true, successMessage: 'Your account has been deleted.' }, '/');
 });
 app.get('/todo', requireUser, async (request, response) => {
   const location = await userDateLocation(request.user, request);
@@ -1587,10 +1665,10 @@ app.post('/org/:id/members/:userId/repercussion', requireUser, async (request, r
     addNotification(target, { type: 'warning', title: `Conduct warning from ${org.name}`, message: message || 'An administrator has given you a conduct warning.' });
   } else if (action === 'suspension') {
     const days = Math.min(30, Math.max(1, Number(request.body.days) || 1)); target.moderationStatus = 'suspended'; target.moderationUntil = new Date(Date.now() + days * 86400000).toISOString(); target.moderationMessage = message || `Your access is suspended for ${days} day${days === 1 ? '' : 's'}.`; addNotification(target, { type: 'suspension', title: `Suspended from ${org.name}`, message: target.moderationMessage });
-    sessions.forEach((userId, token) => { if (userId === target.id) sessions.delete(token); });
+    sessions.forEach((userId, token) => { if (userId === target.id) clearSession(token); });
   } else if (action === 'ban') {
     target.moderationStatus = 'banned'; target.moderationUntil = ''; target.moderationMessage = message || 'Your access is permanently suspended until an administrator lifts the ban.'; addNotification(target, { type: 'ban', title: `Banned from ${org.name}`, message: target.moderationMessage });
-    sessions.forEach((userId, token) => { if (userId === target.id) sessions.delete(token); });
+    sessions.forEach((userId, token) => { if (userId === target.id) clearSession(token); });
   } else {
     target.moderationStatus = 'active'; target.moderationUntil = ''; target.moderationMessage = ''; addNotification(target, { type: 'unban', title: `Access restored to ${org.name}`, message: message || 'An administrator restored your access.' });
   }
@@ -1634,7 +1712,7 @@ app.post('/org/:id/admin/reports/:reportId/action', requireUser, async (request,
   if (['remove-moderate', 'warn', 'ban'].includes(action) && affectedUser && affectedUser.id !== request.user.id) {
     const days = Math.min(30, Math.max(1, Number(request.body.days) || 7));
     if (action === 'warn') addNotification(affectedUser, { type: 'warning', title: `Conduct warning from ${org.name}`, message });
-    else { affectedUser.moderationStatus = action === 'ban' ? 'banned' : 'suspended'; affectedUser.moderationUntil = action === 'ban' ? '' : new Date(Date.now() + days * 86400000).toISOString(); affectedUser.moderationMessage = message || (action === 'ban' ? 'Your access is permanently suspended until an administrator lifts the ban.' : `Your access is suspended for ${days} days after a content moderation action.`); addNotification(affectedUser, { type: action === 'ban' ? 'ban' : 'suspension', title: `Moderation action in ${org.name}`, message: affectedUser.moderationMessage }); sessions.forEach((userId, token) => { if (userId === affectedUser.id) sessions.delete(token); }); }
+    else { affectedUser.moderationStatus = action === 'ban' ? 'banned' : 'suspended'; affectedUser.moderationUntil = action === 'ban' ? '' : new Date(Date.now() + days * 86400000).toISOString(); affectedUser.moderationMessage = message || (action === 'ban' ? 'Your access is permanently suspended until an administrator lifts the ban.' : `Your access is suspended for ${days} days after a content moderation action.`); addNotification(affectedUser, { type: action === 'ban' ? 'ban' : 'suspension', title: `Moderation action in ${org.name}`, message: affectedUser.moderationMessage }); sessions.forEach((userId, token) => { if (userId === affectedUser.id) clearSession(token); }); }
   }
   report.status = 'closed'; report.action = action; report.actionBy = request.user.username; report.actionAt = new Date().toISOString(); saveOrg(org);
   emitOrg(org, 'org:moderation-updated', { orgId: org.id, reportId: report.id, commentId: report.contentId, action });
@@ -1678,6 +1756,12 @@ const taskSyncScheduler = setInterval(() => {
   });
 }, 15_000);
 taskSyncScheduler.unref();
+
+const sessionSweeper = setInterval(() => {
+  const now = Date.now();
+  for (const [token, expiresAt] of sessionExpiry) if (expiresAt <= now) clearSession(token);
+}, 60 * 60 * 1000);
+sessionSweeper.unref();
 
 server.listen(port, host, () => {
   const codespacesUrl = process.env.CODESPACES && process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN

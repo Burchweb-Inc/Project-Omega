@@ -1,41 +1,7 @@
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+const { decrypt, encrypt } = require('../utils/task-encryption');
 let taskEncryptionMigrationNeeded = false;
 
-function loadTaskEncryptionKey() {
-  if (process.env.TASK_ENCRYPTION_KEY) {
-    const key = Buffer.from(process.env.TASK_ENCRYPTION_KEY, 'base64url');
-    if (key.length !== 32) throw new Error('TASK_ENCRYPTION_KEY must decode to exactly 32 bytes.');
-    return key;
-  }
-  const keyPath = path.join(dataDir, '.task-encryption-key');
-  if (!fs.existsSync(keyPath)) fs.writeFileSync(keyPath, crypto.randomBytes(32), { mode: 0o600 });
-  fs.chmodSync(keyPath, 0o600);
-  const key = fs.readFileSync(keyPath);
-  if (key.length !== 32) throw new Error(`${keyPath} must contain exactly 32 bytes.`);
-  return key;
-}
-
-const taskEncryptionKey = loadTaskEncryptionKey();
-function encryptTasks(tasks) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', taskEncryptionKey, iv);
-  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(tasks || []), 'utf8'), cipher.final()]);
-  return `v1:${iv.toString('base64url')}:${cipher.getAuthTag().toString('base64url')}:${ciphertext.toString('base64url')}`;
-}
-
-function decryptTasks(storedTasks) {
-  if (!storedTasks?.startsWith('v1:')) return JSON.parse(storedTasks || '[]');
-  const [, encodedIv, encodedTag, encodedCiphertext] = storedTasks.split(':');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', taskEncryptionKey, Buffer.from(encodedIv, 'base64url'));
-  decipher.setAuthTag(Buffer.from(encodedTag, 'base64url'));
-  return JSON.parse(Buffer.concat([decipher.update(Buffer.from(encodedCiphertext, 'base64url')), decipher.final()]).toString('utf8'));
-}
-
 function normalizeTask(task, index = 0) { return { ...task, details: task.details || '', links: normalizeLinks(task.links), position: Number.isFinite(Number(task.position)) ? Number(task.position) : index, linked: task.sourceId ? task.linked !== false : false, importance: dueImportance(task.due) }; }
-//function normalizeUserTasks(user) { if (!user) return; user.tasks = (user.tasks || []).map(normalizeTask); }
 function normalizeLink(link) { const url = String(typeof link === 'string' ? link : link?.url || ''); let domain = url; try { domain = new URL(url).hostname; } catch (error) {} const fallbackImage = domain && domain !== url ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` : ''; return typeof link === 'string' ? { url, title: domain, description: '', image: fallbackImage, domain } : { url, title: link.title || domain, description: link.description || '', image: link.image || fallbackImage, domain: link.domain || domain }; }
 function normalizeLinks(links) { return (Array.isArray(links) ? links : []).filter((link) => link?.url).map(normalizeLink); }
 function dueImportance(due) {
@@ -57,8 +23,8 @@ function loadUsersFromDatabase(db) {
       username: row.username,
       age: Number(row.age),
       passwordHash: row.password_hash,
-      isSiteAdmin: Boolean(row.is_site_admin) || row.username === 'admin',
-      tasks: decryptTasks(row.tasks).map(normalizeTask),
+      isSiteAdmin: Boolean(row.is_site_admin) || (process.env.NODE_ENV === 'development' && row.username === 'admin'),
+      tasks: decrypt(row.tasks, []).map(normalizeTask),
       settings,
       notifications: JSON.parse(row.notifications || '[]'),
       moderationStatus: row.moderation_status || 'active',
@@ -127,7 +93,7 @@ function persistState(db, users) {
     age: Number(user.age),
     passwordHash: user.passwordHash,
     isSiteAdmin: user.isSiteAdmin ? 1 : 0,
-    tasks: encryptTasks(user.tasks),
+    tasks: encrypt(user.tasks || []),
     notifications: JSON.stringify(user.notifications || []),
     settings: JSON.stringify(user.settings || {}),
     moderationStatus: user.moderationStatus || 'active',
@@ -158,7 +124,7 @@ function updateUser(db, user) {
     age: Number(user.age),
     passwordHash: user.passwordHash,
     isSiteAdmin: user.isSiteAdmin ? 1 : 0,
-    tasks: encryptTasks(user.tasks),
+    tasks: encrypt(user.tasks || []),
     notifications: JSON.stringify(user.notifications || []),
     settings: JSON.stringify(user.settings || {}),
     moderationStatus: user.moderationStatus || 'active',

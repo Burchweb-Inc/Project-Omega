@@ -580,3 +580,44 @@ function bindLockUiGallery() {
     button.addEventListener('click', () => showLockUiStatus('Demo only. The real action opens the copy-task dialog.'));
   });
 }
+
+function bindCopyButtons(scope = document) {
+  scope.querySelectorAll('[data-copy-value]').forEach((button) => {
+    if (button.dataset.copyBound === 'true') return;
+    button.dataset.copyBound = 'true';
+    button.addEventListener('click', async () => {
+      const value = button.dataset.copyValue || '';
+      const original = button.innerHTML;
+      try {
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
+        else {
+          const field = document.createElement('textarea');
+          field.value = value;
+          field.setAttribute('readonly', '');
+          field.style.position = 'fixed';
+          field.style.opacity = '0';
+          document.body.appendChild(field);
+          field.select();
+          const copied = document.execCommand('copy');
+          field.remove();
+          if (!copied) throw new Error('Clipboard access is unavailable.');
+        }
+        button.textContent = 'Copied';
+        window.setTimeout(() => { button.innerHTML = original; lucide.createIcons(); }, 2000);
+      } catch (error) {
+        button.textContent = 'Select and copy';
+        window.setTimeout(() => { button.innerHTML = original; lucide.createIcons(); }, 2500);
+      }
+    });
+  });
+}
+
+function bindConfirmForms(scope = document) {
+  scope.querySelectorAll('form[data-confirm-message]:not([data-live-form])').forEach((form) => {
+    if (form.dataset.confirmBound === 'true') return;
+    form.dataset.confirmBound = 'true';
+    form.addEventListener('submit', (event) => {
+      if (!window.confirm(form.dataset.confirmMessage || 'Continue?')) event.preventDefault();
+    });
+  });
+}

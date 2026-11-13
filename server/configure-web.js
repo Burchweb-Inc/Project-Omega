@@ -3,6 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 function configureWeb(app, { rootDir, serviceWorkerVersion }) {
+  const configuredOrigin = process.env.PUBLIC_URL || process.env.ORIGIN || '';
+  const forceHttps = process.env.NODE_ENV === 'production' || /^https:/i.test(configuredOrigin);
   app.set('view engine', 'ejs');
   app.use(express.urlencoded({ extended: true }));
   app.disable('x-powered-by');
@@ -11,6 +13,7 @@ function configureWeb(app, { rootDir, serviceWorkerVersion }) {
     response.setHeader('X-Frame-Options', 'DENY');
     response.setHeader('Referrer-Policy', 'same-origin');
     response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    if (forceHttps) response.setHeader('Strict-Transport-Security', 'max-age=15552000');
     next();
   });
   app.get('/service-worker-version.json', (request, response) => {
