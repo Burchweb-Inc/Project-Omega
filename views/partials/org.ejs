@@ -6,7 +6,6 @@
                     <%= selectedOrg.name[0] %>
                 </span>
                 <div>
-                    <p class="eyebrow">GROUP</p>
                     <h1>
                         <%= selectedOrg.name %>
                     </h1>
@@ -30,8 +29,7 @@
             </span></a><a href="/org/<%= selectedOrg.id %>/admin/report">Report</a></div>
     <div class="panel-heading section-gap">
         <div>
-            <p class="eyebrow">COURSES IN THIS GROUP</p>
-            <h2>Each subject gets its own folder.</h2>
+            <h2>Courses</h2>
         </div>
         <% if (canEdit(member)) { %><a class="lui-link" href="/org/<%= selectedOrg.id %>/courses/new"><i
                     data-lucide="plus"></i> Add course</a>

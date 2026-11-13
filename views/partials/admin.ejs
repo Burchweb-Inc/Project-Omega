@@ -36,7 +36,7 @@
     </section>
   <% } else if (adminTab === 'settings') { %>
     <div class="group-settings-heading"><h2>Group settings</h2><p class="muted">Manage group details, assignment dates, and course tools.</p></div>
-    <% if (error === 'timezone') { %><p class="group-settings-error" role="alert">Choose a valid time zone before saving.</p><% } else if (error === 'policy') { %><p class="group-settings-error" role="alert">The group name or description could not be saved.</p><% } %>
+    <% if (error === 'timezone') { %><p class="group-settings-error" role="alert">Choose a valid time zone before saving.</p><% } else if (error === 'past-time') { %><p class="group-settings-error" role="alert">Choose a valid time to move assignments to Past.</p><% } else if (error === 'policy') { %><p class="group-settings-error" role="alert">The group name or description could not be saved.</p><% } %>
     <form action="/org/<%= adminOrg.id || '' %>/admin/settings" method="post" class="group-settings-form">
       <section class="group-setting-block" aria-labelledby="group-details-heading">
         <div class="group-setting-intro"><h3 id="group-details-heading">Group details</h3><p class="muted">The name and description members see.</p></div>
@@ -52,6 +52,9 @@
           <label for="group-timezone-picker">Group time zone</label>
           <%- include('mini/timezone-select', { id: 'group-timezone-picker', name: 'timezone', value: adminOrg.timezone, timezones }) %>
           <p class="group-setting-help">What time zone should be used for this group?</p>
+          <label for="assignment-past-time">Time to move assignments to Past</label>
+          <input id="assignment-past-time" name="assignmentPastTime" type="time" value="<%= adminOrg.assignmentPastTime || '00:00' %>" required>
+          <p class="group-setting-help">Assignments move to Past on the day after their due date, at this time in the group time zone.</p>
           <label class="toggle-row"><span><strong>Automatically move assignments to Past</strong><small>Turn this off to keep assignments in Current until someone moves them.</small></span><input type="checkbox" name="autoMovePastAssignments" <%= adminOrg.autoMovePastAssignments !== false ? 'checked' : '' %>></label>
         </div>
       </section>
