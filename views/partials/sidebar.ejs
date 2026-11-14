@@ -31,8 +31,12 @@
           <% }) %>
             <a class="new-space" href="/group/new"><i data-lucide="plus"></i><span>New group</span></a>
     <div class="nav-label space-label">OTHER PRODUCTS</div>
-    <a class="nav-link <%= page === 'lockin-study-pre' ? 'selected' : '' %>" href="/products/lockin-study"><i
+    <a class="nav-link <%= page === 'lockin-study-pre' ? 'selected' : '' %>" id="lockin-study-link" href="/products/lockin-study"><i
         data-lucide="book-open-check"></i><span>LockIn Study</span></a>
+    <div class="study-nudge" id="lockin-study-nudge" data-lockin-study-nudge data-user-id="<%= user.id %>" role="status" aria-live="polite" hidden>
+      <span>The days of Quizlet are over. No ads, no payments. Coming soon.</span>
+      <button type="button" data-dismiss-study-nudge aria-label="Dismiss LockIn Study message"><i data-lucide="x" aria-hidden="true"></i></button>
+    </div>
   </nav>
   <div class="sidebar-foot">
     <small class="sidebar-version" title="Current server build ID" aria-label="Current server build ID <%= buildInfo.id %>">build <%= buildInfo.id %></small>

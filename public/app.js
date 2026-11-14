@@ -43,8 +43,37 @@ function bindCreateGroupForm() {
   updatePreview();
 }
 
+function bindLockInStudyNudge() {
+  const nudge = document.querySelector('[data-lockin-study-nudge]');
+  if (!nudge) return;
+
+  const link = document.getElementById('lockin-study-link');
+  const dismiss = () => {
+    nudge.hidden = true;
+    link?.removeAttribute('aria-describedby');
+  };
+  const storageKey = `lockin-study-nudge-seen-${nudge.dataset.userId || 'user'}`;
+
+  try {
+    if (localStorage.getItem(storageKey) === 'true') {
+      nudge.remove();
+      return;
+    }
+    localStorage.setItem(storageKey, 'true');
+  } catch (error) {
+    console.warn('[LockIn] Could not save LockIn Study nudge preference.', error);
+  }
+
+  nudge.hidden = false;
+  link?.setAttribute('aria-describedby', nudge.id);
+  nudge.querySelector('[data-dismiss-study-nudge]')?.addEventListener('click', dismiss);
+  link?.addEventListener('click', dismiss);
+  window.setTimeout(dismiss, 8000);
+}
+
 function bindInteractions() {
   bindCreateGroupForm();
+  bindLockInStudyNudge();
   bindLockUiComponentDecoration();
   bindTransientBanners();
   bindSidebarToggle();
