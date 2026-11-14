@@ -111,7 +111,7 @@
 .sidebar-toggle:hover { transform: scale(1.04); }
 .sidebar-toggle svg { transition: transform .24s cubic-bezier(.2,.8,.2,1); }
 .nav-label, .nav-link, .space-link, .new-space, .user-chip, .sidebar-version, .beta-badge { transition: opacity .2s ease, color .18s ease, background-color .18s ease; }
-.nav-label { max-height: 40px; overflow: hidden; transition: max-height .42s cubic-bezier(.16,1,.3,1), padding .42s cubic-bezier(.16,1,.3,1), margin .42s cubic-bezier(.16,1,.3,1), opacity .24s ease; }
+.nav-label { max-height: 40px; overflow: visible; transition: max-height .42s cubic-bezier(.16,1,.3,1), padding .42s cubic-bezier(.16,1,.3,1), margin .42s cubic-bezier(.16,1,.3,1), opacity .24s ease; }
 .nav-link, .space-link, .new-space { overflow: hidden; white-space: nowrap; transition: gap .42s cubic-bezier(.16,1,.3,1), padding .42s cubic-bezier(.16,1,.3,1), opacity .3s ease, color .18s ease, background-color .18s ease; }
 .nav-link span, .space-link > span:last-child, .new-space span, .user-chip > div { min-width: 0; max-width: 220px; overflow: hidden; transition: max-width .42s cubic-bezier(.16,1,.3,1), opacity .24s ease, transform .42s cubic-bezier(.16,1,.3,1); }
 .sidebar-backdrop { display: none; }
