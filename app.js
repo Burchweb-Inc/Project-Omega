@@ -30,7 +30,7 @@ app.use(pino);
 const taskSyncConfig = taskSyncConfiguration(config);
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || '0.0.0.0';
-const serviceWorkerVersion = 'lockin-sw-20261004-1';
+const serviceWorkerVersion = 'lockin-sw-20261113-3';
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const db = require('./server/database')(dataDir);
 

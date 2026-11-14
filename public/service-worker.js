@@ -1,15 +1,24 @@
-const STATIC_CACHE = 'lockin-static-v6';
+const STATIC_CACHE = 'lockin-static-v9';
 const OFFLINE_CACHE = 'lockin-offline-media-v5';
 const CORE_ASSETS = ['/offline.html', '/media/logo.png'];
 
 async function cacheCoreAssets() {
   const cache = await caches.open(STATIC_CACHE);
-  await Promise.all(CORE_ASSETS.map(async (asset) => {
-    const response = await fetch(asset, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`Could not cache ${asset}: ${response.status}`);
-    await cache.put(asset, response);
-  }));
+  const offlineResponse = await fetch(CORE_ASSETS[0], { cache: 'no-store' });
+  if (!offlineResponse.ok) throw new Error(`Could not cache ${CORE_ASSETS[0]}: ${offlineResponse.status}`);
+  await cache.put(CORE_ASSETS[0], offlineResponse);
+
+  const logoResponse = await fetch(CORE_ASSETS[1], { cache: 'no-store' });
+  if (logoResponse.ok) await cache.put(CORE_ASSETS[1], logoResponse);
+  else console.warn(`[LockIn SW] Could not cache ${CORE_ASSETS[1]}: ${logoResponse.status}`);
+
   console.info('[LockIn SW] Core assets cached', CORE_ASSETS);
+}
+
+async function offlineResponse() {
+  const cache = await caches.open(STATIC_CACHE);
+  return await cache.match('/offline.html')
+    || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
 }
 
 async function cacheOfflineMedia() {
@@ -71,10 +80,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (url.pathname === '/media/logo.png') {
+    event.respondWith((async () => {
+      const cache = await caches.open(STATIC_CACHE);
+      const cached = await cache.match(CORE_ASSETS[1]);
+      if (cached) return cached;
+
+      const response = await fetch(request);
+      if (response.ok) await cache.put(CORE_ASSETS[1], response.clone());
+      return response;
+    })());
+    return;
+  }
+
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).catch(async () => {
-      const offline = await caches.match('/offline.html');
-      return offline || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
-    }));
+    event.respondWith(fetch(request).then((response) => {
+      return response.status >= 500 ? offlineResponse() : response;
+    }).catch(offlineResponse));
   }
 });

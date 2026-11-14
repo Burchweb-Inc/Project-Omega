@@ -18,11 +18,31 @@
   </style>
 </head>
 <body>
-  <main>
-    <img src="/media/offline/logo.png" alt="LockIn">
-    <h1>You are offline.</h1>
-    <p>We couldn't connect you to our servers. Please check your internet connection, then retry.</p>
+  <main aria-live="polite">
+    <img src="/media/logo.png" alt="LockIn">
+    <h1 id="status-title">You are offline.</h1>
+    <p id="status-message">We couldn't connect you to our servers. Please check your internet connection, then retry.</p>
     <a href="/">Try again</a>
   </main>
+  <script>
+    const statusTitle = document.getElementById('status-title');
+    const statusMessage = document.getElementById('status-message');
+
+    function updateConnectionStatus() {
+      if (navigator.onLine) {
+        document.title = 'LockIn | Server issue';
+        statusTitle.textContent = 'Server issue.';
+        statusMessage.textContent = "Your internet connection is available, but we couldn't reach LockIn. Please try again in a moment.";
+      } else {
+        document.title = 'LockIn | Offline';
+        statusTitle.textContent = 'You are offline.';
+        statusMessage.textContent = "We couldn't connect you to our servers. Please check your internet connection, then retry.";
+      }
+    }
+
+    updateConnectionStatus();
+    window.addEventListener('online', () => window.location.reload());
+    window.addEventListener('offline', updateConnectionStatus);
+  </script>
 </body>
 </html>
