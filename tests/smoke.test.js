@@ -13,6 +13,8 @@ const client = ['js/shared-ui.js', 'js/course.js', 'js/todo.js', 'js/live-ui.js'
   .map((file) => fs.readFileSync(path.join(__dirname, '..', 'public', file), 'utf8'))
   .join('\n');
 const sharedUi = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'shared-ui.js'), 'utf8');
+const sidebar = fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'sidebar.ejs'), 'utf8');
+const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
 const lockUiStyles = fs.readFileSync(path.join(__dirname, '..', 'public', 'lockui.css'), 'utf8');
 const pagesStyles = fs.readFileSync(path.join(__dirname, '..', 'public', 'pages.css'), 'utf8');
 
@@ -22,6 +24,9 @@ assert.match(index, /socket\.io\/socket\.io\.js[\s\S]*js\/shared-ui\.js[\s\S]*js
 assert.match(sharedUi, /querySelector\('i, svg'\)[\s\S]*icon\.replaceWith\(placeholder\)/, 'Sidebar toggles should replace rendered Lucide SVGs when changing icons.');
 assert.match(sharedUi, /element\.animate\(\[[\s\S]*offsetX/, 'Desktop sidebar contents should animate between layouts.');
 assert.match(sharedUi, /prefers-reduced-motion:\s*reduce/, 'Sidebar layout animation should respect reduced-motion preferences.');
+assert.match(sidebar, /data-lockin-study-nudge[\s\S]*role="status"[\s\S]*hidden/, 'The LockIn Study nudge should be accessible and initially hidden.');
+assert.match(client, /lockin-study-nudge-seen-/, 'The LockIn Study nudge should persist its first display in local storage.');
+assert.match(styles, /\.study-nudge\[hidden\]\s*\{\s*display:\s*none/, 'The hidden nudge should stay hidden despite its visible flex styling.');
 assert.match(lockUiStyles, /grid-template-columns \.54s cubic-bezier/, 'The sidebar grid should use a smooth, eased width transition.');
 assert.match(lockUiStyles, /\.sidebar \{ z-index: 6; min-width: 0; overflow: visible;/, 'The desktop sidebar should allow its account menu to extend beyond the collapsed rail.');
 assert.match(lockUiStyles, /\.sidebar-collapsed \.nav-link, \.sidebar-collapsed \.space-link, \.sidebar-collapsed \.new-space \{ justify-content: center; gap: 0; padding-right: 0; padding-left: 0;/, 'Collapsed navigation icons should remain centered in their links.');

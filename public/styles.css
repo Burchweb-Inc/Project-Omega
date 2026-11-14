@@ -183,6 +183,52 @@ select {
     width: 16px
 }
 
+.study-nudge {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0 5px 3px 12px;
+    padding: 9px 10px;
+    border-left: 2px solid var(--coral);
+    border-radius: 0 7px 7px 0;
+    background: rgba(255, 255, 255, .09);
+    color: #e5eef4;
+    font-size: 11px;
+    line-height: 1.45
+}
+
+.study-nudge[hidden] {
+    display: none
+}
+
+.study-nudge[hidden] {
+    display: none
+}
+
+.study-nudge button {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer
+}
+
+.study-nudge button:hover {
+    background: rgba(255, 255, 255, .13)
+}
+
+.study-nudge button svg {
+    width: 13px;
+    height: 13px
+}
+
 .site-admin-link {
     color: #f3d28b;
 }
