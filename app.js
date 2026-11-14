@@ -663,6 +663,7 @@ app.get('/terms', (request, response) => renderPublicPage(request, response, 'te
 app.get('/understand', (request, response) => renderPublicPage(request, response, 'understand'));
 app.get('/beta', (request, response) => renderPublicPage(request, response, 'beta'));
 app.get('/dev/lockui', (request, response) => renderPublicPage(request, response, 'lockui'));
+app.get('/products/lockin-study', requireUser, (request, response) => render(request, response, 'lockin-study-pre'));
 
 app.post('/signup', (request, response) => {
   const { name, username, password, age } = request.body;

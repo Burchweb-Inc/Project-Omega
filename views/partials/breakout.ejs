@@ -1,9 +1,9 @@
 <section class="content-wrap space-page breakout-page" data-breakout-live data-org-id="<%= selectedOrg.id %>" data-group-id="<%= group.id %>" data-user-id="<%= user.id %>" data-group-admin="<%= groupAdmin %>" data-members="<%= JSON.stringify(group.members.map(memberId => { const member = users.find(userRecord => userRecord.id === memberId) || { name: 'Member', username: 'member' }; return { id: memberId, name: member.name, username: member.username, role: group.roles?.[memberId] || 'Member' }; })) %>">
   <a class="back-link" href="/org/<%= selectedOrg.id %>/course/<%= group.courseId %>/task/<%= group.taskSlug %>/breakout-groups"><i data-lucide="arrow-left"></i> All breakout groups</a>
-  <div class="page-heading hero-heading"><div><p class="eyebrow">BREAKOUT GROUP</p><h1><%= group.name %></h1><p class="lead"><%= groupItem?.title || group.courseName %> · <%= group.members.length %>/<%= group.limit %> people</p></div><aside class="breakout-presence" data-breakout-presence aria-label="Group presence"><div class="presence-heading"><span><i data-lucide="radio"></i> In this space</span><small data-presence-summary>Connecting...</small></div><div class="presence-list" data-presence-list></div></aside></div>
+  <div class="page-heading hero-heading"><div><h1><%= group.name %></h1><p class="lead"><%= groupItem?.title || group.courseName %> · <%= group.members.length %>/<%= group.limit %> people</p></div><aside class="breakout-presence" data-breakout-presence aria-label="Group presence"><div class="presence-heading"><span><i data-lucide="radio"></i> In this space</span><small data-presence-summary>Connecting...</small></div><div class="presence-list" data-presence-list></div></aside></div>
   <div class="breakout-grid">
     <section class="rail-panel breakout-comments breakout-discussion">
-      <div class="panel-heading"><div><p class="eyebrow">GROUP FORUM</p><h2>Discussion</h2></div><span class="muted"><%= (group.comments || []).filter(comment => !comment.parentId && !comment.reported).length %> threads</span></div>
+      <div class="panel-heading"><div><h2>Discussion</h2></div><span class="muted"><%= (group.comments || []).filter(comment => !comment.parentId && !comment.reported).length %> threads</span></div>
       <div class="comment-list" data-breakout-comment-list>
         <% (group.comments || []).filter(comment => !comment.parentId && !comment.reported).forEach(comment => { %>
           <div class="comment-thread" data-comment-id="<%= comment.id %>">
@@ -16,7 +16,7 @@
     </section>
     <aside class="breakout-side">
       <section class="rail-panel breakout-board">
-        <div class="panel-heading"><div><p class="eyebrow">SHARED BOARD</p><h2>Tasks</h2></div><span class="progress-ring"><%= (group.tasks || []).length %></span></div>
+        <div class="panel-heading"><div><h2>Tasks</h2></div><span class="progress-ring"><%= (group.tasks || []).length %></span></div>
         <% if (groupMember) { %><form class="inline-tool-form task-add-form" data-live-form action="/org/<%= selectedOrg.id %>/breakout/<%= group.id %>/tasks" method="post"><input name="title" placeholder="Add a shared task" required><button class="lui-button lui-button-secondary" type="submit">Add task</button></form><% } %>
         <div class="breakout-task-list" data-breakout-task-list>
           <% (group.tasks || []).forEach(task => { const claimedUser = users.find(userRecord => userRecord.id === task.claimedBy) || { name: 'a member' }; %>
