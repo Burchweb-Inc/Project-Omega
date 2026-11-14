@@ -27,6 +27,7 @@ assert.match(sharedUi, /prefers-reduced-motion:\s*reduce/, 'Sidebar layout anima
 assert.match(sidebar, /data-lockin-study-nudge[\s\S]*role="status"[\s\S]*hidden/, 'The LockIn Study nudge should be accessible and initially hidden.');
 assert.match(client, /lockin-study-nudge-seen-/, 'The LockIn Study nudge should persist its first display in local storage.');
 assert.match(styles, /\.study-nudge\[hidden\]\s*\{\s*display:\s*none/, 'The hidden nudge should stay hidden despite its visible flex styling.');
+assert.match(styles, /\.nav-label\s*\{[^}]*line-height:\s*1\.5/, 'Sidebar section labels should use an explicit line-height to prevent glyph clipping across font renderers.');
 assert.match(lockUiStyles, /grid-template-columns \.54s cubic-bezier/, 'The sidebar grid should use a smooth, eased width transition.');
 assert.match(lockUiStyles, /\.sidebar \{ z-index: 6; min-width: 0; overflow: visible;/, 'The desktop sidebar should allow its account menu to extend beyond the collapsed rail.');
 assert.match(lockUiStyles, /\.sidebar-collapsed \.nav-link, \.sidebar-collapsed \.space-link, \.sidebar-collapsed \.new-space \{ justify-content: center; gap: 0; padding-right: 0; padding-left: 0;/, 'Collapsed navigation icons should remain centered in their links.');
