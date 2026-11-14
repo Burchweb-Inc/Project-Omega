@@ -11,7 +11,7 @@
     <% } else { %>
       <p class="auth-page-kicker">LOCKIN SINGLE SIGN-ON</p>
       <h1 id="sso-consent-title">Continue to <%= ssoClient.name %>?</h1>
-      <p class="auth-page-lead"><%= ssoClient.name %> wants to use your LockIn account. LockIn will share only the details listed below. Your password, tasks, and groups stay here.</p>
+      <p class="auth-page-lead"><%= ssoClient.name %> wants to use your LockIn account. LockIn will share only the details listed below. Your password and workspace content stay here.</p>
 
       <dl class="sso-consent-details">
         <div>
@@ -24,7 +24,7 @@
         </div>
         <div>
           <dt>Shares</dt>
-          <dd><%= scopes.includes('profile') ? 'Name and username' : 'Account identifier only' %></dd>
+          <dd><%= [scopes.includes('profile') ? 'Name and username' : 'Account identifier only', scopes.includes('groups') ? 'Groups you belong to and their members' : ''].filter(Boolean).join('; ') %></dd>
         </div>
       </dl>
 

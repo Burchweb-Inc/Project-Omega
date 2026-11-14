@@ -19,6 +19,24 @@ test('renders ordinary auth pages without a theme preview local', async () => {
   assert.match(html, /if \('serviceWorker' in navigator && !false\)/);
 });
 
+test('renders the SSO consent form with a same-origin action URL', async () => {
+  const html = await ejs.renderFile('views/index.ejs', {
+    page: 'sso-authorize',
+    view: 'sso-authorize',
+    user: { name: 'Student One', username: 'student1' },
+    selectedOrg: null,
+    canonicalUrl: 'http://localhost:3000/oauth/authorize',
+    ssoError: null,
+    ssoClient: { name: 'LockIn Study' },
+    authorizationRequest: { id: 'request-1' },
+    redirectHost: 'localhost:3200',
+    scopes: ['openid', 'profile'],
+    themePreview: null
+  });
+
+  assert.match(html, /<form class="sso-consent-actions" action="\/oauth\/authorize" method="post">/);
+});
+
 test('embeds authenticated preview CSS in the page for sandboxed theme previews', async () => {
   const html = await ejs.renderFile('views/index.ejs', {
     page: 'login',

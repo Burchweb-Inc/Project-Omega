@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
 const { once } = require('node:events');
+const http = require('node:http');
 const createRequestProtection = require('../server/request-protection');
 
 async function startServer(options = {}) {
@@ -13,6 +14,7 @@ async function startServer(options = {}) {
     ...options
   }));
   app.post('/save', (_request, response) => response.json({ saved: true }));
+  app.post('/oauth/authorize', (_request, response) => response.json({ authorized: true }));
   app.post('/login', (_request, response) => response.json({ signedIn: true }));
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -33,6 +35,25 @@ function post(baseUrl, path, headers = {}) {
   });
 }
 
+function rawPost(baseUrl, path, headers, body) {
+  return new Promise((resolve, reject) => {
+    const target = new URL(path, baseUrl);
+    const request = http.request(target, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Length': Buffer.byteLength(body) }
+    }, (response) => {
+      const chunks = [];
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.on('end', () => resolve({
+        status: response.statusCode,
+        body: Buffer.concat(chunks).toString('utf8')
+      }));
+    });
+    request.on('error', reject);
+    request.end(body);
+  });
+}
+
 test('unsafe requests require a same-origin browser context', async (context) => {
   const server = await startServer();
   context.after(server.close);
@@ -44,6 +65,20 @@ test('unsafe requests require a same-origin browser context', async (context) =>
   assert.equal((await post(server.baseUrl, '/save', { Cookie: 'session=test', Origin: 'https://evil.test' })).status, 403);
   assert.equal((await post(server.baseUrl, '/save', { Cookie: 'session=test', Referer: 'https://evil.test/settings' })).status, 403);
   assert.equal((await post(server.baseUrl, '/save', { Cookie: 'session=test', Origin: 'null' })).status, 403);
+  assert.equal((await post(server.baseUrl, '/oauth/authorize', {
+    Cookie: 'lockin_sso_request=request-1',
+    Origin: 'null',
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-Mode': 'navigate'
+  })).status, 403);
+  const consent = await rawPost(server.baseUrl, '/oauth/authorize', {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    Cookie: 'lockin_sso_request=request-1',
+    Origin: 'null',
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-Mode': 'navigate'
+  }, 'request_id=request-1');
+  assert.equal(consent.status, 200, consent.body);
   assert.equal((await post(server.baseUrl, '/save', { Cookie: 'session=test', 'Sec-Fetch-Site': 'cross-site' })).status, 403);
   assert.equal((await post(server.baseUrl, '/save', { Cookie: 'session=test', 'Sec-Fetch-Site': 'same-site' })).status, 403);
   assert.equal((await post(server.baseUrl, '/save', { Cookie: 'session=test', 'Sec-Fetch-Site': 'none' })).status, 200);

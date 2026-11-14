@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const http = require('node:http');
 const express = require('express');
 const Database = require('better-sqlite3');
 const createSsoModel = require('../sso/model');
@@ -22,6 +23,20 @@ function parseCookies(request) {
   }));
 }
 
+function rawPost(baseUrl, headers, body) {
+  return new Promise((resolve, reject) => {
+    const request = http.request(new URL('/oauth/authorize', baseUrl), {
+      method: 'POST',
+      headers: { ...headers, 'Content-Length': Buffer.byteLength(body) }
+    }, (response) => {
+      response.resume();
+      response.on('end', () => resolve(response));
+    });
+    request.on('error', reject);
+    request.end(body);
+  });
+}
+
 test('LockIn SSO completes an authorization code flow with PKCE and rotates secrets', async (context) => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lockin-oidc-'));
   const db = new Database(':memory:');
@@ -30,8 +45,17 @@ test('LockIn SSO completes an authorization code flow with PKCE and rotates secr
   const oidcSigner = createOidcSigner(dataDir);
   const users = [
     { id: 'user-1', name: 'Student One', username: 'student1' },
+    { id: 'user-2', name: 'Student Two', username: 'student2' },
     { id: 'admin-1', name: 'Site Admin', username: 'admin', isSiteAdmin: true }
   ];
+  const orgModel = {
+    copyCandidatesForUser: (userId) => userId === 'user-1' ? [{
+      id: 'group-1',
+      name: 'Biology study group',
+      description: 'Weekly review',
+      members: [{ userId: 'user-1', role: 'admin' }, { userId: 'user-2', role: 'viewer' }]
+    }] : []
+  };
   const app = express();
   app.use(express.urlencoded({ extended: true }));
   app.use((request, _response, next) => {
@@ -47,6 +71,7 @@ test('LockIn SSO completes an authorization code flow with PKCE and rotates secr
     ssoModel,
     oidcSigner,
     users,
+    orgModel,
     publicOrigin: () => 'https://issuer.test',
     requireUser,
     requireSiteAdmin,
@@ -80,16 +105,21 @@ test('LockIn SSO completes an authorization code flow with PKCE and rotates secr
   const verifier = 'verifier-value-that-is-long-enough-for-pkce-123';
   const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
 
-  const authorize = await request(`/oauth/authorize?client_id=${client.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20profile&state=state-123&nonce=nonce-123&code_challenge=${challenge}&code_challenge_method=S256`, 'user-1');
+  const authorize = await request(`/oauth/authorize?client_id=${client.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20profile%20groups&state=state-123&nonce=nonce-123&code_challenge=${challenge}&code_challenge_method=S256`, 'user-1');
   assert.equal(authorize.status, 200);
   const authorizePage = await authorize.json();
   assert.equal(authorizePage.page, 'sso-authorize');
   assert.equal(authorizePage.redirectHost, 'notes.test');
-  assert.equal(authorize.headers.get('content-security-policy'), "frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
-  assert.equal(authorize.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(authorize.headers.get('content-security-policy'), "frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://notes.test");
+  assert.equal(authorize.headers.get('referrer-policy'), 'same-origin');
   assert.equal(authorize.headers.get('cache-control'), 'no-store');
   const stateCookie = cookieHeader(authorize);
   assert.match(stateCookie, /lockin_sso_request=/);
+
+  const localCreated = ssoModel.create({ name: 'LockIn Study', redirectUris: 'http://localhost:3200/auth/lockin/callback', createdBy: 'admin-1' });
+  const localAuthorize = await request(`/oauth/authorize?client_id=${localCreated.client.clientId}&redirect_uri=${encodeURIComponent(localCreated.client.redirectUris[0])}&response_type=code&scope=openid%20profile&state=local-state`, 'user-1');
+  assert.equal(localAuthorize.headers.get('content-security-policy'), "frame-ancestors 'none'; base-uri 'self'; form-action 'self' http://localhost:3200");
+  assert.doesNotMatch(localAuthorize.headers.get('content-security-policy'), /localhost:\*/);
 
   const crossSiteApproval = await request('/oauth/authorize', 'user-1', {
     method: 'POST',
@@ -109,7 +139,7 @@ test('LockIn SSO completes an authorization code flow with PKCE and rotates secr
   const approval = await request('/oauth/authorize', 'user-1', {
     method: 'POST',
     redirect: 'manual',
-    headers: { Cookie: stateCookie },
+    headers: { Cookie: stateCookie, Origin: 'https://issuer.test' },
     body: new URLSearchParams({ request_id: authorizePage.authorizationRequest.id, decision: 'allow' })
   });
   assert.equal(approval.status, 302);
@@ -119,6 +149,18 @@ test('LockIn SSO completes an authorization code flow with PKCE and rotates secr
   assert.equal(callback.searchParams.get('state'), 'state-123');
   const code = callback.searchParams.get('code');
   assert.ok(code);
+
+  const nullOriginAuthorize = await request(`/oauth/authorize?client_id=${client.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid&state=null-origin-state`, 'user-1');
+  const nullOriginPage = await nullOriginAuthorize.json();
+  const nullOriginApproval = await rawPost(baseUrl, {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    Cookie: cookieHeader(nullOriginAuthorize),
+    'x-user': 'user-1',
+    Origin: 'null',
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-Mode': 'navigate'
+  }, `request_id=${encodeURIComponent(nullOriginPage.authorizationRequest.id)}&decision=allow`);
+  assert.equal(nullOriginApproval.statusCode, 302);
 
   const tokenResponse = await request('/oauth/token', '', {
     method: 'POST',
@@ -145,10 +187,32 @@ test('LockIn SSO completes an authorization code flow with PKCE and rotates secr
   assert.equal(claims.nonce, 'nonce-123');
   assert.equal(claims.name, 'Student One');
   assert.equal(claims.preferred_username, 'student1');
+  assert.deepEqual(claims.groups, [{
+    id: 'group-1',
+    name: 'Biology study group',
+    description: 'Weekly review',
+    members: [
+      { sub: 'user-1', name: 'Student One', preferred_username: 'student1', role: 'admin' },
+      { sub: 'user-2', name: 'Student Two', preferred_username: 'student2', role: 'viewer' }
+    ]
+  }]);
 
   const userinfo = await request('/oauth/userinfo', '', { headers: { Authorization: `Bearer ${token.access_token}` } });
   assert.equal(userinfo.status, 200);
-  assert.deepEqual(await userinfo.json(), { sub: 'user-1', name: 'Student One', preferred_username: 'student1' });
+  assert.deepEqual(await userinfo.json(), {
+    sub: 'user-1',
+    name: 'Student One',
+    preferred_username: 'student1',
+    groups: [{
+      id: 'group-1',
+      name: 'Biology study group',
+      description: 'Weekly review',
+      members: [
+        { sub: 'user-1', name: 'Student One', preferred_username: 'student1', role: 'admin' },
+        { sub: 'user-2', name: 'Student Two', preferred_username: 'student2', role: 'viewer' }
+      ]
+    }]
+  });
 
   users[0].moderationStatus = 'suspended';
   const suspendedUserinfo = await request('/oauth/userinfo', '', { headers: { Authorization: `Bearer ${token.access_token}` } });
@@ -194,6 +258,7 @@ test('LockIn SSO completes an authorization code flow with PKCE and rotates secr
   assert.equal(discoveryData.issuer, 'https://issuer.test');
   assert.equal(discoveryData.authorization_endpoint, 'https://issuer.test/oauth/authorize');
   assert.deepEqual(discoveryData.code_challenge_methods_supported, ['S256']);
+  assert.deepEqual(discoveryData.scopes_supported, ['openid', 'profile', 'groups']);
 
   const crossSiteAdmin = await request('/site-admin/developers/clients', 'admin-1', {
     method: 'POST',

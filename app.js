@@ -563,6 +563,7 @@ registerSsoRoutes({
   ssoModel,
   oidcSigner,
   users,
+  orgModel,
   publicOrigin,
   requireUser,
   requireSiteAdmin,

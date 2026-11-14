@@ -21,6 +21,16 @@ function normalizeOrigin(value) {
   }
 }
 
+function allowsNullOriginConsent(request) {
+  return request.method === 'POST'
+    && request.path === '/oauth/authorize'
+    && request.get('origin') === 'null'
+    && request.get('sec-fetch-site') === 'same-origin'
+    && request.get('sec-fetch-mode') === 'navigate'
+    && /(?:^|;\s*)lockin_sso_request=[^;]+/.test(String(request.headers.cookie || ''))
+    && Boolean(String(request.body?.request_id || ''));
+}
+
 function sendRejection(request, response, status, message) {
   response.setHeader('Cache-Control', 'no-store');
   if (wantsJson(request)) return response.status(status).json({ error: message });
@@ -94,7 +104,8 @@ module.exports = function createRequestProtection({
     const refererHeader = String(request.get('referer') || '');
     const origin = originHeader ? normalizeOrigin(originHeader) : '';
     const referer = refererHeader ? normalizeOrigin(refererHeader) : '';
-    if ((originHeader && !origin) || (refererHeader && !referer)) {
+    const nullOriginConsent = allowsNullOriginConsent(request);
+    if ((originHeader && !origin && !nullOriginConsent) || (refererHeader && !referer)) {
       return sendRejection(request, response, 403, 'This request must come from LockIn.');
     }
     if ((origin && origin !== expectedOrigin) || (referer && referer !== expectedOrigin)) {
@@ -112,4 +123,3 @@ module.exports = function createRequestProtection({
     return next();
   };
 };
-

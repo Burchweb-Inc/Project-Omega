@@ -1,6 +1,6 @@
 # LockIn SSO integration guide
 
-LockIn SSO is LockIn's own OpenID Connect provider. It lets another Burchweb app sign a user in with their LockIn account without receiving the user's LockIn password, tasks, groups, or other workspace data.
+LockIn SSO is LockIn's own OpenID Connect provider. It lets another Burchweb app sign a user in with their LockIn account without receiving the user's LockIn password, tasks, or other workspace data. Clients can optionally request the `groups` scope to copy groups the user belongs to.
 
 This guide is for the developer building the client app. It covers the admin setup, the full authorization code flow, request and response details, a Node.js example, security requirements, and common errors.
 
@@ -34,7 +34,7 @@ The examples use `https://lockedin.burchweb.com` as the LockIn origin. Replace i
 | JWKS endpoint | `/.well-known/jwks.json` |
 | Client authentication | HTTP Basic or form body |
 | PKCE | Optional, S256 only |
-| Scopes | `openid`, `profile` |
+| Scopes | `openid`, `profile`, `groups` |
 | ID token signing | RS256 |
 | Access token | Opaque bearer token, 1 hour |
 | Authorization code | Single use, 60 seconds |
@@ -233,7 +233,7 @@ https://lockedin.burchweb.com/oauth/authorize
   ?client_id=lockin_0123456789abcdef0123456789abcdef
   &redirect_uri=https%3A%2F%2Fapp.example.com%2Fauth%2Flockin%2Fcallback
   &response_type=code
-  &scope=openid%20profile
+  &scope=openid%20profile%20groups
   &state=RANDOM_STATE
   &nonce=RANDOM_NONCE
   &code_challenge=PKCE_CHALLENGE
@@ -242,7 +242,7 @@ https://lockedin.burchweb.com/oauth/authorize
 
 The browser may not be signed in to LockIn. LockIn will send the user to its login page and return to the authorization request afterward. The user must sign in and approve the request.
 
-The consent page shows the integration name, the redirect host, and whether the request asks for name and username. It does not share the user's password, tasks, or groups.
+The consent page shows the integration name, the redirect host, and the requested data. A request for `groups` is explicitly shown as sharing the groups the user belongs to and the members in those groups.
 
 ### Step 3: Receive the callback
 
@@ -332,7 +332,7 @@ The response is JSON:
 }
 ```
 
-With only `openid`, userinfo returns `sub`. With `profile`, it also returns `name` and `preferred_username`.
+With only `openid`, userinfo returns `sub`. With `profile`, it also returns `name` and `preferred_username`. With `groups`, it returns `groups`, including only groups where the signed-in user is a member.
 
 ### Step 7: Create your own session
 
@@ -353,7 +353,7 @@ LockIn SSO does not publish an RP-initiated logout endpoint. Clear your app's se
 | `client_id` | Yes | Client ID from the Developers page |
 | `redirect_uri` | Yes | Must exactly match an approved URL |
 | `response_type` | Yes | Must be `code` |
-| `scope` | No | Space-delimited. Defaults to `openid profile` when omitted. Only `openid` and `profile` are supported. |
+| `scope` | No | Space-delimited. Defaults to `openid profile` when omitted. Supported values are `openid`, `profile`, and `groups`. |
 | `state` | Recommended | Returned unchanged. Maximum 500 characters. |
 | `nonce` | Recommended with `openid` | Included in the ID token. Maximum 200 characters. |
 | `code_challenge` | Optional | Base64url SHA-256 challenge, 43 to 128 characters |
@@ -410,7 +410,30 @@ Common token errors:
 
 Send `Authorization: Bearer <access_token>`.
 
-A valid token returns `sub`. With the `profile` scope, it also returns `name` and `preferred_username`.
+A valid token returns `sub`. With the `profile` scope, it also returns `name` and `preferred_username`. With the `groups` scope, it returns the user's groups and their members:
+
+```json
+{
+  "sub": "user-1",
+  "groups": [
+    {
+      "id": "group-1",
+      "name": "Biology study group",
+      "description": "Weekly review",
+      "members": [
+        {
+          "sub": "user-1",
+          "name": "Student One",
+          "preferred_username": "student1",
+          "role": "admin"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Group membership is evaluated when the ID token or userinfo response is created. The list excludes pending invitations and groups where the user is not a member. Member profile values can change, so use each member's `sub` as the stable identifier when copying a group.
 
 An invalid, expired, revoked, or deleted-user token returns HTTP 401 with:
 
@@ -450,6 +473,7 @@ Discovery and JWKS responses are cached publicly for 5 minutes. Refetch the JWKS
 | `nonce` | The nonce from the authorization request, when supplied |
 | `name` | Display name, when `profile` is authorized |
 | `preferred_username` | LockIn username, when `profile` is authorized |
+| `groups` | Groups the user belongs to and their member metadata, when `groups` is authorized |
 
 The ID token is signed with RS256. The access token is opaque and is not a JWT.
 
@@ -459,6 +483,7 @@ The ID token is signed with RS256. The access token is opaque and is not a JWT.
 | --- | --- |
 | `openid` | Issues an ID token and enables OpenID Connect |
 | `profile` | Adds `name` and `preferred_username` to the ID token and userinfo |
+| `groups` | Adds `groups` to the ID token and userinfo. Each group includes its `id`, `name`, `description`, and members with `sub`, `name`, `preferred_username`, and `role`. |
 
 Use `scope=openid profile` for a normal sign-in that shows the user's name and username on consent.
 
@@ -471,7 +496,7 @@ LockIn SSO does not expose:
 - Passwords.
 - Email addresses.
 - Tasks, courses, calendar entries, or files.
-- Group memberships or group content.
+- Group memberships or group content, unless the client requests the `groups` scope. The `groups` scope shares membership metadata only, not courses, tasks, or other group content.
 - Account settings or moderation details.
 
 The consent screen is the boundary. If a value is not listed in the claims above, the client does not receive it.
@@ -698,7 +723,7 @@ The ID token signing key is created at `data/.oidc-signing-key.pem` if `OIDC_SIG
 | ID token signature verification fails | Cached JWKS is stale, `iss` is wrong, or the signing key changed | Refetch the JWKS and check that `LOCKIN_ISSUER` exactly matches `PUBLIC_URL`. |
 | ID token audience verification fails | Using the wrong client ID | Use the same client ID for authorization and token validation. |
 | Nonce mismatch | Session was lost or reused | Generate and store a new nonce for every sign-in. |
-| `invalid_scope` | Requested a scope other than `openid` or `profile` | Request only `openid` and `profile`. |
+| `invalid_scope` | Requested a scope other than `openid`, `profile`, or `groups` | Request only the supported scopes. |
 | Browser reports a CORS error | Calling token or userinfo from browser JavaScript | Move the request to your server. LockIn SSO is a server-side integration. |
 | HTTP redirect URL is rejected | Production URL uses HTTP | Use HTTPS. HTTP is allowed only for localhost and loopback addresses. |
 

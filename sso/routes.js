@@ -4,7 +4,7 @@ const REQUEST_TTL_MS = 10 * 60 * 1000;
 const CODE_TTL_MS = 60 * 1000;
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const REQUEST_COOKIE = 'lockin_sso_request';
-const SUPPORTED_SCOPES = new Set(['openid', 'profile']);
+const SUPPORTED_SCOPES = new Set(['openid', 'profile', 'groups']);
 const PKCE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/;
 const SSO_PAGE_CSP = "frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
 
@@ -36,10 +36,11 @@ function noStore(response) {
   response.setHeader('Pragma', 'no-cache');
 }
 
-function ssoPageHeaders(response) {
+function ssoPageHeaders(response, referrerPolicy = 'no-referrer', formActionOrigin = '') {
   noStore(response);
-  response.setHeader('Referrer-Policy', 'no-referrer');
-  response.setHeader('Content-Security-Policy', SSO_PAGE_CSP);
+  response.setHeader('Referrer-Policy', referrerPolicy);
+  const formAction = formActionOrigin ? `'self' ${formActionOrigin}` : "'self'";
+  response.setHeader('Content-Security-Policy', SSO_PAGE_CSP.replace("form-action 'self'", `form-action ${formAction}`));
 }
 
 function parseScopes(value) {
@@ -103,6 +104,7 @@ module.exports = function registerSsoRoutes({
   ssoModel,
   oidcSigner,
   users,
+  orgModel,
   publicOrigin,
   requireUser,
   requireSiteAdmin,
@@ -137,6 +139,34 @@ module.exports = function registerSsoRoutes({
 
   function isActiveUser(user) {
     return Boolean(user) && user.isActive !== false && (user.moderationStatus || 'active') === 'active';
+  }
+
+  function groupClaimsForUser(userId) {
+    if (!orgModel || typeof orgModel.copyCandidatesForUser !== 'function') return [];
+    return orgModel.copyCandidatesForUser(userId).map((org) => ({
+      id: org.id,
+      name: org.name,
+      description: org.description || '',
+      members: (org.members || []).map((member) => {
+        const user = users.find((candidate) => candidate.id === member.userId);
+        return {
+          sub: member.userId,
+          name: user?.name || '',
+          preferred_username: user?.username || '',
+          role: member.role || 'viewer'
+        };
+      })
+    }));
+  }
+
+  function claimsForUser(user, scope) {
+    const claims = { sub: user.id };
+    if (scope.split(' ').includes('profile')) {
+      claims.name = user.name;
+      claims.preferred_username = user.username;
+    }
+    if (scope.split(' ').includes('groups')) claims.groups = groupClaimsForUser(user.id);
+    return claims;
   }
 
   function renderAuthorizeError(request, response, description) {
@@ -186,14 +216,24 @@ module.exports = function registerSsoRoutes({
     }
   }
 
+  function isNullOriginConsent(request) {
+    return request.method === 'POST'
+      && request.path === '/oauth/authorize'
+      && request.get('origin') === 'null'
+      && request.get('sec-fetch-site') === 'same-origin'
+      && request.get('sec-fetch-mode') === 'navigate'
+      && /(?:^|;\s*)lockin_sso_request=[^;]+/.test(String(request.headers.cookie || ''))
+      && Boolean(String(request.body?.request_id || ''));
+  }
+
   function requireSameOrigin(request, response, next) {
-    if (isSameOriginRequest(request, publicOrigin(request))) return next();
+    if (isSameOriginRequest(request, publicOrigin(request)) || isNullOriginConsent(request)) return next();
     noStore(response);
     return response.status(403).send('This request must come from LockIn.');
   }
 
   app.get('/oauth/authorize', requireUser, (request, response) => {
-    ssoPageHeaders(response);
+    ssoPageHeaders(response, 'same-origin');
     pruneExpiredRecords();
 
     const client = ssoModel.getByClientId(String(request.query.client_id || ''));
@@ -207,8 +247,9 @@ module.exports = function registerSsoRoutes({
 
     if (!client) return renderAuthorizeError(request, response, 'This app is not registered with LockIn SSO.');
     if (!client.redirectUris.includes(redirectUri)) return renderAuthorizeError(request, response, 'This app requested a redirect URL that has not been approved.');
+    ssoPageHeaders(response, 'same-origin', new URL(redirectUri).origin);
     if (responseType !== 'code') return redirectOAuthError(response, redirectUri, state, 'unsupported_response_type', 'LockIn SSO only supports the authorization code flow.');
-    if (!scopes) return redirectOAuthError(response, redirectUri, state, 'invalid_scope', 'LockIn SSO supports the openid and profile scopes.');
+    if (!scopes) return redirectOAuthError(response, redirectUri, state, 'invalid_scope', 'LockIn SSO supports the openid, profile, and groups scopes.');
     if (state.length > 500) return redirectOAuthError(response, redirectUri, state, 'invalid_request', 'The state value is too long.');
     if (nonce.length > 200) return redirectOAuthError(response, redirectUri, state, 'invalid_request', 'The nonce value is too long.');
     if (codeChallenge && (codeChallengeMethod !== 'S256' || !/^[A-Za-z0-9_-]{43,128}$/.test(codeChallenge))) {
@@ -335,7 +376,10 @@ module.exports = function registerSsoRoutes({
 
     if (record.scope.split(' ').includes('openid')) {
       const issuedAt = Math.floor(Date.now() / 1000);
-      const claims = tokenClaims(user, client, record.scope, record.authTime, record.nonce, publicOrigin(request), issuedAt);
+      const claims = {
+        ...tokenClaims(user, client, record.scope, record.authTime, record.nonce, publicOrigin(request), issuedAt),
+        ...claimsForUser(user, record.scope)
+      };
       responsePayload.id_token = oidcSigner.sign(claims);
     }
 
@@ -358,12 +402,7 @@ module.exports = function registerSsoRoutes({
       response.setHeader('WWW-Authenticate', 'Bearer error="invalid_token"');
       return oauthError(response, 401, 'invalid_token', 'The LockIn account is not active.');
     }
-    const claims = { sub: user.id };
-    if (record.scope.split(' ').includes('profile')) {
-      claims.name = user.name;
-      claims.preferred_username = user.username;
-    }
-    return response.json(claims);
+    return response.json(claimsForUser(user, record.scope));
   });
 
   function openIdConfiguration(request, response) {
@@ -380,10 +419,10 @@ module.exports = function registerSsoRoutes({
       grant_types_supported: ['authorization_code'],
       subject_types_supported: ['public'],
       id_token_signing_alg_values_supported: ['RS256'],
-      scopes_supported: ['openid', 'profile'],
+      scopes_supported: ['openid', 'profile', 'groups'],
       token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
       code_challenge_methods_supported: ['S256'],
-      claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'auth_time', 'nonce', 'name', 'preferred_username']
+      claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'auth_time', 'nonce', 'name', 'preferred_username', 'groups']
     });
   }
 
