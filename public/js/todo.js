@@ -1,5 +1,39 @@
 function todoList() { return document.querySelector('[data-live-todo-list]'); }
 function todoRoot() { return document.querySelector('[data-todo-date-locale]'); }
+function dashboardTodoTaskMarkup(task) {
+  return `<article class="dashboard-todo-item ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}"><form class="toggle-task-form" action="/tasks/${escapeHtml(task.id)}/toggle" method="post" data-live-form><button class="lui-check dashboard-todo-check" type="submit" aria-label="${task.done ? 'Mark incomplete' : 'Mark complete'}: ${escapeHtml(task.title)}"><i data-lucide="check"></i></button></form><div><strong>${linkedTaskTextMarkup(task.title, task.links)}</strong><small>${escapeHtml(task.source || 'Personal task')}</small></div></article>`;
+}
+function syncDashboardTodoCount() {
+  const list = document.querySelector('[data-dashboard-todo-list]');
+  if (!list) return;
+  const count = list.querySelectorAll('.dashboard-todo-item:not(.is-done)').length;
+  document.querySelectorAll('[data-dashboard-todo-count]').forEach((target) => { target.textContent = String(count); });
+  if (list.querySelector('.dashboard-todo-item')) list.querySelector('.dashboard-todo-empty')?.remove();
+  else if (!list.querySelector('.dashboard-todo-empty')) {
+    const empty = document.createElement('p');
+    empty.className = 'dashboard-todo-empty';
+    empty.textContent = 'Your private queue is clear. Add a task from any class feed.';
+    list.append(empty);
+  }
+}
+function updateDashboardTodo(task) {
+  const list = document.querySelector('[data-dashboard-todo-list]');
+  if (!list || !task) return;
+  let row = list.querySelector(`[data-task-id="${CSS.escape(String(task.id))}"]`);
+  if (row) row.outerHTML = dashboardTodoTaskMarkup(task);
+  else {
+    list.querySelector('.dashboard-todo-empty')?.remove();
+    list.insertAdjacentHTML('beforeend', dashboardTodoTaskMarkup(task));
+  }
+  bindLiveForms(list);
+  syncDashboardTodoCount();
+  lucide.createIcons();
+}
+function removeDashboardTodo(taskId) {
+  const list = document.querySelector('[data-dashboard-todo-list]');
+  list?.querySelector(`[data-task-id="${CSS.escape(String(taskId || ''))}"]`)?.remove();
+  syncDashboardTodoCount();
+}
 function formatTodoDate(due) {
   if (!due || due === 'No date') return 'No date';
   const date = new Date(`${due}T12:00:00Z`); if (Number.isNaN(date.getTime())) return due;
@@ -84,6 +118,7 @@ function bindTodoPriorityMenus(scope = document) {
   });
 }
 function connectLiveTodo() {
+  if (document.querySelector('[data-dashboard-todo-list]')) return;
   const list = todoList(); if (!list || typeof io !== 'function') return;
   liveState.socket?.disconnect(); liveState.socket = io(); liveState.socket.on('connect', () => liveState.socket.emit('todo:join'));
   liveState.socket.on('todo:task-added', ({ task }) => { if (!task || list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`)) return; list.querySelector('.empty-panel')?.remove(); const previous = captureTaskListPositions(list); list.insertAdjacentHTML('beforeend', todoTaskMarkup(task)); const row = list.querySelector(`:scope > [data-task-id="${CSS.escape(task.id)}"]`); if (!row) return; row.hidden = list.dataset.activeFilter === 'completed'; animateTaskListPositions(list, previous, { enterElement: row, rippleFrom: row }); bindLiveForms(row); bindLinkComposers(row); enhanceTodoTasks(); lucide.createIcons(); });
@@ -150,7 +185,18 @@ async function submitLiveForm(form, animatedEntry = null) {
       }
     }
     if (payload.role || (payload.action && payload.userId)) { window.location.reload(); return; }
-    if (payload.verifiedBy) { const itemId = actionUrl.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-verify-count]`); if (count) count.textContent = payload.verifiedBy.length; }
+    if (payload.verifiedBy) {
+      const itemId = actionUrl.split('/').at(-2);
+      const card = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"]`);
+      const count = card?.querySelector('[data-verify-count]');
+      if (count) count.textContent = payload.verifiedBy.length;
+      const button = card?.querySelector('.dashboard-confirm-action');
+      if (button) {
+        const confirmed = payload.verifiedBy.includes(document.querySelector('[data-dashboard-live]')?.dataset.userId);
+        button.classList.toggle('is-confirmed', confirmed);
+        button.setAttribute('aria-pressed', String(confirmed));
+      }
+    }
     if (payload.downvotedBy) { const itemId = actionUrl.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = payload.downvotedBy.length; }
     if (payload.downvoteCount !== undefined) { const itemId = actionUrl.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = payload.downvoteCount; }
     if (payload.comment) {
@@ -160,8 +206,10 @@ async function submitLiveForm(form, animatedEntry = null) {
         const itemCardElement = form.closest('[data-item-id]');
         const courseLive = form.closest('[data-course-live]');
         const breakoutLive = form.closest('[data-breakout-live]');
+        const dashboard = itemCardElement?.closest('[data-dashboard-live]');
         const context = itemCardElement && courseLive ? { orgId: courseLive.dataset.orgId, itemId: itemCardElement.dataset.itemId, canEdit: courseLive.dataset.isAdmin === 'true' || payload.comment.userId === courseLive.dataset.userId, canDelete: courseLive.dataset.isAdmin === 'true' || payload.comment.userId === courseLive.dataset.userId, canViewHistory: courseLive.dataset.isAdmin === 'true' } : breakoutLive ? { orgId: breakoutLive.dataset.orgId, groupId: breakoutLive.dataset.groupId, canEdit: breakoutLive.dataset.groupAdmin === 'true' || payload.comment.userId === breakoutLive.dataset.userId, canDelete: breakoutLive.dataset.groupAdmin === 'true' || payload.comment.userId === breakoutLive.dataset.userId, canViewHistory: breakoutLive.dataset.groupAdmin === 'true' } : null;
-        if (entry && context) { entry.outerHTML = commentMarkup(payload.comment, context); bindLiveForms(entry.parentElement || document); lucide.createIcons(); }
+        if (entry && dashboard) { entry.outerHTML = dashboardCommentMarkup(payload.comment); updateCommentCount(itemCardElement); }
+        else if (entry && context) { entry.outerHTML = commentMarkup(payload.comment, context); bindLiveForms(entry.parentElement || document); lucide.createIcons(); }
       } else {
         const breakoutLive = form.closest('[data-breakout-live]');
         if (breakoutLive) appendBreakoutComment(payload.comment, breakoutLive);
@@ -180,7 +228,7 @@ async function submitLiveForm(form, animatedEntry = null) {
         if (!existing) {
           const empty = list.querySelector('.empty-panel'); empty?.remove();
           const previous = captureTaskListPositions(list);
-          list.insertAdjacentHTML('beforeend', todoTaskMarkup(payload.task));
+          list.insertAdjacentHTML('beforeend', list.matches('[data-dashboard-todo-list]') ? dashboardTodoTaskMarkup(payload.task) : todoTaskMarkup(payload.task));
           const row = list.querySelector(`:scope > [data-task-id="${CSS.escape(payload.task.id)}"]`);
           if (row) {
             row.hidden = list.dataset.activeFilter === 'completed';
@@ -191,6 +239,7 @@ async function submitLiveForm(form, animatedEntry = null) {
           enhanceTodoTasks();
           lucide.createIcons();
         }
+        syncDashboardTodoCount();
         if (isTaskCreate) {
           form.reset();
           void animateTaskComposer(document.getElementById('quick-task'), false);
@@ -200,8 +249,12 @@ async function submitLiveForm(form, animatedEntry = null) {
     if (payload.task && isTaskToggle) {
       const row = document.querySelector(`[data-task-id="${CSS.escape(payload.task.id)}"]`);
       if (row) { row.classList.toggle('is-done', Boolean(payload.task.done)); if (payload.task.done) celebrateTask(row); applyTodoFilter(document.querySelector('[data-live-todo-list]')?.dataset.activeFilter || 'all'); }
+      syncDashboardTodoCount();
     }
-    if (payload.deleted && payload.taskId) document.querySelector(`[data-task-id="${CSS.escape(payload.taskId)}"]`)?.remove();
+    if (payload.deleted && payload.taskId) {
+      document.querySelector(`[data-task-id="${CSS.escape(payload.taskId)}"]`)?.remove();
+      syncDashboardTodoCount();
+    }
     if (payload.deleted && payload.resourceId) document.querySelector(`[data-resource-id="${CSS.escape(payload.resourceId)}"]`)?.remove();
     if (payload.deleted && payload.itemId) document.querySelector(`[data-item-id="${CSS.escape(payload.itemId)}"]`)?.remove();
     if (payload.deleted && payload.cardId) document.querySelector(`[data-card-id="${CSS.escape(payload.cardId)}"]`)?.remove();

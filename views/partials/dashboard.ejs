@@ -6,8 +6,7 @@
 
   .page-heading .hero {
     display: inline-block;
-    transition: opacity 2s ease, transform 2s ease;
-    min-height: 150px;
+    min-height: 0;
   }
 
   .hero-fade-in {
@@ -198,10 +197,10 @@
   }
 </style>
 
-<section class="content-wrap dashboard-page" data-dashboard-live data-user-name="<%= user.name %>">
+<section class="content-wrap dashboard-page" data-dashboard-live data-user-id="<%= user.id %>" data-user-name="<%= user.name %>">
   <div class="page-heading hero-heading">
     <div>
-      <p class="time">TIME TO GET TO BUSINESS</p>
+      <p class="time">YOUR STUDY DESK</p>
       <h1 class="hero">Make today easier to carry.</h1>
       <p class="lead">Hey, <%= user.name %>, ready to get some work done?</p>
     </div>
@@ -218,83 +217,94 @@
     <% if (dashboardTab === 'overview') { %>
     <section class="dashboard-tab-panel active">
       <div class="metric-grid">
-        <div class="metric-card metric-accent"><span>Open tasks</span><strong><%= (user.tasks || []).filter(task => !task.done).length %></strong><small>in your private queue</small></div>
-        <div class="metric-card"><span>Course feeds</span><strong><%= orgs.reduce((count, org) => count + org.courses.length, 0) %></strong><small>across your spaces</small></div>
-        <div class="metric-card"><span>Peer signals</span><strong><%= feedItems.filter(entry => (entry.verifiedBy || []).length).length %></strong><small>items checked recently</small></div>
-        <div class="metric-card"><span>Groups</span><strong><%= orgs.reduce((count, org) => count + (org.groups || []).length, 0) %></strong><small>projects in motion</small></div>
+        <div class="metric-card metric-accent"><span>Still to do</span><strong data-dashboard-todo-count><%= (user.tasks || []).filter(task => !task.done).length %></strong><small>tasks in your personal queue</small></div>
+        <div class="metric-card"><span>Your classes</span><strong><%= dashboardCourses.length %></strong><small>connected to your desk</small></div>
+        <div class="metric-card"><span>Class updates</span><strong data-dashboard-feed-count><%= feedItems.length %></strong><small>in your latest activity</small></div>
+        <div class="metric-card"><span>Study groups</span><strong><%= dashboardGroups.reduce((count, org) => count + (org.groups || []).length, 0) %></strong><small>ready to work together</small></div>
       </div>
-      <div class="dashboard-grid">
-        <section class="feed-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">LIVE FROM YOUR SPACES</p>
-              <h2>Course activity</h2>
-            </div>
-            <a class="lui-link" href="/calendar">View calendar <i data-lucide="arrow-up-right"></i></a>
+      <div class="dashboard-grid dashboard-home-grid">
+        <section class="dashboard-feed-column">
+          <div class="dashboard-section-heading">
+            <div><h2>Feed</h2><p>Deadlines, projects, and notes shared in your classes.</p></div>
+            <a class="lui-button lui-button-quiet" href="/calendar">Calendar <i data-lucide="arrow-up-right"></i></a>
           </div>
-          <div class="feed-list">
+          <div class="dashboard-live-status" data-dashboard-feed-status role="status" aria-live="polite"></div>
+          <div class="dashboard-feed-list" data-dashboard-feed-list>
             <% feedItems.forEach(entry => { %>
-              <article class="feed-card">
-                <div class="feed-card-head">
-                  <span class="category-dot category-<%= entry.type.toLowerCase().replace(/[^a-z]/g, '-') %>"></span>
-                  <div>
-                    <span class="feed-source"><%= entry.course.name %> · <%= entry.org.name %></span>
-                    <h3><%= entry.title %></h3>
+              <article class="lui-card dashboard-feed-post" data-item-id="<%= entry.id %>" data-org-id="<%= entry.org.id %>" data-course-id="<%= entry.course.id %>" data-type="<%= entry.type %>">
+                <header class="dashboard-post-header">
+                  <span class="dashboard-course-mark" style="--course-color:<%= entry.course.color || '#547484' %>" aria-hidden="true"><%= (entry.course.code || entry.course.name || 'C').slice(0, 1) %></span>
+                  <div class="dashboard-post-source"><strong><%= entry.course.name %></strong><span><%= entry.org.name %> · <%= entry.type %></span></div>
+                  <span class="lui-badge dashboard-post-date"><%= entry.due || 'No date' %></span>
+                </header>
+                <div class="dashboard-post-copy">
+                  <h3><%- renderLinkedText(entry.title, entry.links) %></h3>
+                  <% if (entry.details) { %><p><%- renderLinkedText(entry.details, entry.links) %></p><% } %>
+                </div>
+                <div class="dashboard-post-actions">
+                  <form data-live-form action="/org/<%= entry.org.id %>/items/<%= entry.id %>/verify" method="post">
+                    <button class="lui-button lui-button-quiet dashboard-confirm-action <%= (entry.verifiedBy || []).includes(user.id) ? 'is-confirmed' : '' %>" type="submit" aria-pressed="<%= (entry.verifiedBy || []).includes(user.id) %>">
+                      <i data-lucide="badge-check"></i><span>Confirm</span><strong data-verify-count><%= (entry.verifiedBy || []).length %></strong>
+                    </button>
+                  </form>
+                  <% if (entry.type !== 'Event') { %>
+                    <form data-live-form action="/org/<%= entry.org.id %>/items/<%= entry.id %>/todo" method="post">
+                      <button class="lui-button lui-button-quiet" type="submit"><i data-lucide="list-plus"></i> Add to Todo</button>
+                    </form>
+                  <% } %>
+                  <% if (entry.type === 'Project') { %>
+                    <a class="lui-button lui-button-quiet" href="/org/<%= entry.org.id %>/course/<%= entry.course.id %>/task/<%= `${entry.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || entry.id}-${entry.id.slice(-8)}` %>/breakout-groups"><i data-lucide="users-round"></i> Breakout groups</a>
+                  <% } %>
+                  <a class="lui-button lui-button-quiet dashboard-open-course" href="/org/<%= entry.org.id %>/course/<%= entry.course.id %>#feed"><i data-lucide="arrow-up-right"></i> Class thread</a>
+                </div>
+                <details class="dashboard-post-comments">
+                  <summary><i data-lucide="message-circle"></i> <span data-comment-count><%= (entry.comments || []).filter(comment => !comment.reported).length %></span> comments <i data-lucide="chevron-down"></i></summary>
+                  <div class="dashboard-comment-list" data-comment-list>
+                    <% (entry.comments || []).filter(comment => !comment.reported).forEach(comment => { %>
+                      <article class="dashboard-comment" data-comment-id="<%= comment.id %>"><strong><%= comment.author %></strong><p><%= comment.text %></p></article>
+                    <% }) %>
                   </div>
-                  <span class="feed-date"><%= entry.due %></span>
-                </div>
-                <div class="feed-card-foot">
-                  <span class="type-label"><%= entry.type %></span>
-                  <span class="trust-count"><i data-lucide="shield-check"></i> <%= (entry.verifiedBy || []).length %> confirmed</span>
-                  <a href="/org/<%= entry.org.id %>/course/<%= entry.course.id %>">Open thread <i data-lucide="arrow-right"></i></a>
-                </div>
+                  <form class="dashboard-comment-form" data-live-form action="/org/<%= entry.org.id %>/items/<%= entry.id %>/comments" method="post">
+                    <label class="sr-only" for="comment-<%= entry.id %>">Add a comment</label>
+                    <input id="comment-<%= entry.id %>" name="comment" placeholder="Add to the class conversation..." required>
+                    <button class="lui-icon-button" type="submit" aria-label="Post comment"><i data-lucide="send"></i></button>
+                  </form>
+                </details>
               </article>
             <% }) %>
             <% if (!feedItems.length) { %>
-              <div class="empty-panel"><i data-lucide="layers-2"></i>
-                <h3>Your course feed starts here</h3>
-                <p>Add a course and post the first deadline for your classmates.</p>
-                <a class="lui-button lui-button-secondary" href="/org/new">Create a study space</a>
-              </div>
+              <div class="lui-panel dashboard-feed-empty"><i data-lucide="messages-square"></i><h3>Your class feed is ready</h3><p>When a class shares a deadline or project, it will show up here.</p><a class="lui-button lui-button-secondary" href="/groups">Find a class</a></div>
             <% } %>
+          </div>
+          <div class="dashboard-course-rooms" hidden aria-hidden="true">
+            <% dashboardCourses.forEach(course => { %><span data-dashboard-course data-org-id="<%= course.orgId %>" data-org-name="<%= course.orgName %>" data-course-id="<%= course.courseId %>" data-course-name="<%= course.courseName %>" data-course-code="<%= course.courseCode || '' %>" data-course-color="<%= course.courseColor || '#547484' %>"></span><% }) %>
           </div>
         </section>
 
-        <aside class="dashboard-rail">
-          <section class="rail-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">NEXT UP</p>
-                <h2>My Todo</h2>
-              </div>
-              <a class="icon-link" href="/todo" aria-label="Open Personal Todo"><i data-lucide="arrow-up-right"></i></a>
+        <aside class="dashboard-rail dashboard-home-rail">
+          <section class="lui-panel dashboard-todo-panel">
+            <div class="dashboard-section-heading">
+              <div><h2>Personal Todo</h2><p><span data-dashboard-todo-count><%= (user.tasks || []).filter(task => !task.done).length %></span> still in motion</p></div>
+              <a class="lui-icon-button" href="/todo" aria-label="Expand and open Personal Todo"><i data-lucide="arrow-up-right"></i></a>
             </div>
-            <div class="mini-tasks">
-              <% (user.tasks || []).filter(task => !task.done).slice(0, 4).forEach(task => { %>
-                <div class="mini-task"><span class="mini-check"></span>
-                  <div>
-                    <strong><%= task.title %></strong>
-                    <small><%= task.source %></small>
-                  </div>
-                </div>
+            <div class="dashboard-todo-list" data-live-todo-list data-dashboard-todo-list>
+              <% (user.tasks || []).forEach(task => { %>
+                <article class="dashboard-todo-item <%= task.done ? 'is-done' : '' %>" data-task-id="<%= task.id %>">
+                  <form class="toggle-task-form" action="/tasks/<%= task.id %>/toggle" method="post" data-live-form>
+                    <button class="lui-check dashboard-todo-check" type="submit" aria-label="<%= task.done ? 'Mark incomplete' : 'Mark complete' %>: <%= task.title %>"><i data-lucide="check"></i></button>
+                  </form>
+                  <div><strong><%- renderLinkedText(task.title, task.links) %></strong><small><%= task.source %></small></div>
+                </article>
               <% }) %>
-              <% if (!(user.tasks || []).filter(task => !task.done).length) { %>
-                <p class="muted">Your private queue is clear.</p>
-              <% } %>
+              <% if (!(user.tasks || []).length) { %><p class="dashboard-todo-empty">Your private queue is clear. Add a task from any class feed.</p><% } %>
             </div>
-            <a class="rail-link" href="/todo">Open full Todo <i data-lucide="arrow-right"></i></a>
+            <a class="lui-button lui-button-primary dashboard-expand-todo" href="/todo">Open full Todo <i data-lucide="arrow-up-right"></i></a>
           </section>
-
-          <section class="rail-panel group-callout">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">WORK TOGETHER</p>
-                <h2>Breakout groups</h2>
-              </div>
-              <i data-lucide="users-round"></i>
-            </div>
-            <p>Split project work, claim responsibilities, and keep the shared deadline visible.</p>
-            <a class="lui-button lui-button-secondary" href="/groups">Explore groups</a>
+          <section class="lui-card dashboard-groups-card">
+            <i data-lucide="users-round" aria-hidden="true"></i>
+            <h2>Working on a project?</h2>
+            <p>Open a project’s breakout groups from its feed post to split up the work and keep it moving.</p>
+            <a class="lui-link" href="/groups">Browse your groups <i data-lucide="arrow-right"></i></a>
           </section>
         </aside>
       </div>

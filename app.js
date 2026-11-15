@@ -737,7 +737,15 @@ app.get('/dashboard', requireUser, (request, response) => {
   const dashboardGroups = request.user.isSiteAdmin ? orgs.slice().sort((left, right) => left.name.localeCompare(right.name)) : orgs.filter((org) => membership(org, request.user)).sort((left, right) => left.name.localeCompare(right.name));
   const dashboardModeration = (request.user.isSiteAdmin ? orgs : dashboardGroups).flatMap((org) => moderationComments(org).filter((comment) => !comment.reviewedAt).map((comment) => ({ ...comment, orgId: org.id, orgName: org.name })));
   render(request, response, 'dashboard', {
-    feedItems: orgModel.feedFor(request.user.id).slice(0, 8),
+    feedItems: orgModel.feedFor(request.user.id).slice(0, 20),
+    dashboardCourses: dashboardGroups.flatMap((org) => org.courses.map((course) => ({
+      orgId: org.id,
+      orgName: org.name,
+      courseId: course.id,
+      courseName: course.name,
+      courseCode: course.code,
+      courseColor: course.color
+    }))),
     dashboardTab,
     dashboardGroups,
     dashboardModeration
@@ -1266,7 +1274,7 @@ app.post('/org/:id/courses/:courseId/items', requireUser, async (request, respon
   const item = { id: id(), title: String(request.body.title || '').trim(), details: String(request.body.details || '').trim(), links: await fetchLinkPreviews(`${request.body.title || ''}\n${request.body.details || ''}`), type: request.body.type, ...dueDates, done: request.body.type !== 'Event' ? false : null, comments: [], verifiedBy: [], downvotedBy: [], createdBy: request.user.id, position: course.items.length, past: false };
   item.past = orgModel.isPastAssignment(org, item);
   if (!item.title) return sendMutation(request, response, { error: 'A title is required.' }, `/org/${org.id}/course/${course.id}`);
-  course.items.push(item); saveOrg(org); emitCourse(org, course, 'course:item-created', { item });
+  course.items.push(item); saveOrg(org); emitCourse(org, course, 'course:item-created', { item, orgId: org.id, courseId: course.id });
   return sendMutation(request, response, { item }, `/org/${org.id}/course/${course.id}`);
 });
 
@@ -1387,7 +1395,7 @@ app.post('/org/:id/items/:itemId/copy', requireUser, async (request, response) =
   copiedItem.past = orgModel.isPastAssignment(destinationOrg, copiedItem);
   destinationCourse.items.push(copiedItem);
   saveOrg(destinationOrg);
-  emitCourse(destinationOrg, destinationCourse, 'course:item-created', { item: copiedItem });
+  emitCourse(destinationOrg, destinationCourse, 'course:item-created', { item: copiedItem, orgId: destinationOrg.id, courseId: destinationCourse.id });
   const copiedUrl = `/org/${destinationOrg.id}/course/${destinationCourse.id}#item-${copiedItem.id}`;
   return sendMutation(request, response, { copiedItemId: copiedItem.id, copiedUrl, successMessage: 'Task copied.' }, sourceFallback);
 });

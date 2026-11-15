@@ -309,6 +309,11 @@ function commentMarkup(comment, context) {
 function appendUniqueComment(itemId, comment) {
   const card = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"]`); if (!card || !comment) return;
   const list = card.querySelector('[data-comment-list]'); if (!list || list.querySelector(`[data-comment-id="${CSS.escape(comment.id || '')}"]`)) return;
+  if (card.closest('[data-dashboard-live]')) {
+    list.insertAdjacentHTML('beforeend', dashboardCommentMarkup(comment));
+    updateCommentCount(card);
+    return;
+  }
   const root = courseRoot(); const canAdmin = root.dataset.isAdmin === 'true'; const canEdit = canAdmin || comment.userId === root.dataset.userId;
   list.insertAdjacentHTML('beforeend', commentMarkup(comment, { orgId: root.dataset.orgId, itemId, canEdit, canDelete: canAdmin || comment.userId === root.dataset.userId, canViewHistory: canAdmin }));
   bindLiveForms(list.lastElementChild); lucide.createIcons();
@@ -317,7 +322,9 @@ function appendUniqueComment(itemId, comment) {
 
 function updateCommentCount(card) {
   const list = card?.querySelector('[data-comment-list]'); const count = card?.querySelector('[data-comment-count]');
-  if (list && count) count.textContent = list.querySelectorAll('.comment-entry:not([data-removing="true"]):not(.is-removed)').length;
+  if (list && count) count.textContent = card.closest('[data-dashboard-live]')
+    ? list.querySelectorAll('[data-comment-id]').length
+    : list.querySelectorAll('.comment-entry:not([data-removing="true"]):not(.is-removed)').length;
 }
 function finishCommentRemoval(entry) { if (!entry) return; const card = entry.closest('[data-item-id]'); entry.remove(); updateCommentCount(card); }
 function markCommentReported(entry) {

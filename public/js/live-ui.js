@@ -253,16 +253,95 @@ function connectLiveNotifications() {
   });
 }
 
+function dashboardFeedPostMarkup(item, course) {
+  const orgId = escapeHtml(course.dataset.orgId); const courseId = escapeHtml(course.dataset.courseId); const itemId = escapeHtml(item.id);
+  const isProject = item.type === 'Project'; const isEvent = item.type === 'Event';
+  const taskSlug = `${String(item.title || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || itemId}-${itemId.slice(-8)}`;
+  const comments = (item.comments || []).filter((comment) => !comment.reported);
+  return `<article class="lui-card dashboard-feed-post" data-item-id="${itemId}" data-org-id="${orgId}" data-course-id="${courseId}" data-type="${escapeHtml(item.type || 'Homework')}"><header class="dashboard-post-header"><span class="dashboard-course-mark" style="--course-color:${escapeHtml(course.dataset.courseColor)}" aria-hidden="true">${escapeHtml((course.dataset.courseCode || course.dataset.courseName || 'C').slice(0, 1))}</span><div class="dashboard-post-source"><strong>${escapeHtml(course.dataset.courseName)}</strong><span>${escapeHtml(course.dataset.orgName)} · ${escapeHtml(item.type || 'Class update')}</span></div><span class="lui-badge dashboard-post-date">${escapeHtml(item.due || 'No date')}</span></header><div class="dashboard-post-copy"><h3>${escapeHtml(item.title || 'Untitled class update')}</h3>${item.details ? `<p>${escapeHtml(item.details)}</p>` : ''}</div><div class="dashboard-post-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="lui-button lui-button-quiet dashboard-confirm-action ${item.verifiedBy?.includes(document.querySelector('[data-dashboard-live]')?.dataset.userId) ? 'is-confirmed' : ''}" type="submit" aria-pressed="${Boolean(item.verifiedBy?.includes(document.querySelector('[data-dashboard-live]')?.dataset.userId))}"><i data-lucide="badge-check"></i><span>Confirm</span><strong data-verify-count>${(item.verifiedBy || []).length}</strong></button></form>${isEvent ? '' : `<form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="lui-button lui-button-quiet" type="submit"><i data-lucide="list-plus"></i> Add to Todo</button></form>`}${isProject ? `<a class="lui-button lui-button-quiet" href="/org/${orgId}/course/${courseId}/task/${escapeHtml(taskSlug)}/breakout-groups"><i data-lucide="users-round"></i> Breakout groups</a>` : ''}<a class="lui-button lui-button-quiet dashboard-open-course" href="/org/${orgId}/course/${courseId}#feed"><i data-lucide="arrow-up-right"></i> Class thread</a></div><details class="dashboard-post-comments"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${comments.length}</span> comments <i data-lucide="chevron-down"></i></summary><div class="dashboard-comment-list" data-comment-list>${comments.map(dashboardCommentMarkup).join('')}</div><form class="dashboard-comment-form" data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><label class="sr-only" for="comment-${itemId}">Add a comment</label><input id="comment-${itemId}" name="comment" placeholder="Add to the class conversation..." required><button class="lui-icon-button" type="submit" aria-label="Post comment"><i data-lucide="send"></i></button></form></details></article>`;
+}
+
+function dashboardCommentMarkup(comment) {
+  return `<article class="dashboard-comment" data-comment-id="${escapeHtml(comment.id)}"><strong>${escapeHtml(comment.author || 'Classmate')}</strong><p>${escapeHtml(comment.text || '')}</p></article>`;
+}
+
 function connectLiveDashboard() {
   const root = document.querySelector('[data-dashboard-live]');
   if (!root || typeof io !== 'function') return;
   liveState.socket?.disconnect();
   liveState.socket = io();
   liveState.socket.on('connect', () => {
+    if (root.querySelector('[data-live-todo-list]')) liveState.socket.emit('todo:join');
+    root.querySelectorAll('[data-dashboard-course]').forEach((course) => {
+      liveState.socket.emit('course:join', { orgId: course.dataset.orgId, courseId: course.dataset.courseId });
+    });
     root.querySelectorAll('[data-dashboard-comment]').forEach((item) => {
       if (item.dataset.orgId) liveState.socket.emit('org:join', { orgId: item.dataset.orgId });
     });
   });
+  liveState.socket.on('course:item-created', ({ item, orgId, courseId }) => {
+    if (!item) return;
+    const course = root.querySelector(`[data-dashboard-course][data-org-id="${CSS.escape(String(orgId || ''))}"][data-course-id="${CSS.escape(String(courseId || ''))}"]`);
+    if (!course) return;
+    const list = root.querySelector('[data-dashboard-feed-list]');
+    if (!list || list.querySelector(`[data-item-id="${CSS.escape(String(item.id))}"]`)) return;
+    list.querySelector('.dashboard-feed-empty')?.remove();
+    list.insertAdjacentHTML('afterbegin', dashboardFeedPostMarkup(item, course));
+    bindLiveForms(list.firstElementChild);
+    const count = root.querySelector('[data-dashboard-feed-count]');
+    if (count) count.textContent = String(Number(count.textContent || 0) + 1);
+    const status = root.querySelector('[data-dashboard-feed-status]');
+    if (status) status.textContent = `New post in ${course.dataset.courseName}.`;
+    lucide.createIcons();
+  });
+  liveState.socket.on('item:verification-changed', ({ itemId, verifiedBy }) => {
+    const card = root.querySelector(`[data-item-id="${CSS.escape(String(itemId || ''))}"]`);
+    if (!card || !Array.isArray(verifiedBy)) return;
+    const count = card.querySelector('[data-verify-count]');
+    const button = card.querySelector('.dashboard-confirm-action');
+    if (count) count.textContent = String(verifiedBy.length);
+    if (button) {
+      const confirmed = verifiedBy.includes(root.dataset.userId);
+      button.classList.toggle('is-confirmed', confirmed);
+      button.setAttribute('aria-pressed', String(confirmed));
+    }
+  });
+  liveState.socket.on('item:comment-added', ({ itemId, comment }) => appendUniqueComment(itemId, comment));
+  liveState.socket.on('item:comment-updated', ({ itemId, comment }) => {
+    const card = root.querySelector(`[data-item-id="${CSS.escape(String(itemId || ''))}"]`);
+    const entry = card?.querySelector(`[data-comment-id="${CSS.escape(String(comment?.id || ''))}"]`);
+    if (entry && comment) entry.outerHTML = dashboardCommentMarkup(comment);
+  });
+  liveState.socket.on('item:comment-deleted', ({ itemId, commentId }) => {
+    const card = root.querySelector(`[data-item-id="${CSS.escape(String(itemId || ''))}"]`);
+    const entry = card?.querySelector(`[data-comment-id="${CSS.escape(String(commentId || ''))}"]`);
+    if (!entry) return;
+    entry.remove();
+    const count = card.querySelector('[data-comment-count]');
+    if (count) count.textContent = String(card.querySelectorAll('[data-comment-id]').length);
+  });
+  liveState.socket.on('item:updated', ({ item }) => {
+    if (!item) return;
+    const card = root.querySelector(`[data-item-id="${CSS.escape(String(item.id || ''))}"]`);
+    const course = card && root.querySelector(`[data-dashboard-course][data-org-id="${CSS.escape(card.dataset.orgId)}"][data-course-id="${CSS.escape(card.dataset.courseId)}"]`);
+    if (!card || !course) return;
+    const wasOpen = card.querySelector('.dashboard-post-comments')?.open;
+    card.outerHTML = dashboardFeedPostMarkup(item, course);
+    const updatedCard = root.querySelector(`[data-item-id="${CSS.escape(String(item.id))}"]`);
+    if (wasOpen) updatedCard.querySelector('.dashboard-post-comments').open = true;
+    bindLiveForms(updatedCard);
+    lucide.createIcons();
+  });
+  liveState.socket.on('item:deleted', ({ itemId }) => {
+    const card = root.querySelector(`[data-item-id="${CSS.escape(String(itemId || ''))}"]`);
+    if (!card) return;
+    card.remove();
+    const count = root.querySelector('[data-dashboard-feed-count]');
+    if (count) count.textContent = String(Math.max(0, Number(count.textContent || 0) - 1));
+  });
+  liveState.socket.on('todo:task-added', ({ task }) => updateDashboardTodo(task));
+  liveState.socket.on('todo:task-updated', ({ task }) => updateDashboardTodo(task));
+  liveState.socket.on('todo:task-deleted', ({ taskId }) => removeDashboardTodo(taskId));
   liveState.socket.on('org:moderation-updated', ({ commentId, action }) => {
     if (!commentId || !['comment-removed', 'comment-reviewed'].includes(action)) return;
     const item = root.querySelector(`[data-dashboard-comment-id="${CSS.escape(commentId)}"]`);
@@ -284,40 +363,6 @@ function bindDashboardInteractions() {
 
   const timeElement = dashboard.querySelector('.page-heading .time');
   if (timeElement) timeElement.textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase();
-
-  const heroElement = dashboard.querySelector('.page-heading .hero');
-  if (heroElement) {
-    const fullName = dashboard.dataset.userName?.trim() || '';
-    const firstName = fullName.split(/\s+/)[0] || fullName;
-    const heroMessages = [
-      'Make today easier to carry.',
-      `Good to see you, ${firstName}.`,
-      `${fullName}, your next step is waiting.`,
-      'Your classes, people, and next steps in one calm view.',
-      'Stay on top of your tasks and deadlines.',
-      'Keep your learning organized and efficient.',
-      `Do your homework, ${fullName}, or else I will tell your mother`,
-      'Worried about grades? They\'ll be fine. Just keep working hard.',
-      'Remember to take breaks and stay hydrated.',
-      'Learning is a journey, not a race. Pace yourself.',
-      'Your dedication to learning is inspiring. Keep it up!',
-      'It\'s okay to ask for help. Try our comments feature to ask questions.',
-      'Working on a group project? Use Breakout Groups to stay connected with your team.',
-    ];
-    let currentIndex = Math.floor(Math.random() * heroMessages.length);
-    heroElement.textContent = heroMessages[currentIndex];
-    heroElement.classList.add('hero-fade-in');
-    liveState.dashboardHeroTimer = window.setInterval(() => {
-      heroElement.classList.remove('hero-fade-in');
-      heroElement.classList.add('hero-fade-out');
-      liveState.dashboardHeroFadeTimer = window.setTimeout(() => {
-        currentIndex = (currentIndex + 1) % heroMessages.length;
-        heroElement.textContent = heroMessages[currentIndex];
-        heroElement.classList.remove('hero-fade-out');
-        heroElement.classList.add('hero-fade-in');
-      }, 2500);
-    }, 15000);
-  }
 
   const groupSearch = dashboard.querySelector('[data-dashboard-group-search]');
   groupSearch?.addEventListener('input', () => {
