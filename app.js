@@ -19,11 +19,8 @@ const { isSyncDue, isSyncSchedule, syncInterval } = require('./utils/task-sync-s
 const { taskSyncConfiguration } = require('./utils/task-sync-config');
 const sharedGroupUserIds = require('./utils/shared-group-users');
 const searchUsers = require('./utils/search-users');
-<<<<<<< HEAD
 const { encrypt: encryptData, decrypt: decryptData } = require('./utils/task-encryption');
-=======
 const siteAdminUserPage = require('./utils/site-admin-user-page');
->>>>>>> 0586b5d (Fix site admin usability for user viewing)
 const registerRenderGateRoutes = require('./beta-tests/routes');
 const registerThemeRoutes = require('./themes/routes');
 const registerSsoRoutes = require('./sso/routes');
