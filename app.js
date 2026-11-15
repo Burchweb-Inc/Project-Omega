@@ -21,6 +21,7 @@ const { taskSyncConfiguration } = require('./utils/task-sync-config');
 const sharedGroupUserIds = require('./utils/shared-group-users');
 const searchUsers = require('./utils/search-users');
 const siteAdminUserPage = require('./utils/site-admin-user-page');
+const { DASHBOARD_FEED_PAGE_SIZE, dashboardFeedPage, sortDashboardFeedItems } = require('./utils/dashboard-feed');
 const registerRenderGateRoutes = require('./beta-tests/routes');
 const registerThemeRoutes = require('./themes/routes');
 
@@ -736,8 +737,13 @@ app.get('/dashboard', requireUser, (request, response) => {
   const orgs = orgModel.all();
   const dashboardGroups = request.user.isSiteAdmin ? orgs.slice().sort((left, right) => left.name.localeCompare(right.name)) : orgs.filter((org) => membership(org, request.user)).sort((left, right) => left.name.localeCompare(right.name));
   const dashboardModeration = (request.user.isSiteAdmin ? orgs : dashboardGroups).flatMap((org) => moderationComments(org).filter((comment) => !comment.reviewedAt).map((comment) => ({ ...comment, orgId: org.id, orgName: org.name })));
+  const sortedFeedItems = sortDashboardFeedItems(orgModel.feedFor(request.user.id));
+  const feedPage = dashboardFeedPage(sortedFeedItems, 0);
   render(request, response, 'dashboard', {
-    feedItems: orgModel.feedFor(request.user.id).slice(0, 20),
+    feedItems: feedPage.items,
+    feedTotal: feedPage.total,
+    feedHasMore: feedPage.hasMore,
+    feedPageSize: DASHBOARD_FEED_PAGE_SIZE,
     dashboardCourses: dashboardGroups.flatMap((org) => org.courses.map((course) => ({
       orgId: org.id,
       orgName: org.name,
@@ -750,6 +756,23 @@ app.get('/dashboard', requireUser, (request, response) => {
     dashboardGroups,
     dashboardModeration
   });
+});
+app.get('/dashboard/feed', requireUser, (request, response) => {
+  const requestedOffset = Number(request.query.offset);
+  const offset = Number.isSafeInteger(requestedOffset) ? Math.max(0, requestedOffset) : 0;
+  const items = sortDashboardFeedItems(orgModel.feedFor(request.user.id));
+  const page = dashboardFeedPage(items, offset);
+  page.items = page.items.map((entry) => ({
+    ...entry,
+    org: { id: entry.org.id, name: entry.org.name },
+    course: {
+      id: entry.course.id,
+      name: entry.course.name,
+      code: entry.course.code,
+      color: entry.course.color
+    }
+  }));
+  return response.json(page);
 });
 app.get('/site-admin', requireUser, requireSiteAdmin, (request, response) => render(request, response, 'site-admin', siteAdminPageData(request)));
 app.get('/site-admin/users/page', requireUser, requireSiteAdmin, (request, response, next) => {

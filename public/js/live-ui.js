@@ -254,20 +254,124 @@ function connectLiveNotifications() {
 }
 
 function dashboardFeedPostMarkup(item, course) {
-  const orgId = escapeHtml(course.dataset.orgId); const courseId = escapeHtml(course.dataset.courseId); const itemId = escapeHtml(item.id);
-  const isProject = item.type === 'Project'; const isEvent = item.type === 'Event';
+  const orgId = escapeHtml(course.dataset.orgId);
+  const courseId = escapeHtml(course.dataset.courseId);
+  const itemId = escapeHtml(item.id);
+  const type = item.type || 'Homework';
+  const due = item.due || '';
+  const isProject = type === 'Project';
+  const isEvent = type === 'Event';
   const taskSlug = `${String(item.title || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || itemId}-${itemId.slice(-8)}`;
   const comments = (item.comments || []).filter((comment) => !comment.reported);
-  return `<article class="lui-card dashboard-feed-post" data-item-id="${itemId}" data-org-id="${orgId}" data-course-id="${courseId}" data-type="${escapeHtml(item.type || 'Homework')}"><header class="dashboard-post-header"><span class="dashboard-course-mark" style="--course-color:${escapeHtml(course.dataset.courseColor)}" aria-hidden="true">${escapeHtml((course.dataset.courseCode || course.dataset.courseName || 'C').slice(0, 1))}</span><div class="dashboard-post-source"><strong>${escapeHtml(course.dataset.courseName)}</strong><span>${escapeHtml(course.dataset.orgName)} · ${escapeHtml(item.type || 'Class update')}</span></div><span class="lui-badge dashboard-post-date">${escapeHtml(item.due || 'No date')}</span></header><div class="dashboard-post-copy"><h3>${escapeHtml(item.title || 'Untitled class update')}</h3>${item.details ? `<p>${escapeHtml(item.details)}</p>` : ''}</div><div class="dashboard-post-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="lui-button lui-button-quiet dashboard-confirm-action ${item.verifiedBy?.includes(document.querySelector('[data-dashboard-live]')?.dataset.userId) ? 'is-confirmed' : ''}" type="submit" aria-pressed="${Boolean(item.verifiedBy?.includes(document.querySelector('[data-dashboard-live]')?.dataset.userId))}"><i data-lucide="badge-check"></i><span>Confirm</span><strong data-verify-count>${(item.verifiedBy || []).length}</strong></button></form>${isEvent ? '' : `<form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="lui-button lui-button-quiet" type="submit"><i data-lucide="list-plus"></i> Add to Todo</button></form>`}${isProject ? `<a class="lui-button lui-button-quiet" href="/org/${orgId}/course/${courseId}/task/${escapeHtml(taskSlug)}/breakout-groups"><i data-lucide="users-round"></i> Breakout groups</a>` : ''}<a class="lui-button lui-button-quiet dashboard-open-course" href="/org/${orgId}/course/${courseId}#feed"><i data-lucide="arrow-up-right"></i> Class thread</a></div><details class="dashboard-post-comments"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${comments.length}</span> comments <i data-lucide="chevron-down"></i></summary><div class="dashboard-comment-list" data-comment-list>${comments.map(dashboardCommentMarkup).join('')}</div><form class="dashboard-comment-form" data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><label class="sr-only" for="comment-${itemId}">Add a comment</label><input id="comment-${itemId}" name="comment" placeholder="Add to the class conversation..." required><button class="lui-icon-button" type="submit" aria-label="Post comment"><i data-lucide="send"></i></button></form></details></article>`;
+  const userId = document.querySelector('[data-dashboard-live]')?.dataset.userId;
+  const confirmed = (item.verifiedBy || []).includes(userId);
+  return `<article class="lui-card dashboard-feed-post" data-item-id="${itemId}" data-org-id="${orgId}" data-course-id="${courseId}" data-type="${escapeHtml(type)}" data-due="${escapeHtml(due)}" data-priority="${escapeHtml(item.priority || '')}">
+    <header class="dashboard-post-header"><div class="dashboard-post-source"><strong>${escapeHtml(course.dataset.courseName)}</strong><span>${escapeHtml(course.dataset.orgName)} · ${escapeHtml(type)}</span></div><span class="dashboard-post-date"><i data-lucide="calendar-days" aria-hidden="true"></i>${escapeHtml(due || 'No date')}</span></header>
+    <div class="dashboard-post-copy"><h3>${linkedTaskTextMarkup(item.title || 'Untitled class update', item.links)}</h3>${item.details ? `<p>${linkedTaskTextMarkup(item.details, item.links)}</p>` : ''}</div>
+    <div class="dashboard-post-actions"><form data-live-form action="/org/${orgId}/items/${itemId}/verify" method="post"><button class="lui-button lui-button-quiet dashboard-confirm-action ${confirmed ? 'is-confirmed' : ''}" type="submit" aria-pressed="${confirmed}"><i data-lucide="badge-check"></i><span>${confirmed ? 'Confirmed' : 'Confirm'}</span><strong data-verify-count>${(item.verifiedBy || []).length}</strong></button></form>
+    ${isEvent ? '' : `<form data-live-form action="/org/${orgId}/items/${itemId}/todo" method="post"><button class="lui-button lui-button-quiet" type="submit"><i data-lucide="list-plus"></i> Add to Todo</button></form>`}
+    ${isProject ? `<a class="lui-button lui-button-quiet" href="/org/${orgId}/course/${courseId}/task/${escapeHtml(taskSlug)}/breakout-groups"><i data-lucide="users-round"></i> Breakout groups</a>` : ''}
+    <a class="lui-button lui-button-quiet dashboard-open-course" href="/org/${orgId}/course/${courseId}#feed"><i data-lucide="arrow-up-right"></i> Class thread</a></div>
+    <details class="dashboard-post-comments"><summary><i data-lucide="message-circle"></i> <span data-comment-count>${comments.length}</span> comments <i data-lucide="chevron-down"></i></summary><div class="dashboard-comment-list" data-comment-list>${comments.map(dashboardCommentMarkup).join('')}</div><form class="dashboard-comment-form" data-live-form action="/org/${orgId}/items/${itemId}/comments" method="post"><label class="sr-only" for="comment-${itemId}">Add a comment</label><input id="comment-${itemId}" name="comment" placeholder="Add to the class conversation..." required><button class="lui-icon-button" type="submit" aria-label="Post comment"><i data-lucide="send"></i></button></form></details>
+  </article>`;
 }
 
 function dashboardCommentMarkup(comment) {
   return `<article class="dashboard-comment" data-comment-id="${escapeHtml(comment.id)}"><strong>${escapeHtml(comment.author || 'Classmate')}</strong><p>${escapeHtml(comment.text || '')}</p></article>`;
 }
 
+function updateDashboardConfirmation(card, verifiedBy, userId) {
+  if (!Array.isArray(verifiedBy)) return;
+  const count = card?.querySelector('[data-verify-count]');
+  const button = card?.querySelector('.dashboard-confirm-action');
+  if (count) count.textContent = String(verifiedBy.length);
+  if (!button) return;
+  const confirmed = verifiedBy.some((id) => String(id) === String(userId));
+  button.classList.toggle('is-confirmed', confirmed);
+  button.setAttribute('aria-pressed', String(confirmed));
+  const label = button.querySelector('span');
+  if (label) label.textContent = confirmed ? 'Confirmed' : 'Confirm';
+  if (button.dataset.original !== undefined) button.dataset.original = button.innerHTML;
+}
+
+function sortDashboardFeed(root) {
+  const list = root.querySelector('[data-dashboard-feed-list]');
+  const today = Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
+  const distance = (card) => {
+    const due = card.dataset.due;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(due || '')) return Infinity;
+    const timestamp = Date.parse(`${due}T00:00:00Z`);
+    return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === due
+      ? Math.abs(timestamp - today)
+      : Infinity;
+  };
+  const priority = { urgent: 0, high: 1, medium: 2, normal: 3, low: 4 };
+  const type = { 'upcoming test': 0, test: 0, project: 1, homework: 2, event: 3 };
+  const rank = (map, value) => Object.hasOwn(map, value) ? map[value] : 99;
+  [...list.querySelectorAll('.dashboard-feed-post')].sort((a, b) =>
+    distance(a) - distance(b)
+    || rank(priority, a.dataset.priority.toLowerCase()) - rank(priority, b.dataset.priority.toLowerCase())
+    || rank(type, a.dataset.type.toLowerCase()) - rank(type, b.dataset.type.toLowerCase())
+    || Number(b.querySelector('[data-verify-count]')?.textContent || 0) - Number(a.querySelector('[data-verify-count]')?.textContent || 0)
+    || Number(b.querySelector('[data-comment-count]')?.textContent || 0) - Number(a.querySelector('[data-comment-count]')?.textContent || 0)
+    || a.dataset.itemId.localeCompare(b.dataset.itemId)
+  ).forEach((card) => list.append(card));
+}
+
+function bindDashboardFeedPagination(root) {
+  const pagination = root.querySelector('[data-dashboard-feed-pagination]');
+  const button = pagination?.querySelector('[data-dashboard-feed-more]');
+  const list = root.querySelector('[data-dashboard-feed-list]');
+  if (!pagination || !button || !list) return;
+
+  let loading = false;
+  const loadMore = async () => {
+    if (loading || pagination.dataset.hasMore !== 'true') return;
+    loading = true;
+    button.disabled = true;
+    try {
+      const offset = Number(pagination.dataset.offset) || 0;
+      const pageSize = Number(pagination.dataset.pageSize) || 10;
+      const response = await fetch(`/dashboard/feed?offset=${offset}`, { headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+      const page = await response.json();
+      if (!Array.isArray(page.items) || page.items.length > pageSize || !Number.isInteger(page.total) || typeof page.hasMore !== 'boolean') {
+        throw new Error('The server returned an invalid feed page.');
+      }
+      page.items.forEach((item) => {
+        const key = `[data-item-id="${CSS.escape(String(item.id))}"]`;
+        if (list.querySelector(key)) return;
+        const course = root.querySelector(`[data-dashboard-course][data-org-id="${CSS.escape(String(item.org.id))}"][data-course-id="${CSS.escape(String(item.course.id))}"]`);
+        if (course) list.insertAdjacentHTML('beforeend', dashboardFeedPostMarkup(item, course));
+      });
+      pagination.dataset.offset = String(offset + page.items.length);
+      pagination.dataset.hasMore = String(page.hasMore);
+      root.querySelector('[data-dashboard-feed-count]').textContent = String(page.total);
+      root.querySelector('[data-dashboard-feed-page-status]').textContent = `Loaded ${Math.min(Number(pagination.dataset.offset), page.total)} of ${page.total} class updates.`;
+      sortDashboardFeed(root);
+      lucide.createIcons();
+      bindLiveForms(list);
+    } catch (error) {
+      console.error('[LockIn] Could not load more class feed posts.', error);
+      showLiveError('Could not load more class posts. Please try again.');
+    } finally {
+      loading = false;
+      button.disabled = false;
+      button.hidden = pagination.dataset.hasMore !== 'true';
+    }
+  };
+
+  button.addEventListener('click', loadMore);
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) loadMore(); }, { rootMargin: '0px 0px 120px' });
+    observer.observe(button);
+  }
+}
+
 function connectLiveDashboard() {
   const root = document.querySelector('[data-dashboard-live]');
   if (!root || typeof io !== 'function') return;
+  bindDashboardFeedPagination(root);
   liveState.socket?.disconnect();
   liveState.socket = io();
   liveState.socket.on('connect', () => {
@@ -286,10 +390,17 @@ function connectLiveDashboard() {
     const list = root.querySelector('[data-dashboard-feed-list]');
     if (!list || list.querySelector(`[data-item-id="${CSS.escape(String(item.id))}"]`)) return;
     list.querySelector('.dashboard-feed-empty')?.remove();
-    list.insertAdjacentHTML('afterbegin', dashboardFeedPostMarkup(item, course));
-    bindLiveForms(list.firstElementChild);
+    list.insertAdjacentHTML('beforeend', dashboardFeedPostMarkup(item, course));
+    bindLiveForms(list.lastElementChild);
     const count = root.querySelector('[data-dashboard-feed-count]');
     if (count) count.textContent = String(Number(count.textContent || 0) + 1);
+    root.querySelector('[data-dashboard-feed-pagination]').dataset.hasMore = 'true';
+    root.querySelector('[data-dashboard-feed-more]').hidden = false;
+    sortDashboardFeed(root);
+    const pagination = root.querySelector('[data-dashboard-feed-pagination]');
+    const loadedCount = Number(pagination.dataset.offset) || 0;
+    const cards = root.querySelectorAll('.dashboard-feed-post');
+    if (cards.length > loadedCount) cards[cards.length - 1].remove();
     const status = root.querySelector('[data-dashboard-feed-status]');
     if (status) status.textContent = `New post in ${course.dataset.courseName}.`;
     lucide.createIcons();
@@ -297,14 +408,8 @@ function connectLiveDashboard() {
   liveState.socket.on('item:verification-changed', ({ itemId, verifiedBy }) => {
     const card = root.querySelector(`[data-item-id="${CSS.escape(String(itemId || ''))}"]`);
     if (!card || !Array.isArray(verifiedBy)) return;
-    const count = card.querySelector('[data-verify-count]');
-    const button = card.querySelector('.dashboard-confirm-action');
-    if (count) count.textContent = String(verifiedBy.length);
-    if (button) {
-      const confirmed = verifiedBy.includes(root.dataset.userId);
-      button.classList.toggle('is-confirmed', confirmed);
-      button.setAttribute('aria-pressed', String(confirmed));
-    }
+    updateDashboardConfirmation(card, verifiedBy, root.dataset.userId);
+    sortDashboardFeed(root);
   });
   liveState.socket.on('item:comment-added', ({ itemId, comment }) => appendUniqueComment(itemId, comment));
   liveState.socket.on('item:comment-updated', ({ itemId, comment }) => {
@@ -330,18 +435,28 @@ function connectLiveDashboard() {
     const updatedCard = root.querySelector(`[data-item-id="${CSS.escape(String(item.id))}"]`);
     if (wasOpen) updatedCard.querySelector('.dashboard-post-comments').open = true;
     bindLiveForms(updatedCard);
+    sortDashboardFeed(root);
     lucide.createIcons();
   });
   liveState.socket.on('item:deleted', ({ itemId }) => {
     const card = root.querySelector(`[data-item-id="${CSS.escape(String(itemId || ''))}"]`);
-    if (!card) return;
-    card.remove();
+    card?.remove();
     const count = root.querySelector('[data-dashboard-feed-count]');
     if (count) count.textContent = String(Math.max(0, Number(count.textContent || 0) - 1));
+    const pagination = root.querySelector('[data-dashboard-feed-pagination]');
+    if (card) pagination.dataset.offset = String(Math.max(0, Number(pagination.dataset.offset || 0) - 1));
+    pagination.dataset.hasMore = String(Number(pagination.dataset.offset || 0) < Number(count?.textContent || 0));
+    root.querySelector('[data-dashboard-feed-more]').hidden = pagination.dataset.hasMore !== 'true';
   });
   liveState.socket.on('todo:task-added', ({ task }) => updateDashboardTodo(task));
   liveState.socket.on('todo:task-updated', ({ task }) => updateDashboardTodo(task));
   liveState.socket.on('todo:task-deleted', ({ taskId }) => removeDashboardTodo(taskId));
+  liveState.socket.on('todo:reordered', ({ tasks }) => {
+    const list = root.querySelector('[data-dashboard-todo-list]');
+    if (!list || !Array.isArray(tasks)) return;
+    const positions = new Map(tasks.map((task) => [String(task.id), Number(task.position) || 0]));
+    [...list.querySelectorAll('.dashboard-todo-item')].sort((left, right) => (positions.get(left.dataset.taskId) ?? Number.MAX_SAFE_INTEGER) - (positions.get(right.dataset.taskId) ?? Number.MAX_SAFE_INTEGER)).forEach((item) => list.append(item));
+  });
   liveState.socket.on('org:moderation-updated', ({ commentId, action }) => {
     if (!commentId || !['comment-removed', 'comment-reviewed'].includes(action)) return;
     const item = root.querySelector(`[data-dashboard-comment-id="${CSS.escape(commentId)}"]`);

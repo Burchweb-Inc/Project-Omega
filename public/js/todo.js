@@ -7,7 +7,7 @@ function syncDashboardTodoCount() {
   const list = document.querySelector('[data-dashboard-todo-list]');
   if (!list) return;
   const count = list.querySelectorAll('.dashboard-todo-item:not(.is-done)').length;
-  document.querySelectorAll('[data-dashboard-todo-count]').forEach((target) => { target.textContent = String(count); });
+  document.querySelectorAll('[data-dashboard-todo-count], [data-live-todo-count]').forEach((target) => { target.textContent = String(count); });
   if (list.querySelector('.dashboard-todo-item')) list.querySelector('.dashboard-todo-empty')?.remove();
   else if (!list.querySelector('.dashboard-todo-empty')) {
     const empty = document.createElement('p');
@@ -20,11 +20,16 @@ function updateDashboardTodo(task) {
   const list = document.querySelector('[data-dashboard-todo-list]');
   if (!list || !task) return;
   let row = list.querySelector(`[data-task-id="${CSS.escape(String(task.id))}"]`);
+  const wasDone = row?.classList.contains('is-done');
   if (row) row.outerHTML = dashboardTodoTaskMarkup(task);
   else {
     list.querySelector('.dashboard-todo-empty')?.remove();
     list.insertAdjacentHTML('beforeend', dashboardTodoTaskMarkup(task));
   }
+  const status = document.querySelector('[data-dashboard-todo-status]');
+  if (status) status.textContent = wasDone === undefined
+    ? `Added ${task.title} to Personal Todo.`
+    : wasDone !== Boolean(task.done) ? `Marked ${task.title} ${task.done ? 'complete' : 'incomplete'}.` : '';
   bindLiveForms(list);
   syncDashboardTodoCount();
   lucide.createIcons();
@@ -186,16 +191,11 @@ async function submitLiveForm(form, animatedEntry = null) {
     }
     if (payload.role || (payload.action && payload.userId)) { window.location.reload(); return; }
     if (payload.verifiedBy) {
-      const itemId = actionUrl.split('/').at(-2);
-      const card = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"]`);
-      const count = card?.querySelector('[data-verify-count]');
-      if (count) count.textContent = payload.verifiedBy.length;
-      const button = card?.querySelector('.dashboard-confirm-action');
-      if (button) {
-        const confirmed = payload.verifiedBy.includes(document.querySelector('[data-dashboard-live]')?.dataset.userId);
-        button.classList.toggle('is-confirmed', confirmed);
-        button.setAttribute('aria-pressed', String(confirmed));
-      }
+      const itemId = payload.itemId || actionUrl.match(/\/items\/([^/]+)\/verify$/)?.[1];
+      const card = form.closest('.dashboard-feed-post')
+        || document.querySelector(`[data-dashboard-feed-list] [data-item-id="${CSS.escape(String(itemId || ''))}"]`);
+      updateDashboardConfirmation(card, payload.verifiedBy, document.querySelector('[data-dashboard-live]')?.dataset.userId);
+      if (card?.closest('[data-dashboard-live]')) sortDashboardFeed(card.closest('[data-dashboard-live]'));
     }
     if (payload.downvotedBy) { const itemId = actionUrl.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = payload.downvotedBy.length; }
     if (payload.downvoteCount !== undefined) { const itemId = actionUrl.split('/').at(-2); const count = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"] [data-downvote-count]`); if (count) count.textContent = payload.downvoteCount; }
@@ -248,7 +248,12 @@ async function submitLiveForm(form, animatedEntry = null) {
     }
     if (payload.task && isTaskToggle) {
       const row = document.querySelector(`[data-task-id="${CSS.escape(payload.task.id)}"]`);
-      if (row) { row.classList.toggle('is-done', Boolean(payload.task.done)); if (payload.task.done) celebrateTask(row); applyTodoFilter(document.querySelector('[data-live-todo-list]')?.dataset.activeFilter || 'all'); }
+      if (row) {
+        row.classList.toggle('is-done', Boolean(payload.task.done));
+        row.querySelector('.dashboard-todo-check')?.setAttribute('aria-label', `${payload.task.done ? 'Mark incomplete' : 'Mark complete'}: ${payload.task.title}`);
+        if (payload.task.done) celebrateTask(row);
+        applyTodoFilter(document.querySelector('[data-live-todo-list]')?.dataset.activeFilter || 'all');
+      }
       syncDashboardTodoCount();
     }
     if (payload.deleted && payload.taskId) {
@@ -460,7 +465,9 @@ function bindTaskCopyModal() {
 function syncTodoSummary() {
   const list = document.querySelector('[data-live-todo-list]'); const summary = document.querySelector('[data-todo-summary]'); const countTarget = document.querySelector('[data-live-todo-count]');
   if (!list) return;
-  const count = list.querySelectorAll('.private-task:not(.is-done)').length;
+  const count = list.matches('[data-dashboard-todo-list]')
+    ? list.querySelectorAll('.dashboard-todo-item:not(.is-done)').length
+    : list.querySelectorAll('.private-task:not(.is-done)').length;
   if (summary) summary.textContent = `${count} thing${count === 1 ? '' : 's'} still in motion`;
-  if (countTarget) countTarget.textContent = count;
+  document.querySelectorAll('[data-live-todo-count], [data-dashboard-todo-count]').forEach((target) => { target.textContent = String(count); });
 }

@@ -219,7 +219,7 @@
       <div class="metric-grid">
         <div class="metric-card metric-accent"><span>Still to do</span><strong data-dashboard-todo-count><%= (user.tasks || []).filter(task => !task.done).length %></strong><small>tasks in your personal queue</small></div>
         <div class="metric-card"><span>Your classes</span><strong><%= dashboardCourses.length %></strong><small>connected to your desk</small></div>
-        <div class="metric-card"><span>Class updates</span><strong data-dashboard-feed-count><%= feedItems.length %></strong><small>in your latest activity</small></div>
+        <div class="metric-card"><span>Class updates</span><strong data-dashboard-feed-count><%= feedTotal %></strong><small>in your latest activity</small></div>
         <div class="metric-card"><span>Study groups</span><strong><%= dashboardGroups.reduce((count, org) => count + (org.groups || []).length, 0) %></strong><small>ready to work together</small></div>
       </div>
       <div class="dashboard-grid dashboard-home-grid">
@@ -231,11 +231,10 @@
           <div class="dashboard-live-status" data-dashboard-feed-status role="status" aria-live="polite"></div>
           <div class="dashboard-feed-list" data-dashboard-feed-list>
             <% feedItems.forEach(entry => { %>
-              <article class="lui-card dashboard-feed-post" data-item-id="<%= entry.id %>" data-org-id="<%= entry.org.id %>" data-course-id="<%= entry.course.id %>" data-type="<%= entry.type %>">
+              <article class="lui-card dashboard-feed-post" data-item-id="<%= entry.id %>" data-org-id="<%= entry.org.id %>" data-course-id="<%= entry.course.id %>" data-type="<%= entry.type %>" data-due="<%= entry.due || '' %>" data-priority="<%= entry.priority || '' %>">
                 <header class="dashboard-post-header">
-                  <span class="dashboard-course-mark" style="--course-color:<%= entry.course.color || '#547484' %>" aria-hidden="true"><%= (entry.course.code || entry.course.name || 'C').slice(0, 1) %></span>
                   <div class="dashboard-post-source"><strong><%= entry.course.name %></strong><span><%= entry.org.name %> · <%= entry.type %></span></div>
-                  <span class="lui-badge dashboard-post-date"><%= entry.due || 'No date' %></span>
+                  <span class="dashboard-post-date"><i data-lucide="calendar-days" aria-hidden="true"></i><%= entry.due || 'No date' %></span>
                 </header>
                 <div class="dashboard-post-copy">
                   <h3><%- renderLinkedText(entry.title, entry.links) %></h3>
@@ -244,7 +243,7 @@
                 <div class="dashboard-post-actions">
                   <form data-live-form action="/org/<%= entry.org.id %>/items/<%= entry.id %>/verify" method="post">
                     <button class="lui-button lui-button-quiet dashboard-confirm-action <%= (entry.verifiedBy || []).includes(user.id) ? 'is-confirmed' : '' %>" type="submit" aria-pressed="<%= (entry.verifiedBy || []).includes(user.id) %>">
-                      <i data-lucide="badge-check"></i><span>Confirm</span><strong data-verify-count><%= (entry.verifiedBy || []).length %></strong>
+                      <i data-lucide="badge-check"></i><span><%= (entry.verifiedBy || []).includes(user.id) ? 'Confirmed' : 'Confirm' %></span><strong data-verify-count><%= (entry.verifiedBy || []).length %></strong>
                     </button>
                   </form>
                   <% if (entry.type !== 'Event') { %>
@@ -276,6 +275,10 @@
               <div class="lui-panel dashboard-feed-empty"><i data-lucide="messages-square"></i><h3>Your class feed is ready</h3><p>When a class shares a deadline or project, it will show up here.</p><a class="lui-button lui-button-secondary" href="/groups">Find a class</a></div>
             <% } %>
           </div>
+          <div class="dashboard-feed-pagination" data-dashboard-feed-pagination data-offset="<%= feedItems.length %>" data-page-size="<%= feedPageSize %>" data-has-more="<%= feedHasMore %>">
+            <button class="lui-button lui-button-secondary" type="button" data-dashboard-feed-more <%= feedHasMore ? '' : 'hidden' %>>Load <%= feedPageSize %> more</button>
+            <span class="sr-only" data-dashboard-feed-page-status role="status" aria-live="polite"></span>
+          </div>
           <div class="dashboard-course-rooms" hidden aria-hidden="true">
             <% dashboardCourses.forEach(course => { %><span data-dashboard-course data-org-id="<%= course.orgId %>" data-org-name="<%= course.orgName %>" data-course-id="<%= course.courseId %>" data-course-name="<%= course.courseName %>" data-course-code="<%= course.courseCode || '' %>" data-course-color="<%= course.courseColor || '#547484' %>"></span><% }) %>
           </div>
@@ -298,6 +301,7 @@
               <% }) %>
               <% if (!(user.tasks || []).length) { %><p class="dashboard-todo-empty">Your private queue is clear. Add a task from any class feed.</p><% } %>
             </div>
+            <p class="sr-only" data-dashboard-todo-status role="status" aria-live="polite"></p>
             <a class="lui-button lui-button-primary dashboard-expand-todo" href="/todo">Open full Todo <i data-lucide="arrow-up-right"></i></a>
           </section>
           <section class="lui-card dashboard-groups-card">

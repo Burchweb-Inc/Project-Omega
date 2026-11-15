@@ -325,6 +325,7 @@ function updateCommentCount(card) {
   if (list && count) count.textContent = card.closest('[data-dashboard-live]')
     ? list.querySelectorAll('[data-comment-id]').length
     : list.querySelectorAll('.comment-entry:not([data-removing="true"]):not(.is-removed)').length;
+  if (card?.closest('[data-dashboard-live]')) sortDashboardFeed(card.closest('[data-dashboard-live]'));
 }
 function finishCommentRemoval(entry) { if (!entry) return; const card = entry.closest('[data-item-id]'); entry.remove(); updateCommentCount(card); }
 function markCommentReported(entry) {
