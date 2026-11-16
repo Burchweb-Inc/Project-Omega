@@ -1171,12 +1171,14 @@ app.get('/todo', requireUser, async (request, response) => {
 app.get('/todo/tasks', requireUser, (request, response) => {
   const offset = Number(request.query.offset ?? 0);
   if (!Number.isSafeInteger(offset) || offset < 0) return response.status(400).json({ error: 'Task offset must be a non-negative integer.' });
-  normalizeUserTasks(request.user);
-  const tasks = [...(request.user.tasks || [])].sort((left, right) => left.position - right.position);
+  const tasks = request.user.tasks || [];
+  tasks.sort((left, right) => (Number(left.position) || 0) - (Number(right.position) || 0));
   response.setHeader('Cache-Control', 'private, no-store');
   return response.json({
     tasks: tasks.slice(offset, offset + TODO_TASK_PAGE_SIZE).map(normalizeTask),
-    hasMore: offset + TODO_TASK_PAGE_SIZE < tasks.length
+    hasMore: offset + TODO_TASK_PAGE_SIZE < tasks.length,
+    total: tasks.length,
+    ...(request.query.includePendingCount === 'true' && { pendingTotal: tasks.filter((task) => !task.done).length })
   });
 });
 app.get('/focus-backgrounds.json', requireUser, (request, response) => {
@@ -1511,10 +1513,29 @@ app.post('/tasks/:taskId/delete', requireUser, (request, response) => {
   return sendMutation(request, response, { deleted: true, taskId: task.id, todoPendingCount: request.user.tasks.filter((entry) => !entry.done).length }, '/todo');
 });
 
-app.post('/tasks/:taskId/reorder', requireUser, (request, response) => {
-  const tasks = request.user.tasks || []; const orderedIds = Array.isArray(request.body.order) ? request.body.order : String(request.body.order || '').split(',');
-  const byId = new Map(tasks.map((task) => [task.id, task])); orderedIds.forEach((taskId, index) => { const task = byId.get(taskId); if (task) task.position = index; });
-  tasks.sort((left, right) => left.position - right.position); persistState(); emitTodo(request.user.id, 'todo:reordered', { tasks: tasks.map(normalizeTask) }); return sendMutation(request, response, { tasks }, '/todo');
+app.post('/tasks/reorder', requireUser, (request, response) => {
+  const tasks = request.user.tasks || [];
+  const orderedIds = Array.isArray(request.body.order) ? request.body.order : String(request.body.order || '').split(',');
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const reordered = new Set();
+  const nextOrder = [];
+  orderedIds.forEach((taskId) => {
+    const task = byId.get(taskId);
+    if (task && !reordered.has(taskId)) {
+      nextOrder.push(task);
+      reordered.add(taskId);
+    }
+  });
+  tasks
+    .sort((left, right) => left.position - right.position)
+    .forEach((task) => {
+      if (!reordered.has(task.id)) nextOrder.push(task);
+    });
+  nextOrder.forEach((task, index) => { task.position = index; });
+  request.user.tasks = nextOrder;
+  persistState();
+  emitTodo(request.user.id, 'todo:reordered', { tasks: nextOrder.map(normalizeTask) });
+  return sendMutation(request, response, { tasks: nextOrder }, '/todo');
 });
 
 app.post('/org/:id/items/:itemId/toggle', requireUser, (request, response) => {

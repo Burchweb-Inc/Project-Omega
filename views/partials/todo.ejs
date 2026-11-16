@@ -17,7 +17,7 @@
         <button class="lui-icon-button task-sync-tip-close" type="button" data-dismiss-sync-tip aria-label="Dismiss task sync tip"><i data-lucide="x"></i></button>
     </aside>
     <%- include('mini/task-sync-modal') %>
-    <section class="private-list" data-live-todo-list data-offset="<%= Math.min((user.tasks || []).length, todoPageSize || 10) %>" data-has-more="<%= (user.tasks || []).length > (todoPageSize || 10) %>">
+    <section class="private-list" data-live-todo-list data-page-size="<%= todoPageSize || 10 %>" data-offset="<%= Math.min((user.tasks || []).length, todoPageSize || 10) %>" data-has-more="<%= (user.tasks || []).length > (todoPageSize || 10) %>">
         <% (user.tasks || []).slice(0, todoPageSize || 10).forEach(task=> { %><article class="private-task <%= task.done ? 'is-done' : '' %>" data-priority="<%= (task.priority || 'Normal').toLowerCase() %>"
                 data-task-id="<%= task.id %>">
                 <form class="toggle-task-form" action="/tasks/<%= task.id %>/toggle" method="post" data-live-form>
