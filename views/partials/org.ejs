@@ -36,7 +36,7 @@
             <% } %>
     </div>
     <div class="course-grid">
-        <% selectedOrg.courses.forEach(course=> { %><a class="course-tile"
+        <% selectedOrg.courses.forEach(course=> { const currentItems = course.currentItems || []; %><a class="course-tile"
                 href="/org/<%= selectedOrg.id %>/course/<%= course.id %>">
                 <div class="course-tile-top"><span class="course-color"
                         style="background:<%= course.color %>"></span><span>
@@ -46,15 +46,15 @@
                     <%= course.name %>
                 </h3>
                 <p>
-                    <%= course.items.filter(item=> item.type !== 'Event' && !item.done).length %> open tasks · <%=
+                    <%= currentItems.filter(item=> item.type !== 'Event').length %> open tasks · <%=
                             course.items.length %> feed posts
                 </p>
                 <div class="course-tags"><span>Homework <strong>
-                            <%= course.items.filter(item=> item.type === 'Homework').length %>
+                            <%= currentItems.filter(item=> item.type === 'Homework').length %>
                         </strong></span><span>Tests <strong>
-                            <%= course.items.filter(item=> item.type === 'Upcoming test').length %>
+                            <%= currentItems.filter(item=> item.type === 'Upcoming test').length %>
                         </strong></span><span>Events <strong>
-                            <%= course.items.filter(item=> item.type === 'Event').length %>
+                            <%= currentItems.filter(item=> item.type === 'Event').length %>
                         </strong></span></div>
             </a>
             <% }) %>

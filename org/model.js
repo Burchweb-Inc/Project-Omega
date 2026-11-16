@@ -135,6 +135,16 @@ function isPastAssignment(org, item, now = new Date()) {
   return current.date > pastDate || (current.date === pastDate && current.time >= pastTime);
 }
 
+function isPastAssignmentForCourseDay(org, course, item, day, now = new Date()) {
+  const hasABDates = Object.hasOwn(item, 'dueA') || Object.hasOwn(item, 'dueB');
+  if (!course.abDayEnabled || !hasABDates) return isPastAssignment(org, item, now);
+  const { dueA, dueB, ...assignment } = item;
+  return isPastAssignment(org, {
+    ...assignment,
+    due: item[`due${day === 'B' ? 'B' : 'A'}`] || 'No date'
+  }, now);
+}
+
 function normalizeCourseItems(org, course) {
   course.items = (course.items || []).map((item, index) => {
     const past = isPastAssignment(org, item);
@@ -325,6 +335,7 @@ module.exports = (db) => ({
   isValidTimezone,
   isValidAssignmentPastTime,
   isPastAssignment,
+  isPastAssignmentForCourseDay,
   create: (data) => createOrg(db, data),
   save: (org) => saveOrg(db, org),
   delete: (orgId) => deleteOrg(db, orgId)

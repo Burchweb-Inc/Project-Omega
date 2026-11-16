@@ -119,6 +119,18 @@ test('A/B-day assignments stay current until their later due date passes', (cont
   ), true);
 });
 
+test('A/B-day assignment status follows the selected course day', (context) => {
+  const { model } = createModel(context);
+  const org = { timezone: 'UTC', autoMovePastAssignments: true };
+  const course = { abDayEnabled: true };
+  const item = { due: '2025-01-20', dueA: '2025-01-20', dueB: '2025-02-05' };
+  const now = new Date('2025-02-01T12:00:00Z');
+
+  assert.equal(model.isPastAssignmentForCourseDay(org, course, item, 'A', now), true);
+  assert.equal(model.isPastAssignmentForCourseDay(org, course, item, 'B', now), false);
+  assert.equal(model.isPastAssignmentForCourseDay(org, course, item, 'unknown', now), true);
+});
+
 test('A/B-day course settings and task dates persist', (context) => {
   const { model } = createModel(context);
   model.save(orgData('ab-org', 'A/B Group', {

@@ -545,7 +545,18 @@ async function contentPolicyError(input) {
 function renderOrgPage(request, response, page, extra = {}) {
   const org = getOrg(request); const member = membership(org, request.user);
   if (!canAccess(org, request.user)) return response.redirect('/dashboard');
-  render(request, response, page, { selectedOrg: org, member, ...extra });
+  const selectedOrg = page === 'org'
+    ? {
+      ...org,
+      courses: org.courses.map((course) => ({
+        ...course,
+        currentItems: course.items.filter((item) =>
+          !item.done && !orgModel.isPastAssignmentForCourseDay(org, course, item, courseDayForUser(request.user, course))
+        )
+      }))
+    }
+    : org;
+  render(request, response, page, { selectedOrg, member, ...extra });
 }
 function renderSuspendedGroup(request, response, org) {
   return response.status(423).render('index', { page: 'suspended-group', view: 'suspended-group', user: request.user, users, orgs: orgModel.all(), canEdit, selectedOrg: org, notifications: request.user?.notifications || [], error: null });
