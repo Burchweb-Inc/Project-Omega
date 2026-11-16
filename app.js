@@ -22,6 +22,7 @@ const sharedGroupUserIds = require('./utils/shared-group-users');
 const searchUsers = require('./utils/search-users');
 const siteAdminUserPage = require('./utils/site-admin-user-page');
 const { DASHBOARD_FEED_PAGE_SIZE, dashboardFeedPage, sortDashboardFeedItems } = require('./utils/dashboard-feed');
+const { discoverFocusBackgrounds } = require('./utils/focus-backgrounds');
 const registerRenderGateRoutes = require('./beta-tests/routes');
 const registerThemeRoutes = require('./themes/routes');
 
@@ -29,6 +30,7 @@ const app = express();
 app.use(pino);
 
 const taskSyncConfig = taskSyncConfiguration(config);
+const TODO_TASK_PAGE_SIZE = 10;
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || '0.0.0.0';
 const serviceWorkerVersion = 'lockin-sw-20261113-3';
@@ -1153,6 +1155,7 @@ app.post('/settings/delete', requireUser, (request, response) => {
 app.get('/todo', requireUser, async (request, response) => {
   const location = await userDateLocation(request.user, request);
   return render(request, response, 'todo', {
+    todoPageSize: TODO_TASK_PAGE_SIZE,
     todoDateTimezone: location.timezone,
     todoDateLocale: location.locale,
     formatTaskDate,
@@ -1164,6 +1167,22 @@ app.get('/todo', requireUser, async (request, response) => {
     taskSyncMissingConfig: taskSyncConfig.missing.join(', '),
     integrationStatus: String(request.query.integration || '')
   });
+});
+app.get('/todo/tasks', requireUser, (request, response) => {
+  const offset = Number(request.query.offset ?? 0);
+  if (!Number.isSafeInteger(offset) || offset < 0) return response.status(400).json({ error: 'Task offset must be a non-negative integer.' });
+  normalizeUserTasks(request.user);
+  const tasks = [...(request.user.tasks || [])].sort((left, right) => left.position - right.position);
+  response.setHeader('Cache-Control', 'private, no-store');
+  return response.json({
+    tasks: tasks.slice(offset, offset + TODO_TASK_PAGE_SIZE).map(normalizeTask),
+    hasMore: offset + TODO_TASK_PAGE_SIZE < tasks.length
+  });
+});
+app.get('/focus-backgrounds.json', requireUser, (request, response) => {
+  const directory = path.join(__dirname, 'public', 'media', 'focus-backgrounds');
+  response.setHeader('Cache-Control', 'private, no-store');
+  return response.json(discoverFocusBackgrounds(directory));
 });
 app.use('/calendar', require('./calendar/routes')({ requireUser, render, feedFor: orgModel.feedFor}));
 app.use(require('./org/routes')({ contentPolicyError, requireUser, orgModel, render, creatorTimezone: async (user, request) => (await userDateLocation(user, request)).timezone }));
@@ -1460,7 +1479,7 @@ app.post('/tasks', requireUser, async (request, response) => {
   if (request.body.title?.trim()) {
     const policyError = await contentPolicyError({ type: 'text', text: request.body.title });
     if (policyError) return sendMutation(request, response, { error: policyError }, '/todo');
-    request.user.tasks ||= []; task = normalizeTask({ id: id(), title: request.body.title.trim(), details: String(request.body.details || '').trim(), links: await fetchLinkPreviews(`${request.body.title || ''}\n${request.body.details || ''}`), sourceId: null, source: 'Personal study goal', due: request.body.due || 'No date', priority: request.body.priority || 'Normal', done: false, position: request.user.tasks.length }); request.user.tasks.push(task); persistState(); emitTodo(request.user.id, 'todo:task-added', { task });
+    request.user.tasks ||= []; task = normalizeTask({ id: id(), title: request.body.title.trim(), details: String(request.body.details || '').trim(), links: await fetchLinkPreviews(`${request.body.title || ''}\n${request.body.details || ''}`), sourceId: null, source: 'Personal task', due: request.body.due || 'No date', priority: request.body.priority || 'Normal', done: false, position: request.user.tasks.length }); request.user.tasks.push(task); persistState(); emitTodo(request.user.id, 'todo:task-added', { task });
   }
   return sendMutation(request, response, { task, todoPendingCount: (request.user.tasks || []).filter((entry) => !entry.done).length }, '/todo');
 });

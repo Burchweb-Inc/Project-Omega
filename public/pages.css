@@ -1120,6 +1120,863 @@
     display: block
 }
 
+.todo-page .private-list {
+    height: min(56vh, 590px);
+    min-height: 270px;
+    align-content: start;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(235, 241, 244, .62);
+    box-shadow: inset 0 1px 5px rgba(20, 32, 52, .035)
+}
+
+.todo-page .private-list > .private-task {
+    margin: 0 3px
+}
+
+.todo-load-more {
+    display: flex;
+    min-height: 52px;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 12px
+}
+
+.todo-load-more[hidden] {
+    display: none
+}
+
+.todo-loading-orbit {
+    position: relative;
+    width: 22px;
+    height: 22px;
+    border: 2px solid #c9d8db;
+    border-top-color: #e28a58;
+    border-right-color: #497d80;
+    border-radius: 50%;
+    animation: todo-loader-turn .85s linear infinite
+}
+
+.todo-loading-orbit::after {
+    position: absolute;
+    inset: 4px;
+    border: 1px dashed #86a4a4;
+    border-radius: inherit;
+    content: ''
+}
+
+@keyframes todo-loader-turn {
+    to { transform: rotate(360deg) }
+}
+
+body.focus-mode-open {
+    overflow: hidden
+}
+
+body.focus-mode-open .app-shell {
+    visibility: hidden;
+    pointer-events: none
+}
+
+.focus-mode,
+.focus-mode[hidden] {
+    display: grid
+}
+
+.focus-mode[hidden],
+.focus-mode [hidden] {
+    display: none !important
+}
+
+.focus-mode {
+    position: fixed;
+    z-index: 1200;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+    box-sizing: border-box;
+    padding: clamp(14px, 2.4vw, 30px) clamp(18px, 4vw, 58px) clamp(12px, 2vw, 24px);
+    color: #fffaf0;
+    background: #19363a;
+    isolation: isolate
+}
+
+.focus-scene {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    pointer-events: none
+}
+
+.focus-scene {
+    background-color: #27464a;
+    background-position: center;
+    background-size: cover
+}
+
+.focus-header {
+    position: relative;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px
+}
+
+.focus-header {
+    min-height: 42px
+}
+
+.focus-wordmark,
+.focus-header-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px
+}
+
+.focus-wordmark {
+    color: #fffaf0;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none
+}
+
+.focus-wordmark svg {
+    width: 17px
+}
+
+.focus-header-meta {
+    color: rgba(255, 250, 240, .82);
+    font-size: 12px
+}
+
+.focus-header-meta .lui-icon-button {
+    color: #fffaf0;
+    border-color: rgba(255, 250, 240, .36);
+    background: rgba(20, 39, 43, .22)
+}
+
+.focus-header-meta .lui-icon-button:hover {
+    background: rgba(20, 39, 43, .55)
+}
+
+.focus-exit {
+    color: #fffaf0 !important;
+    border-color: rgba(255, 250, 240, .36) !important;
+    background: rgba(20, 39, 43, .22) !important
+}
+
+.focus-center {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    min-height: 0;
+    padding: 18px 24px
+}
+
+.focus-card,
+.focus-loading,
+.focus-finish {
+    width: min(100%, 720px);
+    text-align: center
+}
+
+.focus-card {
+    width: min(100%, 660px);
+    max-height: 100%;
+    padding: clamp(24px, 4vw, 46px);
+    border: 1px solid rgba(255, 250, 240, .33);
+    border-radius: 7px 42px 7px 42px;
+    background: rgba(20, 42, 44, .55);
+    box-shadow: 0 25px 90px rgba(9, 24, 28, .23);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    opacity: 0;
+    transform: translateY(28px) rotateX(5deg) scale(.97)
+}
+
+.focus-card-entering {
+    animation: focus-card-arrive .8s cubic-bezier(.18, .72, .24, 1) forwards
+}
+
+.focus-card-completing {
+    animation: focus-card-launch 1.65s cubic-bezier(.64, 0, .28, 1) forwards
+}
+
+@keyframes focus-card-arrive {
+    70% { opacity: 1; transform: translateY(-4px) rotateX(0) scale(1.015) }
+    100% { opacity: 1; transform: translateY(0) rotateX(0) scale(1) }
+}
+
+@keyframes focus-card-launch {
+    0% { opacity: 1; transform: translateY(0) scale(1) rotate(0) }
+    36% { opacity: 1; transform: translateY(-14px) scale(1.025) rotate(-1deg) }
+    100% { opacity: 0; transform: translateY(-72px) translateX(34px) scale(.78) rotate(5deg) }
+}
+
+.focus-kicker {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    margin: 0 0 28px;
+    color: #f0c47e;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase
+}
+
+.focus-card h1,
+.focus-finish h1 {
+    margin: 0;
+    color: #fffaf0;
+    font: 600 clamp(34px, 5vw, 54px)/1.12 'Space Grotesk', sans-serif;
+    overflow-wrap: anywhere
+}
+
+.focus-details {
+    max-width: 520px;
+    margin: 16px auto 0;
+    color: rgba(255, 250, 240, .77);
+    font-size: 15px;
+    line-height: 1.38;
+    white-space: pre-wrap
+}
+
+.focus-complete {
+    position: relative;
+    min-height: 54px;
+    gap: 24px;
+    margin-top: 28px;
+    padding: 0 24px;
+    border: 1px solid #f1c783;
+    color: #273e3c;
+    background: #f1c783;
+    font-size: 13px;
+    font-weight: 700;
+    overflow: hidden;
+    transition: transform .2s ease, background .2s ease
+}
+
+.focus-complete:hover {
+    transform: translateY(-3px) rotate(-1deg);
+    background: #ffdda0
+}
+
+.focus-complete svg {
+    width: 18px;
+    transition: transform .25s ease
+}
+
+.focus-complete:hover svg {
+    transform: translateX(4px)
+}
+
+.focus-complete.focus-completion-burst::after {
+    position: absolute;
+    inset: -50%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,.9) 0 2%, transparent 2.5% 13%, rgba(255,255,255,.52) 13.5% 14%, transparent 14.5% 28%, rgba(255,255,255,.65) 28.5% 29%, transparent 29.5%);
+    content: '';
+    animation: focus-burst .95s ease-out both
+}
+
+@keyframes focus-burst {
+    from { opacity: 1; transform: scale(.2) rotate(0) }
+    to { opacity: 0; transform: scale(1.8) rotate(95deg) }
+}
+
+.focus-shortcut {
+    margin: 20px 0 0;
+    color: rgba(255, 250, 240, .66);
+    font-size: 11px
+}
+
+.focus-loading {
+    color: #fffaf0
+}
+
+.focus-loading p {
+    margin: 22px 0 0;
+    font: 500 18px 'Space Grotesk', sans-serif
+}
+
+.focus-loading-mark {
+    position: relative;
+    display: inline-block;
+    width: 70px;
+    height: 70px;
+    border: 1px solid rgba(255, 250, 240, .62);
+    border-radius: 50%;
+    animation: focus-orbit 2.1s cubic-bezier(.55, .1, .45, .9) infinite
+}
+
+.focus-loading-mark::before,
+.focus-loading-mark::after {
+    position: absolute;
+    inset: 10px -8px;
+    border: 1px solid rgba(241, 199, 131, .85);
+    border-radius: 50%;
+    content: '';
+    transform: rotate(58deg)
+}
+
+.focus-loading-mark::after {
+    transform: rotate(-58deg)
+}
+
+.focus-loading-mark i {
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #f1c783
+}
+
+.focus-loading-mark i:nth-child(1) { top: 4px; left: 32px }
+.focus-loading-mark i:nth-child(2) { right: 6px; bottom: 17px; background: #a7cbc1 }
+.focus-loading-mark i:nth-child(3) { bottom: 8px; left: 14px; background: #e4956b }
+
+@keyframes focus-orbit {
+    0%, 100% { transform: rotate(0) scale(.94) }
+    50% { transform: rotate(180deg) scale(1.05) }
+}
+
+.focus-finish {
+    width: min(100%, 590px);
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    opacity: 0;
+    transform: translateY(22px) scale(.95)
+}
+
+.focus-finish.is-celebrating {
+    animation: focus-finish-arrive .8s cubic-bezier(.18, .72, .24, 1) forwards
+}
+
+@keyframes focus-finish-arrive {
+    65% { opacity: 1; transform: translateY(-5px) scale(1.025) }
+    100% { opacity: 1; transform: translateY(0) scale(1) }
+}
+
+.focus-finish-art {
+    position: relative;
+    display: grid;
+    width: 174px;
+    height: 150px;
+    place-items: center;
+    margin: 0 auto 20px;
+    border: 1px solid rgba(255, 250, 240, .42);
+    border-radius: 46% 54% 43% 57% / 49% 42% 58% 51%;
+    background: rgba(20, 42, 44, .42);
+    animation: focus-art-float 3s ease-in-out infinite
+}
+
+.focus-finish-art svg {
+    z-index: 1;
+    width: 112px;
+    height: 92px;
+    color: #fff4d8;
+    stroke-width: 1.2
+}
+
+.focus-sun {
+    position: absolute;
+    top: 22px;
+    left: 70px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #f1c783;
+    box-shadow: 0 0 34px rgba(241, 199, 131, .42);
+    animation: focus-sun-rise 1.8s cubic-bezier(.17, .67, .22, 1) both
+}
+
+.focus-star {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border: 1px solid #fff4d8;
+    transform: rotate(45deg);
+    animation: focus-star-pop .7s ease-out both
+}
+
+.focus-star-one { top: 28px; right: 25px; animation-delay: .35s }
+.focus-star-two { top: 62px; left: 22px; width: 6px; height: 6px; animation-delay: .55s }
+.focus-star-three { right: 34px; bottom: 28px; width: 5px; height: 5px; animation-delay: .75s }
+
+@keyframes focus-art-float {
+    50% { transform: translateY(-8px) rotate(2deg) }
+}
+
+@keyframes focus-sun-rise {
+    from { transform: translateY(48px) scale(.5); opacity: 0 }
+    to { transform: translateY(0) scale(1); opacity: 1 }
+}
+
+@keyframes focus-star-pop {
+    from { transform: rotate(45deg) scale(0); opacity: 0 }
+    60% { transform: rotate(135deg) scale(1.8); opacity: 1 }
+    to { transform: rotate(225deg) scale(1); opacity: .8 }
+}
+
+.focus-finish .focus-kicker {
+    justify-content: center;
+    margin-bottom: 12px
+}
+
+.focus-finish > p:not(.focus-kicker) {
+    max-width: 430px;
+    margin: 16px auto 0;
+    color: rgba(255, 250, 240, .78);
+    font-size: 14px;
+    line-height: 1.42
+}
+
+.focus-return {
+    margin-top: 28px;
+    padding: 12px 18px;
+    border: 1px solid rgba(255, 250, 240, .58);
+    color: #fffaf0;
+    background: rgba(20, 42, 44, .4)
+}
+
+.focus-return:hover {
+    background: rgba(20, 42, 44, .76)
+}
+
+.focus-error {
+    position: absolute;
+    bottom: 64px;
+    max-width: min(90vw, 580px);
+    margin: 0;
+    padding: 11px 15px;
+    border: 1px solid rgba(255, 220, 183, .6);
+    border-radius: 8px;
+    color: #fff2df;
+    background: rgba(87, 45, 37, .82);
+    font-size: 12px
+}
+
+.focus-retry {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 1px solid rgba(255, 250, 240, .58);
+    color: #fffaf0;
+    background: rgba(20, 42, 44, .7)
+}
+
+.focus-background-error {
+    display: block;
+    margin: 10px 0 0;
+    color: #8d3e2d;
+    font-size: 12px;
+    line-height: 1.4
+}
+
+.focus-picker {
+    position: absolute;
+    z-index: 4;
+    inset: 0;
+    pointer-events: none
+}
+
+.focus-picker[hidden] {
+    display: none
+}
+
+.focus-picker-backdrop {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgba(8, 23, 27, .48);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .32s ease
+}
+
+.focus-picker.is-open .focus-picker-backdrop {
+    opacity: 1;
+    pointer-events: auto
+}
+
+.focus-picker-panel {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    display: block;
+    width: min(520px, calc(100vw - 56px));
+    overflow: auto;
+    padding: clamp(22px, 3vw, 34px);
+    border-right: 1px solid rgba(255, 255, 255, .8);
+    color: #203d41;
+    background: #f6f5ee;
+    box-shadow: 16px 0 55px rgba(8, 24, 28, .3);
+    opacity: 0;
+    overscroll-behavior: contain;
+    transform: translateX(-100%);
+    transform-origin: left center;
+    transition: transform .24s cubic-bezier(.2, .72, .25, 1), opacity .2s ease, visibility .24s;
+    visibility: hidden;
+    pointer-events: auto;
+    scrollbar-gutter: stable
+}
+
+.focus-picker.is-open .focus-picker-panel {
+    opacity: 1;
+    transform: translateX(0);
+    visibility: visible
+}
+
+.focus-picker-panel[aria-hidden="true"] {
+    pointer-events: none
+}
+
+.focus-sidebar-toggle {
+    position: absolute;
+    z-index: 6;
+    top: 50%;
+    left: max(8px, env(safe-area-inset-left));
+    display: flex;
+    width: 54px;
+    min-height: 112px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 8px;
+    border: 1px solid rgba(255, 250, 240, .56);
+    /* border-left: 0; */
+    /* border-radius: 0 13px 13px 0; */
+    border-radius: 13px;
+    color: #fffaf0;
+    background: rgba(20, 42, 44, .62);
+    box-shadow: 0 8px 22px rgba(8, 24, 28, .2);
+    cursor: pointer;
+    transform: translateY(-50%);
+    transition: background .16s ease, transform .16s ease
+}
+
+.focus-sidebar-toggle:hover {
+    background: rgba(20, 42, 44, .9);
+    transform: translateY(-50%) translateX(2px)
+}
+
+.focus-sidebar-toggle[hidden] {
+    display: none
+}
+
+.focus-sidebar-toggle svg {
+    width: 19px;
+    height: 19px;
+    transition: transform .18s ease
+}
+
+.focus-sidebar-toggle.is-expanded svg {
+    transform: rotate(180deg)
+}
+
+.focus-sidebar-toggle span {
+    font-size: 11px;
+    font-weight: 700;
+    writing-mode: vertical-rl
+}
+
+.focus-picker-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 18px
+}
+
+.focus-picker-heading h2 {
+    margin: 0;
+    color: #203d41;
+    font: 600 24px/1.16 'Space Grotesk', sans-serif
+}
+
+.focus-picker-heading p {
+    margin: 5px 0 0;
+    color: #53696a;
+    font-size: 13px;
+    line-height: 1.35
+}
+
+.focus-picker-section + .focus-picker-section {
+    margin-top: 20px
+}
+
+.focus-picker-section > h3 {
+    margin: 0 0 9px;
+    color: #3b5555;
+    font-size: 12px;
+    font-weight: 700
+}
+
+.focus-picker-wallpapers {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+    gap: 11px
+}
+
+.focus-picker-empty {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 12px;
+    border: 1px dashed #b6c4bd;
+    border-radius: 8px;
+    color: #53696a;
+    font-size: 12px;
+    line-height: 1.4
+}
+
+.focus-picker-empty code {
+    color: #27464a;
+    font-size: 11px;
+    overflow-wrap: anywhere
+}
+
+.focus-wallpaper {
+    min-width: 0;
+    padding: 5px;
+    border: 1px solid #d5ded8;
+    border-radius: 9px;
+    color: #203d41;
+    background: #fff;
+    cursor: pointer;
+    text-align: left;
+    transition: transform .16s ease, border-color .16s ease
+}
+
+.focus-wallpaper:hover {
+    transform: translateY(-2px);
+    border-color: #517b72
+}
+
+.focus-wallpaper.is-selected {
+    border-color: #315f59;
+    box-shadow: 0 0 0 2px rgba(49, 95, 89, .15)
+}
+
+.focus-wallpaper img {
+    display: block;
+    width: 100%;
+    height: 88px;
+    border-radius: 5px;
+    background: #d7e0d9;
+    object-fit: cover
+}
+
+.focus-wallpaper span {
+    display: block;
+    margin: 6px 2px 2px;
+    overflow: hidden;
+    color: #40595a;
+    font-size: 11px;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.focus-collections {
+    display: grid;
+    gap: 7px
+}
+
+.focus-collection {
+    overflow: hidden;
+    border: 1px solid #d8dfd9;
+    border-radius: 9px;
+    background: #fff
+}
+
+.focus-collection-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 70px;
+    padding: 8px 12px;
+    color: #203d41;
+    cursor: pointer;
+    list-style: none
+}
+
+.focus-collection-summary::-webkit-details-marker {
+    display: none
+}
+
+.focus-collection-chevron {
+    flex: 0 0 auto;
+    width: 9px;
+    height: 9px;
+    margin: 0 4px 4px 0;
+    border-right: 2px solid #58706d;
+    border-bottom: 2px solid #58706d;
+    transform: rotate(45deg);
+    transition: transform .16s ease
+}
+
+.focus-collection[open] .focus-collection-chevron {
+    transform: rotate(225deg)
+}
+
+.focus-fullscreen svg {
+    transition: transform .18s ease
+}
+
+.focus-fullscreen.is-fullscreen svg {
+    transform: rotate(90deg)
+}
+
+.focus-collection-thumbnail {
+    display: grid;
+    flex: 0 0 86px;
+    width: 86px;
+    height: 56px;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 6px;
+    color: #6b7e78;
+    background: #e8eee8;
+    font-size: 18px
+}
+
+.focus-collection-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover
+}
+
+.focus-collection-copy {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+    flex: 1
+}
+
+.focus-collection-copy strong {
+    overflow: hidden;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.focus-collection-copy small {
+    color: #617573;
+    font-size: 11px
+}
+
+.focus-collection-wallpapers {
+    padding: 0 10px 10px
+}
+
+@media (max-width: 700px) {
+    .todo-page .private-list {
+        height: min(52vh, 470px);
+        min-height: 240px;
+        padding: 6px;
+        gap: 8px
+    }
+
+    .focus-mode {
+        padding: 12px 14px max(12px, env(safe-area-inset-bottom))
+    }
+
+    .focus-header-meta {
+        font-size: 10px
+    }
+
+    .focus-wordmark {
+        font-size: 11px
+    }
+
+    .focus-center {
+        padding: 16px 30px
+    }
+
+    .focus-card {
+        padding: 24px 18px;
+        border-radius: 6px 29px 6px 29px
+    }
+
+    .focus-kicker {
+        font-size: 9px
+    }
+
+    .focus-details {
+        font-size: 13px
+    }
+
+    .focus-complete {
+        min-height: 50px;
+        margin-top: 24px
+    }
+
+    .focus-picker-panel {
+        width: min(420px, calc(100vw - 48px));
+        padding: 20px 16px
+    }
+
+    .focus-picker-wallpapers {
+        grid-template-columns: repeat(auto-fill, minmax(122px, 1fr));
+        gap: 8px
+    }
+
+    .focus-wallpaper img {
+        height: 72px
+    }
+
+    .focus-sidebar-toggle {
+        width: 44px;
+        min-height: 94px;
+        left: max(5px, env(safe-area-inset-left));
+        gap: 7px;
+        padding: 9px 5px
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .todo-loading-orbit,
+    .focus-loading-mark,
+    .focus-card-entering,
+    .focus-card-completing,
+    .focus-finish.is-celebrating,
+    .focus-finish-art,
+    .focus-sun,
+    .focus-star {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important
+    }
+
+    .focus-complete.focus-completion-burst::after {
+        display: none
+    }
+
+    .focus-complete,
+    .focus-picker-backdrop,
+    .focus-picker-panel,
+    .focus-sidebar-toggle,
+    .focus-wallpaper {
+        transition-duration: .01ms !important
+    }
+}
+
 .inline-create-form {
     position: relative;
     display: grid;

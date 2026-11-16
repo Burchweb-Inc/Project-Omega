@@ -1,0 +1,21 @@
+<div class="focus-picker" data-focus-picker hidden>
+    <button class="focus-picker-backdrop" type="button" data-focus-picker-backdrop aria-label="Close wallpaper sidebar" tabindex="-1"></button>
+    <aside class="focus-picker-panel" id="focus-picker-panel" data-focus-picker-panel aria-label="Wallpaper collections" aria-hidden="true" inert>
+        <div class="focus-picker-heading">
+            <div><h2>Backgrounds</h2><p>Pick a scene for this session.</p></div>
+            <button class="lui-icon-button" type="button" data-focus-picker-close aria-label="Close backgrounds"><i data-lucide="x" aria-hidden="true"></i></button>
+        </div>
+        <section class="focus-picker-section" aria-labelledby="focus-recommended-title">
+            <h3 id="focus-recommended-title">Recommended</h3>
+            <div class="focus-picker-wallpapers" data-focus-recommended role="group" aria-label="Recommended wallpapers">
+                <p class="focus-picker-empty" data-focus-empty-recommended>No recommended wallpapers yet. Add images directly to <code>public/media/focus-backgrounds/</code>.</p>
+            </div>
+        </section>
+        <section class="focus-picker-section" data-focus-collections-section hidden aria-labelledby="focus-collections-title">
+            <h3 id="focus-collections-title">Collections</h3>
+            <div class="focus-collections" data-focus-collections></div>
+        </section>
+        <p class="focus-background-error" data-focus-background-error role="status" hidden></p>
+        <button class="lui-link focus-background-retry" type="button" data-focus-background-retry hidden>Reload wallpapers</button>
+    </aside>
+</div>

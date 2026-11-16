@@ -1,7 +1,16 @@
 function todoList() { return document.querySelector('[data-live-todo-list]'); }
 function todoRoot() { return document.querySelector('[data-todo-date-locale]'); }
+let todoPageObserver = null;
+let focusTasks = [];
+let focusCompleted = 0;
+let focusReturnTarget = null;
+const focusBackgroundStorageKey = 'lockin.focus-mode.background';
+function todoTaskSource(task) {
+  return task.sourceId || task.source === 'Unlinked course task' ? task.source || '' : '';
+}
 function dashboardTodoTaskMarkup(task) {
-  return `<article class="dashboard-todo-item ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}"><form class="toggle-task-form" action="/tasks/${escapeHtml(task.id)}/toggle" method="post" data-live-form><button class="lui-check dashboard-todo-check" type="submit" aria-label="${task.done ? 'Mark incomplete' : 'Mark complete'}: ${escapeHtml(task.title)}"><i data-lucide="check"></i></button></form><div><strong>${linkedTaskTextMarkup(task.title, task.links)}</strong><small>${escapeHtml(task.source || 'Personal task')}</small></div></article>`;
+  const source = todoTaskSource(task);
+  return `<article class="dashboard-todo-item ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}"><form class="toggle-task-form" action="/tasks/${escapeHtml(task.id)}/toggle" method="post" data-live-form><button class="lui-check dashboard-todo-check" type="submit" aria-label="${task.done ? 'Mark incomplete' : 'Mark complete'}: ${escapeHtml(task.title)}"><i data-lucide="check"></i></button></form><div><strong>${linkedTaskTextMarkup(task.title, task.links)}</strong>${source ? `<small>${escapeHtml(source)}</small>` : ''}</div></article>`;
 }
 function syncDashboardTodoCount() {
   const list = document.querySelector('[data-dashboard-todo-list]');
@@ -65,10 +74,11 @@ function todoImportance(due) {
 }
 function todoTaskMarkup(task) {
   const importance = task.importance || todoImportance(task.due); const priority = task.priority || 'Normal';
+  const source = todoTaskSource(task);
   const editForm = `<details class="task-edit-details"><summary class="lui-icon-button" aria-label="Edit task"><i data-lucide="pencil"></i></summary><form class="task-edit-form link-composer" action="/tasks/${escapeHtml(task.id)}/update" method="post" data-live-form data-link-composer><label>Title<input name="title" value="${escapeHtml(task.title)}" required></label><label>Details<textarea name="details" rows="3">${escapeHtml(task.details || '')}</textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Due date<input name="due" type="date" value="${task.due !== 'No date' ? escapeHtml(task.due) : ''}"></label><label>Priority<select name="priority">${['Low', 'Normal', 'Medium', 'High'].map((value) => `<option ${priority === value ? 'selected' : ''}>${value}</option>`).join('')}</select></label><button class="lui-button lui-button-secondary" type="submit">Save task</button></form></details>`;
-  return `<article class="private-task ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}" data-due="${escapeHtml(task.due)}" data-importance="${importance}" data-priority="${escapeHtml(priority.toLowerCase())}" data-position="${Number(task.position) || 0}" draggable="false"><form class="toggle-task-form" action="/tasks/${escapeHtml(task.id)}/toggle" method="post" data-live-form><button class="lui-check task-check" aria-label="Toggle ${escapeHtml(task.title)}"><i data-lucide="check"></i></button></form><div class="private-task-copy"><h3>${linkedTaskTextMarkup(task.title, task.links)}</h3>${task.details ? `<p class="task-details">${linkedTaskTextMarkup(task.details, task.links)}</p>` : ''}<span><i data-lucide="link-2"></i> ${escapeHtml(task.source)}</span><small class="task-due" data-raw-due="${escapeHtml(task.due)}">Due ${escapeHtml(formatTodoDate(task.due))} · ${importance}</small></div>${editForm}<div class="priority-menu"><button class="lui-menu-trigger priority-flag" type="button" aria-haspopup="menu" aria-expanded="false"><i data-lucide="flag"></i> <span>${escapeHtml(priority)}</span><i data-lucide="chevron-down"></i></button><div class="priority-options" role="menu"><button class="lui-menu-action" type="button" data-priority="Low">Low</button><button class="lui-menu-action" type="button" data-priority="Normal">Normal</button><button class="lui-menu-action" type="button" data-priority="Medium">Medium</button><button class="lui-menu-action" type="button" data-priority="High">High</button></div></div><form data-live-form action="/tasks/${escapeHtml(task.id)}/delete" method="post"><button class="lui-icon-button" type="submit" aria-label="Delete task"><i data-lucide="trash-2"></i></button></form><button class="lui-icon-button drag-handle" aria-label="Move task" type="button"><i data-lucide="grip-vertical"></i></button></article>`;
+  return `<article class="private-task ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}" data-due="${escapeHtml(task.due)}" data-importance="${importance}" data-priority="${escapeHtml(priority.toLowerCase())}" data-position="${Number(task.position) || 0}" draggable="false"><form class="toggle-task-form" action="/tasks/${escapeHtml(task.id)}/toggle" method="post" data-live-form><button class="lui-check task-check" aria-label="Toggle ${escapeHtml(task.title)}"><i data-lucide="check"></i></button></form><div class="private-task-copy"><h3>${linkedTaskTextMarkup(task.title, task.links)}</h3>${task.details ? `<p class="task-details">${linkedTaskTextMarkup(task.details, task.links)}</p>` : ''}${source ? `<span><i data-lucide="link-2"></i> ${escapeHtml(source)}</span>` : ''}<small class="task-due" data-raw-due="${escapeHtml(task.due)}">Due ${escapeHtml(formatTodoDate(task.due))} · ${importance}</small></div>${editForm}<div class="priority-menu"><button class="lui-menu-trigger priority-flag" type="button" aria-haspopup="menu" aria-expanded="false"><i data-lucide="flag"></i> <span>${escapeHtml(priority)}</span><i data-lucide="chevron-down"></i></button><div class="priority-options" role="menu"><button class="lui-menu-action" type="button" data-priority="Low">Low</button><button class="lui-menu-action" type="button" data-priority="Normal">Normal</button><button class="lui-menu-action" type="button" data-priority="Medium">Medium</button><button class="lui-menu-action" type="button" data-priority="High">High</button></div></div><form data-live-form action="/tasks/${escapeHtml(task.id)}/delete" method="post"><button class="lui-icon-button" type="submit" aria-label="Delete task"><i data-lucide="trash-2"></i></button></form><button class="lui-icon-button drag-handle" aria-label="Move task" type="button"><i data-lucide="grip-vertical"></i></button></article>`;
 }
-function sortTodoDom(compare) { const list = todoList(); if (!list) return; [...list.querySelectorAll('.private-task')].sort(compare).forEach((task) => list.appendChild(task)); }
+function sortTodoDom(compare) { const list = todoList(); if (!list) return; const sentinel = list.querySelector('[data-todo-load-more]'); [...list.querySelectorAll('.private-task')].sort(compare).forEach((task) => sentinel ? list.insertBefore(task, sentinel) : list.appendChild(task)); }
 function persistTodoOrder() {
   const list = todoList(); if (!list) return;
   const order = [...list.querySelectorAll('.private-task')].map((task, index) => { task.dataset.position = index; return task.dataset.taskId; });
@@ -89,6 +99,461 @@ function toggleFocusMode(button) {
   else sortTodoDom((left, right) => Number(left.dataset.position) - Number(right.dataset.position));
   animateTodoPositions(previous, true);
 }
+function waitForTodoAnimation(duration) { return new Promise((resolve) => window.setTimeout(resolve, duration)); }
+function todoLoadMoreControl() { return document.querySelector('[data-todo-load-more]'); }
+function setTodoLoadError(message) {
+  const control = todoLoadMoreControl();
+  if (!control) return;
+  control.hidden = false;
+  control.dataset.loadError = 'true';
+  control.querySelector('[data-todo-load-message]').textContent = message;
+  control.querySelector('.todo-loading-orbit').hidden = true;
+  control.querySelector('[data-todo-load-retry]').hidden = false;
+}
+async function loadMoreTodoTasks() {
+  const list = todoList();
+  const control = todoLoadMoreControl();
+  if (!list || !control || control.hidden || control.dataset.loading === 'true' || list.dataset.hasMore !== 'true') return;
+  control.dataset.loading = 'true';
+  control.dataset.loadError = 'false';
+  control.querySelector('.todo-loading-orbit').hidden = false;
+  control.querySelector('[data-todo-load-message]').textContent = 'Bringing in the next tasks';
+  control.querySelector('[data-todo-load-retry]').hidden = true;
+  try {
+    const offset = Number(list.dataset.offset) || 0;
+    const response = await fetch(`/todo/tasks?offset=${offset}`, { headers: { Accept: 'application/json' } });
+    const payload = await response.json();
+    if (!response.ok || payload.error) throw new Error(payload.error || 'Tasks could not be loaded.');
+    const sentinel = control;
+    payload.tasks.forEach((task) => {
+      const template = document.createElement('template');
+      template.innerHTML = todoTaskMarkup(task);
+      const row = template.content.firstElementChild;
+      if (!row || list.querySelector(`[data-task-id="${CSS.escape(String(task.id))}"]`)) return;
+      row.hidden = list.dataset.activeFilter === 'pending' ? Boolean(task.done) : list.dataset.activeFilter === 'completed' ? !task.done : false;
+      list.insertBefore(row, sentinel);
+      bindLiveForms(row);
+      bindLinkComposers(row);
+    });
+    list.dataset.offset = String(offset + payload.tasks.length);
+    list.dataset.hasMore = String(payload.hasMore);
+    control.hidden = !payload.hasMore;
+    if (!payload.hasMore) control.remove();
+    enhanceTodoTasks();
+    lucide.createIcons();
+  } catch (error) {
+    console.error('Could not load more Todo tasks.', error);
+    setTodoLoadError('Tasks could not be loaded.');
+  } finally {
+    if (control.isConnected) control.dataset.loading = 'false';
+  }
+}
+function bindTodoPagination() {
+  const list = todoList();
+  const control = todoLoadMoreControl();
+  if (!list || !control || list.dataset.hasMore !== 'true') return;
+  control.querySelector('[data-todo-load-retry]')?.addEventListener('click', () => {
+    control.dataset.loadError = 'false';
+    void loadMoreTodoTasks();
+  });
+  if ('IntersectionObserver' in window) {
+    todoPageObserver?.disconnect();
+    todoPageObserver = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting) && control.dataset.loadError !== 'true') void loadMoreTodoTasks();
+    }, { root: list, rootMargin: '100px 0px' });
+    todoPageObserver.observe(control);
+  } else {
+    list.addEventListener('scroll', () => {
+      if (control.dataset.loadError === 'true') return;
+      if (list.scrollTop + list.clientHeight >= list.scrollHeight - 100) void loadMoreTodoTasks();
+    });
+  }
+}
+function readFocusBackgroundPreference() {
+  try {
+    return window.localStorage.getItem(focusBackgroundStorageKey) || '';
+  } catch (error) {
+    console.error('Could not read the Focus Mode wallpaper preference.', error);
+    return '';
+  }
+}
+function saveFocusBackgroundPreference(url) {
+  try {
+    if (url) window.localStorage.setItem(focusBackgroundStorageKey, url);
+    else window.localStorage.removeItem(focusBackgroundStorageKey);
+  } catch (error) {
+    console.error('Could not save the Focus Mode wallpaper preference.', error);
+  }
+}
+function focusScreen() { return document.querySelector('[data-focus-screen]'); }
+function focusError(message) {
+  const error = focusScreen()?.querySelector('[data-focus-error]');
+  if (!error) return;
+  error.textContent = message;
+  error.hidden = false;
+}
+function updateFocusBackground(imageUrl = '') {
+  const screen = focusScreen();
+  const scene = screen?.querySelector('[data-focus-scene]');
+  if (!scene) return;
+  scene.dataset.focusScene = imageUrl ? 'wallpaper' : 'empty';
+  scene.style.backgroundImage = imageUrl ? `linear-gradient(180deg, rgba(10, 26, 34, .18), rgba(10, 26, 34, .48)), url("${imageUrl}")` : '';
+  scene.style.backgroundColor = imageUrl ? '' : '#27464a';
+  screen.querySelectorAll('[data-focus-wallpaper]').forEach((choice) => {
+    const selected = choice.dataset.wallpaperUrl === imageUrl;
+    choice.classList.toggle('is-selected', selected);
+    choice.setAttribute('aria-pressed', String(selected));
+  });
+}
+function focusWallpaperButton(wallpaper, collectionName = '') {
+  const button = document.createElement('button');
+  button.className = 'focus-wallpaper';
+  button.type = 'button';
+  button.dataset.focusWallpaper = 'true';
+  button.dataset.wallpaperUrl = wallpaper.url;
+  button.setAttribute('aria-label', `${wallpaper.name}${collectionName ? `, ${collectionName}` : ''}`);
+  button.setAttribute('aria-pressed', 'false');
+  const image = document.createElement('img');
+  image.src = wallpaper.url;
+  image.alt = '';
+  image.loading = 'lazy';
+  image.decoding = 'async';
+  const name = document.createElement('span');
+  name.textContent = wallpaper.name;
+  button.append(image, name);
+  button.addEventListener('click', () => {
+    updateFocusBackground(wallpaper.url);
+    saveFocusBackgroundPreference(wallpaper.url);
+    closeFocusBackgroundPicker();
+  });
+  return button;
+}
+function closeFocusBackgroundPicker(restoreFocus = true) {
+  const picker = focusScreen()?.querySelector('[data-focus-picker]');
+  const trigger = focusScreen()?.querySelector('[data-focus-sidebar-toggle]');
+  const panel = picker?.querySelector('[data-focus-picker-panel]');
+  if (!picker || !trigger || !panel || (!picker.classList.contains('is-open') && picker.hidden)) return;
+  picker.classList.remove('is-open');
+  panel.inert = true;
+  panel.setAttribute('aria-hidden', 'true');
+  trigger.hidden = false;
+  trigger.setAttribute('aria-expanded', 'false');
+  trigger.setAttribute('aria-label', 'Expand wallpaper sidebar');
+  trigger.classList.remove('is-expanded');
+  if (restoreFocus) trigger.focus();
+  window.clearTimeout(picker.closeTimer);
+  picker.closeTimer = window.setTimeout(() => {
+    if (!picker.classList.contains('is-open')) picker.hidden = true;
+  }, 260);
+}
+function openFocusBackgroundPicker() {
+  const screen = focusScreen();
+  const picker = screen?.querySelector('[data-focus-picker]');
+  const trigger = screen?.querySelector('[data-focus-sidebar-toggle]');
+  const panel = picker?.querySelector('[data-focus-picker-panel]');
+  if (!picker || !trigger || !panel) return;
+  window.clearTimeout(picker.closeTimer);
+  picker.hidden = false;
+  panel.inert = false;
+  panel.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => picker.classList.add('is-open'));
+  trigger.setAttribute('aria-expanded', 'true');
+  trigger.setAttribute('aria-label', 'Collapse wallpaper sidebar');
+  trigger.classList.add('is-expanded');
+  panel.querySelector('[data-focus-picker-close]').focus();
+  trigger.hidden = true;
+}
+function renderFocusBackgrounds(payload) {
+  const screen = focusScreen();
+  const bank = screen?.querySelector('[data-focus-picker]');
+  if (!bank) return;
+  bank.querySelector('[data-focus-background-error]').hidden = true;
+  bank.querySelector('[data-focus-background-retry]').hidden = true;
+  const recommended = bank.querySelector('[data-focus-recommended]');
+  const emptyRecommended = bank.querySelector('[data-focus-empty-recommended]');
+  const collectionsSection = bank.querySelector('[data-focus-collections-section]');
+  const collections = bank.querySelector('[data-focus-collections]');
+  const wallpapers = payload.recommended || [];
+  emptyRecommended.hidden = wallpapers.length > 0;
+  wallpapers.forEach((wallpaper) => recommended.append(focusWallpaperButton(wallpaper)));
+  const collectionEntries = payload.collections || [];
+  collectionsSection.hidden = collectionEntries.length === 0;
+  collectionEntries.forEach((collection) => {
+    const details = document.createElement('details');
+    details.className = 'focus-collection';
+    const summary = document.createElement('summary');
+    summary.className = 'focus-collection-summary';
+    const thumbnail = document.createElement('span');
+    thumbnail.className = 'focus-collection-thumbnail';
+    if (collection.thumbnail) {
+      const image = document.createElement('img');
+      image.src = collection.thumbnail;
+      image.alt = '';
+      image.loading = 'lazy';
+      thumbnail.append(image);
+    } else {
+      thumbnail.setAttribute('aria-hidden', 'true');
+      thumbnail.textContent = '—';
+    }
+    const copy = document.createElement('span');
+    copy.className = 'focus-collection-copy';
+    const name = document.createElement('strong');
+    name.textContent = collection.name;
+    const count = document.createElement('small');
+    count.textContent = `${collection.wallpapers.length} wallpaper${collection.wallpapers.length === 1 ? '' : 's'}`;
+    copy.append(name, count);
+    const arrow = document.createElement('span');
+    arrow.className = 'focus-collection-chevron';
+    arrow.setAttribute('aria-hidden', 'true');
+    summary.append(thumbnail, copy, arrow);
+    const gallery = document.createElement('div');
+    gallery.className = 'focus-picker-wallpapers focus-collection-wallpapers';
+    gallery.setAttribute('role', 'group');
+    gallery.setAttribute('aria-label', `${collection.name} wallpapers`);
+    if (collection.wallpapers.length) {
+      collection.wallpapers.forEach((wallpaper) => gallery.append(focusWallpaperButton(wallpaper, collection.name)));
+    } else {
+      const empty = document.createElement('p');
+      empty.className = 'focus-picker-empty';
+      empty.textContent = 'Add images to this folder to fill the collection.';
+      gallery.append(empty);
+    }
+    details.append(summary, gallery);
+    collections.append(details);
+  });
+  const preferredUrl = readFocusBackgroundPreference();
+  const allWallpapers = [...wallpapers, ...collectionEntries.flatMap((collection) => collection.wallpapers)];
+  const preferredWallpaper = allWallpapers.find((wallpaper) => wallpaper.url === preferredUrl);
+  const firstRecommended = wallpapers[0];
+  const firstCollectionWallpaper = collectionEntries.find((collection) => collection.wallpapers.length)?.wallpapers[0];
+  const selectedWallpaper = preferredWallpaper || firstRecommended || firstCollectionWallpaper;
+  updateFocusBackground(selectedWallpaper?.url || '');
+}
+async function loadCustomFocusBackgrounds() {
+  const bank = focusScreen()?.querySelector('[data-focus-picker]');
+  if (!bank || bank.dataset.customLoaded === 'true') return;
+  bank.dataset.customLoaded = 'true';
+  try {
+    const response = await fetch('/focus-backgrounds.json', { headers: { Accept: 'application/json' } });
+    const payload = await response.json();
+    if (!response.ok || !Array.isArray(payload.recommended) || !Array.isArray(payload.collections)) throw new Error(payload.error || 'Wallpaper collections are unavailable.');
+    renderFocusBackgrounds(payload);
+  } catch (error) {
+    console.error('Could not load custom focus backgrounds.', error);
+    bank.dataset.customLoaded = 'false';
+    const message = focusScreen()?.querySelector('[data-focus-background-error]');
+    if (message) {
+      message.textContent = 'Wallpapers are unavailable. Try again in a moment.';
+      message.hidden = false;
+    }
+    bank.querySelector('[data-focus-background-retry]').hidden = false;
+  }
+}
+async function getAllPendingTasks() {
+  const tasks = [];
+  let offset = 0;
+  let hasMore = true;
+  while (hasMore) {
+    const response = await fetch(`/todo/tasks?offset=${offset}`, { headers: { Accept: 'application/json' } });
+    const payload = await response.json();
+    if (!response.ok || payload.error) throw new Error(payload.error || 'Your tasks could not be loaded.');
+    tasks.push(...payload.tasks.filter((task) => !task.done));
+    offset += payload.tasks.length;
+    hasMore = payload.hasMore;
+  }
+  return tasks;
+}
+function renderFocusTask() {
+  const screen = focusScreen();
+  const loading = screen.querySelector('[data-focus-loading]');
+  const card = screen.querySelector('[data-focus-card]');
+  const finish = screen.querySelector('[data-focus-finish]');
+  const error = screen.querySelector('[data-focus-error]');
+  screen.querySelector('[data-focus-retry]').hidden = true;
+  const count = focusTasks.length;
+  loading.hidden = true;
+  error.hidden = true;
+  if (!count) {
+    card.hidden = true;
+    finish.hidden = false;
+    finish.classList.remove('is-celebrating');
+    requestAnimationFrame(() => finish.classList.add('is-celebrating'));
+    screen.querySelector('[data-focus-progress]').textContent = 'Session complete';
+    window.clearTimeout(screen.focusReturnTimer);
+    screen.focusReturnTimer = window.setTimeout(closeFocusMode, 4800);
+    return;
+  }
+  finish.hidden = true;
+  card.hidden = false;
+  card.classList.remove('focus-card-completing', 'focus-card-entering');
+  card.querySelector('[data-focus-complete]').classList.remove('focus-completion-burst');
+  const task = focusTasks[0];
+  const source = screen.querySelector('[data-focus-source]');
+  source.textContent = todoTaskSource(task);
+  source.hidden = !source.textContent;
+  screen.querySelector('[data-focus-title]').textContent = task.title;
+  const details = screen.querySelector('[data-focus-details]');
+  details.textContent = task.details || '';
+  details.hidden = !task.details;
+  screen.querySelector('[data-focus-count]').textContent = `${focusCompleted + 1} / ${focusCompleted + count}`;
+  screen.querySelector('[data-focus-progress]').textContent = `${count} task${count === 1 ? '' : 's'} left in this session`;
+  screen.querySelector('[data-focus-complete]').disabled = false;
+  requestAnimationFrame(() => card.classList.add('focus-card-entering'));
+}
+function closeFocusMode() {
+  const screen = focusScreen();
+  if (!screen || screen.hidden) return;
+  window.clearTimeout(screen.focusReturnTimer);
+  const returnTarget = focusReturnTarget;
+  screen.hidden = true;
+  screen.setAttribute('hidden', '');
+  screen.classList.remove('focus-session-complete');
+  document.body.classList.remove('focus-mode-open');
+  focusReturnTarget = null;
+  closeFocusBackgroundPicker(false);
+  if (document.fullscreenElement === screen && document.exitFullscreen) {
+    document.exitFullscreen().catch((error) => console.error('Could not exit browser fullscreen.', error));
+  }
+  returnTarget?.focus();
+}
+function syncFocusFullscreenButton() {
+  const screen = focusScreen();
+  const button = screen?.querySelector('[data-focus-fullscreen]');
+  if (!screen || !button) return;
+  const active = document.fullscreenElement === screen;
+  button.setAttribute('aria-label', active ? 'Exit browser fullscreen' : 'Enter browser fullscreen');
+  button.title = active ? 'Exit browser fullscreen' : 'Enter browser fullscreen';
+  button.classList.toggle('is-fullscreen', active);
+}
+async function toggleFocusFullscreen() {
+  const screen = focusScreen();
+  if (!screen) return;
+  try {
+    if (document.fullscreenElement === screen) await document.exitFullscreen();
+    else if (screen.requestFullscreen) await screen.requestFullscreen();
+    else throw new Error('Browser fullscreen is not available here.');
+  } catch (error) {
+    console.error('Could not change fullscreen mode.', error);
+    focusError(error.message || 'Browser fullscreen could not be changed.');
+  }
+}
+async function startFocusMode(button) {
+  const screen = focusScreen();
+  if (!screen || button.disabled) return;
+  button.disabled = true;
+  focusReturnTarget = button;
+  focusTasks = [];
+  focusCompleted = 0;
+  screen.hidden = false;
+  const picker = screen.querySelector('[data-focus-picker]');
+  picker.hidden = true;
+  picker.classList.remove('is-open');
+  screen.querySelector('[data-focus-sidebar-toggle]').hidden = false;
+  picker.querySelector('[data-focus-picker-panel]').inert = true;
+  picker.querySelector('[data-focus-picker-panel]').setAttribute('aria-hidden', 'true');
+  screen.querySelector('[data-focus-sidebar-toggle]').setAttribute('aria-expanded', 'false');
+  screen.querySelector('[data-focus-card]').hidden = true;
+  screen.querySelector('[data-focus-finish]').hidden = true;
+  screen.querySelector('[data-focus-loading]').hidden = false;
+  screen.querySelector('[data-focus-error]').hidden = true;
+  screen.querySelector('[data-focus-retry]').hidden = true;
+  screen.querySelector('[data-focus-progress]').textContent = 'Preparing your focus session';
+  document.body.classList.add('focus-mode-open');
+  screen.querySelector('[data-focus-exit]').focus();
+  void loadCustomFocusBackgrounds();
+  try {
+    focusTasks = await getAllPendingTasks();
+    renderFocusTask();
+  } catch (error) {
+    console.error('Could not start focus mode.', error);
+    screen.querySelector('[data-focus-loading]').hidden = true;
+    focusError(error.message || 'Your tasks could not be loaded. Try again.');
+    screen.querySelector('[data-focus-retry]').hidden = false;
+  } finally {
+    button.disabled = false;
+  }
+}
+async function completeFocusTask() {
+  const screen = focusScreen();
+  const task = focusTasks[0];
+  const button = screen?.querySelector('[data-focus-complete]');
+  if (!task || !button || button.disabled) return;
+  button.disabled = true;
+  screen.querySelector('[data-focus-error]').hidden = true;
+  try {
+    const response = await fetch(`/tasks/${encodeURIComponent(task.id)}/toggle`, {
+      method: 'POST',
+      body: new URLSearchParams(),
+      headers: { Accept: 'application/json', 'X-Live-Request': 'true' }
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.error || !payload.task?.done) throw new Error(payload.error || 'This task could not be marked complete.');
+    screen.querySelector('[data-focus-card]').classList.add('focus-card-completing');
+    button.classList.add('focus-completion-burst');
+    await waitForTodoAnimation(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 1750);
+    focusTasks.shift();
+    focusCompleted += 1;
+    renderFocusTask();
+  } catch (error) {
+    console.error('Could not complete the focused task.', error);
+    button.disabled = false;
+    focusError(error.message || 'This task could not be marked complete. Try again.');
+  }
+}
+function bindFocusMode() {
+  const screen = focusScreen();
+  if (!screen) return;
+  document.body.append(screen);
+  document.querySelector('[data-focus-mode]')?.addEventListener('click', (event) => void startFocusMode(event.currentTarget));
+  document.querySelector('[data-focus-exit]')?.addEventListener('click', (event) => {
+    event.preventDefault();
+    closeFocusMode();
+  });
+  document.querySelector('[data-focus-return]')?.addEventListener('click', closeFocusMode);
+  screen.querySelector('[data-focus-fullscreen]')?.addEventListener('click', () => void toggleFocusFullscreen());
+  document.querySelector('[data-focus-complete]')?.addEventListener('click', () => void completeFocusTask());
+  screen.querySelector('[data-focus-sidebar-toggle]')?.addEventListener('click', () => {
+    screen.querySelector('[data-focus-picker]')?.classList.contains('is-open')
+      ? closeFocusBackgroundPicker()
+      : openFocusBackgroundPicker();
+  });
+  screen.querySelector('[data-focus-picker-close]')?.addEventListener('click', closeFocusBackgroundPicker);
+  screen.querySelector('[data-focus-picker-backdrop]')?.addEventListener('click', closeFocusBackgroundPicker);
+  screen.querySelector('[data-focus-background-retry]')?.addEventListener('click', () => {
+    const picker = screen.querySelector('[data-focus-picker]');
+    picker.dataset.customLoaded = 'false';
+    void loadCustomFocusBackgrounds();
+  });
+  screen.querySelector('[data-focus-retry]')?.addEventListener('click', () => {
+    const trigger = document.querySelector('[data-focus-mode]');
+    if (trigger) void startFocusMode(trigger);
+  });
+  document.addEventListener('fullscreenchange', syncFocusFullscreenButton);
+  document.addEventListener('fullscreenerror', () => focusError('Browser fullscreen could not be changed.'));
+  screen.addEventListener('click', (event) => {
+    const picker = screen.querySelector('[data-focus-picker]');
+    const panel = picker?.querySelector('[data-focus-picker-panel]');
+    if (picker && !picker.hidden && !panel.contains(event.target) && !event.target.closest('[data-focus-sidebar-toggle]')) closeFocusBackgroundPicker();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (screen.hidden) return;
+    if (event.key === 'Escape') {
+      if (!screen.querySelector('[data-focus-picker]')?.hidden) {
+        event.preventDefault();
+        closeFocusBackgroundPicker();
+      } else {
+        event.preventDefault();
+        closeFocusMode();
+      }
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = [...screen.querySelectorAll('button:not([disabled]), a[href]:not([hidden]), summary')].filter((element) => !element.closest('[hidden]'));
+    if (!focusable.length) return;
+    if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable.at(-1).focus(); }
+    else if (!event.shiftKey && document.activeElement === focusable.at(-1)) { event.preventDefault(); focusable[0].focus(); }
+  });
+}
 function enhanceTodoTasks() {
   const list = todoList(); if (!list) return;
   list.querySelectorAll('.private-task').forEach((task, index) => {
@@ -100,17 +565,23 @@ function enhanceTodoTasks() {
   list.querySelectorAll('.private-task').forEach((task) => {
     const grip = task.querySelector('.drag-handle, button[aria-label="Move task"]');
     grip?.classList.add('drag-handle');
-    grip?.addEventListener('pointerdown', (event) => {
+    if (grip && grip.dataset.dragBound !== 'true') grip.addEventListener('pointerdown', (event) => {
       if (event.button !== 0) return;
       event.preventDefault(); liveState.draggedTask = task; task.classList.add('is-dragging'); grip.setPointerCapture?.(event.pointerId);
       const move = (moveEvent) => {
         const dragged = liveState.draggedTask; if (!dragged) return;
         const target = [...list.querySelectorAll('.private-task')].filter((candidate) => candidate !== dragged).find((candidate) => moveEvent.clientY < candidate.getBoundingClientRect().top + candidate.offsetHeight / 2);
-        if (target) list.insertBefore(dragged, target); else list.appendChild(dragged);
+        if (target) list.insertBefore(dragged, target);
+        else {
+          const sentinel = list.querySelector('[data-todo-load-more]');
+          if (sentinel) list.insertBefore(dragged, sentinel);
+          else list.appendChild(dragged);
+        }
       };
       const finish = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', finish); document.removeEventListener('pointercancel', finish); task.classList.remove('is-dragging'); liveState.draggedTask = null; persistTodoOrder(); };
       document.addEventListener('pointermove', move); document.addEventListener('pointerup', finish, { once: true }); document.addEventListener('pointercancel', finish, { once: true });
     });
+    if (grip) grip.dataset.dragBound = 'true';
   });
   lucide.createIcons();
 }
@@ -126,16 +597,18 @@ function connectLiveTodo() {
   if (document.querySelector('[data-dashboard-todo-list]')) return;
   const list = todoList(); if (!list || typeof io !== 'function') return;
   liveState.socket?.disconnect(); liveState.socket = io(); liveState.socket.on('connect', () => liveState.socket.emit('todo:join'));
-  liveState.socket.on('todo:task-added', ({ task }) => { if (!task || list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`)) return; list.querySelector('.empty-panel')?.remove(); const previous = captureTaskListPositions(list); list.insertAdjacentHTML('beforeend', todoTaskMarkup(task)); const row = list.querySelector(`:scope > [data-task-id="${CSS.escape(task.id)}"]`); if (!row) return; row.hidden = list.dataset.activeFilter === 'completed'; animateTaskListPositions(list, previous, { enterElement: row, rippleFrom: row }); bindLiveForms(row); bindLinkComposers(row); enhanceTodoTasks(); lucide.createIcons(); });
+  liveState.socket.on('todo:task-added', ({ task }) => { if (!task || list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`)) return; list.querySelector('.empty-panel')?.remove(); const previous = captureTaskListPositions(list); const sentinel = list.querySelector('[data-todo-load-more]'); list.insertAdjacentHTML('beforeend', todoTaskMarkup(task)); const row = list.querySelector(`:scope > [data-task-id="${CSS.escape(task.id)}"]`); if (!row) return; if (sentinel) sentinel.before(row); row.hidden = list.dataset.activeFilter === 'completed'; animateTaskListPositions(list, previous, { enterElement: row, rippleFrom: row }); bindLiveForms(row); bindLinkComposers(row); enhanceTodoTasks(); lucide.createIcons(); });
   liveState.socket.on('todo:task-updated', ({ task }) => { const row = task && list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`); if (!row) return; row.outerHTML = todoTaskMarkup(task); const nextRow = list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`); bindLiveForms(nextRow); bindLinkComposers(nextRow); enhanceTodoTasks(); lucide.createIcons(); syncTodoSummary(); });
   liveState.socket.on('todo:task-deleted', ({ taskId }) => { list.querySelector(`[data-task-id="${CSS.escape(taskId)}"]`)?.remove(); syncTodoSummary(); });
-  liveState.socket.on('todo:reordered', ({ tasks }) => { if (!tasks) return; const byId = new Map(tasks.map((task) => [task.id, task])); [...list.querySelectorAll('.private-task')].sort((left, right) => byId.get(left.dataset.taskId).position - byId.get(right.dataset.taskId).position).forEach((task) => list.appendChild(task)); });
+  liveState.socket.on('todo:reordered', ({ tasks }) => { if (!tasks) return; const byId = new Map(tasks.map((task) => [task.id, task])); sortTodoDom((left, right) => byId.get(left.dataset.taskId).position - byId.get(right.dataset.taskId).position); });
 }
 function bindTodoControls() {
   bindLinkComposers();
   enhanceTodoTasks();
   document.querySelectorAll('[data-todo-filter]').forEach((link) => link.addEventListener('click', (event) => { event.preventDefault(); applyTodoFilter(link.dataset.todoFilter); history.replaceState({}, '', `/todo${link.dataset.todoFilter === 'all' ? '' : `?filter=${link.dataset.todoFilter}`}`); }));
-  document.querySelector('[data-focus-mode]')?.addEventListener('click', (event) => toggleFocusMode(event.currentTarget));
+  document.querySelector('[data-auto-organize]')?.addEventListener('click', (event) => toggleFocusMode(event.currentTarget));
+  bindFocusMode();
+  bindTodoPagination();
   bindTodoPriorityMenus();
   const filter = new URLSearchParams(window.location.search).get('filter') || 'all'; applyTodoFilter(filter);
 }

@@ -7,7 +7,7 @@
     </div>
     <div class="todo-toolbar">
         <div class="segmented"><a class="active" data-todo-filter="all" href="/todo">All tasks</a><a data-todo-filter="pending" href="/todo?filter=pending">Pending</a><a
-            data-todo-filter="completed" href="/todo?filter=completed">Completed</a></div><div class="todo-toolbar-actions"><button class="lui-button lui-button-secondary" type="button" data-focus-mode><i data-lucide="sparkles"></i> Auto organize</button><span class="muted" data-todo-summary>
+            data-todo-filter="completed" href="/todo?filter=completed">Completed</a></div>            <div class="todo-toolbar-actions"><button class="lui-button lui-button-primary" type="button" data-focus-mode><i data-lucide="scan-eye"></i> Focus mode</button><button class="lui-button lui-button-secondary" type="button" data-auto-organize><i data-lucide="sparkles"></i> Auto organize</button><span class="muted" data-todo-summary>
             <%= (user.tasks || []).filter(task=> !task.done).length %> things still in motion
         </span><button class="lui-icon-button task-sync-trigger" type="button" data-open="task-sync-modal" aria-controls="task-sync-modal" aria-label="Open task sync settings" title="Task sync"><i data-lucide="refresh-cw"></i></button></div>
     </div>
@@ -17,8 +17,8 @@
         <button class="lui-icon-button task-sync-tip-close" type="button" data-dismiss-sync-tip aria-label="Dismiss task sync tip"><i data-lucide="x"></i></button>
     </aside>
     <%- include('mini/task-sync-modal') %>
-    <section class="private-list" data-live-todo-list>
-        <% (user.tasks || []).forEach(task=> { %><article class="private-task <%= task.done ? 'is-done' : '' %>" data-priority="<%= (task.priority || 'Normal').toLowerCase() %>"
+    <section class="private-list" data-live-todo-list data-offset="<%= Math.min((user.tasks || []).length, todoPageSize || 10) %>" data-has-more="<%= (user.tasks || []).length > (todoPageSize || 10) %>">
+        <% (user.tasks || []).slice(0, todoPageSize || 10).forEach(task=> { %><article class="private-task <%= task.done ? 'is-done' : '' %>" data-priority="<%= (task.priority || 'Normal').toLowerCase() %>"
                 data-task-id="<%= task.id %>">
                 <form class="toggle-task-form" action="/tasks/<%= task.id %>/toggle" method="post" data-live-form>
                     <button class="lui-check task-check" aria-label="Toggle <%= task.title %>"><i
@@ -26,9 +26,9 @@
                 <div class="private-task-copy">
                     <h3>
                         <%- renderLinkedText(task.title, task.links) %>
-                    </h3><% if (task.details) { %><p class="task-details"><%- renderLinkedText(task.details, task.links) %></p><% } %><span><i data-lucide="link-2"></i>
+                    </h3><% if (task.details) { %><p class="task-details"><%- renderLinkedText(task.details, task.links) %></p><% } %><% if (task.source && (task.sourceId || task.source === 'Unlinked course task')) { %><span><i data-lucide="link-2"></i>
                         <%= task.source %>
-                    </span><small class="task-due" data-raw-due="<%= task.due %>">Due <%= formatTaskDate(task.due, todoDateTimezone, todoDateLocale) %></small>
+                    </span><% } %><small class="task-due" data-raw-due="<%= task.due %>">Due <%= formatTaskDate(task.due, todoDateTimezone, todoDateLocale) %></small>
                 </div><details class="task-edit-details"><summary class="lui-icon-button" aria-label="Edit task"><i data-lucide="pencil"></i></summary><form class="task-edit-form link-composer" action="/tasks/<%= task.id %>/update" method="post" data-live-form><label>Title<input name="title" value="<%= task.title %>" required></label><label>Details<textarea name="details" rows="3"><%= task.details || '' %></textarea></label><div class="link-draft-previews" data-link-draft-previews hidden></div><label>Due date<input name="due" type="date" value="<%= task.due !== 'No date' ? task.due : '' %>"></label><label>Priority<select name="priority"><% ['Low', 'Normal', 'Medium', 'High'].forEach(priority => { %><option <%= task.priority === priority ? 'selected' : '' %>><%= priority %></option><% }) %></select></label><button class="lui-button lui-button-secondary" type="submit">Save task</button></form></details><span class="priority-flag"><i data-lucide="flag"></i>
                     <%= task.priority || 'Normal' %>
                 </span><form data-live-form action="/tasks/<%= task.id %>/delete" method="post"><button class="lui-icon-button" type="submit" aria-label="Delete task"><i data-lucide="trash-2"></i></button></form><button class="lui-icon-button drag-handle" aria-label="Move task" type="button"><i
@@ -41,6 +41,41 @@
                         <p>Add a task from any course feed or create a private study goal.</p>
                     </div>
                     <% } %>
+        <div class="todo-load-more" data-todo-load-more <%= (user.tasks || []).length > (todoPageSize || 10) ? '' : 'hidden' %> role="status" aria-live="polite">
+            <span class="todo-loading-orbit" aria-hidden="true"></span><span data-todo-load-message>Bringing in the next tasks</span><button class="lui-link" type="button" data-todo-load-retry hidden>Try again</button>
+        </div>
+    </section>
+    <section class="focus-mode" data-focus-screen hidden role="dialog" aria-modal="true" aria-label="Focus mode" tabindex="-1">
+        <div class="focus-scene" data-focus-scene="empty" aria-hidden="true"></div>
+        <button class="focus-sidebar-toggle" type="button" data-focus-sidebar-toggle aria-expanded="false" aria-controls="focus-picker-panel" aria-label="Expand wallpaper sidebar">
+            <i data-lucide="panel-left-open" aria-hidden="true"></i><span>Wallpapers</span>
+        </button>
+        <%- include('mini/focus-background-picker') %>
+        <header class="focus-header">
+            <a class="focus-wordmark" href="/todo" aria-label="Return to Personal Todo"></a>
+            <div class="focus-header-meta"><span data-focus-progress>Preparing your focus session</span><button class="lui-icon-button focus-fullscreen" type="button" data-focus-fullscreen aria-label="Enter browser fullscreen" title="Enter browser fullscreen"><i data-lucide="maximize" aria-hidden="true"></i></button><a class="lui-icon-button focus-exit" href="/todo" data-focus-exit aria-label="Exit focus mode" title="Exit focus mode"><i data-lucide="x" aria-hidden="true"></i></a></div>
+        </header>
+        <div class="focus-center">
+            <div class="focus-loading" data-focus-loading role="status" aria-live="polite">
+                <span class="focus-loading-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+                <p>Clearing a little space...</p>
+            </div>
+            <article class="focus-card" data-focus-card hidden>
+                <p class="focus-kicker"><span data-focus-source hidden></span><span data-focus-count></span></p>
+                <h1 id="focus-task-title" data-focus-title></h1>
+                <p class="focus-details" data-focus-details hidden></p>
+                <button class="lui-button focus-complete" type="button" data-focus-complete><span>Complete this task</span><i data-lucide="arrow-right" aria-hidden="true"></i></button>
+            </article>
+            <section class="focus-finish" data-focus-finish hidden aria-live="polite">
+                <div class="focus-finish-art" aria-hidden="true"><i data-lucide="mountain"></i><span class="focus-sun"></span><span class="focus-star focus-star-one"></span><span class="focus-star focus-star-two"></span><span class="focus-star focus-star-three"></span></div>
+                <p class="focus-kicker">WELL DONE</p>
+                <h1>All clear.</h1>
+                <p>You gave every task your attention. Take a breath before the next thing.</p>
+                <button class="lui-button focus-return" type="button" data-focus-return>Back to your tasks <i data-lucide="arrow-up-right" aria-hidden="true"></i></button>
+            </section>
+            <p class="focus-error" data-focus-error role="alert" hidden></p>
+            <button class="lui-button focus-retry" type="button" data-focus-retry hidden>Try again</button>
+        </div>
     </section>
     <div id="quick-task" class="modal-backdrop" aria-hidden="true" aria-labelledby="quick-task-title">
         <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="quick-task-title"><button class="lui-icon-button modal-close" data-close aria-label="Close" type="button"><i
