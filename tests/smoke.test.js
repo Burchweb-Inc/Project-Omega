@@ -51,6 +51,8 @@ assert.match(pagesStyles, /\.task-creation-pending/, 'Task creation forms should
 assert.match(todoView, /aria-modal="true" aria-labelledby="quick-task-title"/, 'The personal task composer should expose an accessible dialog label.');
 assert.match(app, /items\/reorder/, 'Course tasks should have a reorder endpoint.');
 assert.match(app, /app\.post\('\/tasks\/reorder'/, 'Personal task reordering should use the endpoint called by the Todo client.');
+assert.match(app, /app\.post\('\/tasks\/organize'/, 'AI-organized task order should be persisted on the server.');
+assert.match(client, /fetch\('\/tasks\/organize'/, 'AI organize should save its ordering instead of changing only the UI.');
 assert.match(client, /course:items-reordered/, 'Course task reordering should update live over websockets.');
 assert.match(client, /response\.redirected/, 'Client navigation should not render redirected content at the requested URL.');
 assert.match(app, /\/org\/:id\/admin\/:tab\?/, 'Groups should expose tabbed admin routes.');

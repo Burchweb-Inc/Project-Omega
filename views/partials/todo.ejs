@@ -7,7 +7,7 @@
     </div>
     <div class="todo-toolbar">
         <div class="segmented"><a class="active" data-todo-filter="all" href="/todo">All tasks</a><a data-todo-filter="pending" href="/todo?filter=pending">Pending</a><a
-            data-todo-filter="completed" href="/todo?filter=completed">Completed</a></div>            <div class="todo-toolbar-actions"><button class="lui-button lui-button-primary" type="button" data-focus-mode><i data-lucide="scan-eye"></i> Focus mode</button><button class="lui-button lui-button-secondary" type="button" data-auto-organize><i data-lucide="sparkles"></i> Auto organize</button><span class="muted" data-todo-summary>
+            data-todo-filter="completed" href="/todo?filter=completed">Completed</a></div>            <div class="todo-toolbar-actions"><button class="lui-button lui-button-primary" type="button" data-focus-mode><i data-lucide="scan-eye"></i> Focus mode</button><button class="lui-button lui-button-secondary" type="button" data-auto-organize><i data-lucide="sparkles"></i> Auto organize</button><span class="muted" data-auto-organize-status role="status" aria-live="polite" hidden></span><span class="muted" data-todo-summary>
             <%= (user.tasks || []).filter(task=> !task.done).length %> things still in motion
         </span><button class="lui-icon-button task-sync-trigger" type="button" data-open="task-sync-modal" aria-controls="task-sync-modal" aria-label="Open task sync settings" title="Task sync"><i data-lucide="refresh-cw"></i></button></div>
     </div>
@@ -17,7 +17,7 @@
         <button class="lui-icon-button task-sync-tip-close" type="button" data-dismiss-sync-tip aria-label="Dismiss task sync tip"><i data-lucide="x"></i></button>
     </aside>
     <%- include('mini/task-sync-modal') %>
-    <section class="private-list" data-live-todo-list data-page-size="<%= todoPageSize || 10 %>" data-offset="<%= Math.min((user.tasks || []).length, todoPageSize || 10) %>" data-has-more="<%= (user.tasks || []).length > (todoPageSize || 10) %>">
+    <section class="private-list" data-live-todo-list data-task-count="<%= (user.tasks || []).length %>" data-pending-count="<%= (user.tasks || []).filter(task => !task.done).length %>" data-page-size="<%= todoPageSize || 10 %>" data-offset="<%= Math.min((user.tasks || []).length, todoPageSize || 10) %>" data-has-more="<%= (user.tasks || []).length > (todoPageSize || 10) %>">
         <% (user.tasks || []).slice(0, todoPageSize || 10).forEach(task=> { %><article class="private-task <%= task.done ? 'is-done' : '' %>" data-priority="<%= (task.priority || 'Normal').toLowerCase() %>"
                 data-task-id="<%= task.id %>">
                 <form class="toggle-task-form" action="/tasks/<%= task.id %>/toggle" method="post" data-live-form>
@@ -41,6 +41,13 @@
                         <p>Add a task from any course feed or create a private study goal.</p>
                     </div>
                     <% } %>
+        <section class="todo-all-clear" data-todo-all-clear hidden aria-live="polite">
+            <img src="/media/todo-all-clear.png" alt="A bright sun rising over green hills, with stars and confetti celebrating a finished task list">
+            <div>
+                <h2>Look at you. All clear.</h2>
+                <p>You showed up for every task. Enjoy this little pocket of breathing room.</p>
+            </div>
+        </section>
         <div class="todo-load-more" data-todo-load-more <%= (user.tasks || []).length > (todoPageSize || 10) ? '' : 'hidden' %> role="status" aria-live="polite">
             <span class="todo-loading-orbit" aria-hidden="true"></span><span data-todo-load-message>Bringing in the next tasks</span><button class="lui-link" type="button" data-todo-load-retry hidden>Try again</button>
         </div>

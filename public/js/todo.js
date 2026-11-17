@@ -94,13 +94,41 @@ function applyTodoFilter(filter = 'all') {
   list.dataset.activeFilter = filter; animateTodoPositions(previous);
   if (filter === 'pending') void loadPendingTasksIfNeeded();
 }
-function toggleFocusMode(button) {
+async function organizeTodoTasks(button) {
   const list = todoList(); if (!list) return;
-  const previous = captureTodoPositions();
-  const active = button.classList.toggle('active');
-  if (active) sortTodoDom((left, right) => { const leftDue = left.dataset.due === 'No date' ? Number.MAX_SAFE_INTEGER : new Date(`${left.dataset.due}T00:00:00`).getTime(); const rightDue = right.dataset.due === 'No date' ? Number.MAX_SAFE_INTEGER : new Date(`${right.dataset.due}T00:00:00`).getTime(); return (leftDue - rightDue) || (Number(left.dataset.position) - Number(right.dataset.position)); });
-  else sortTodoDom((left, right) => Number(left.dataset.position) - Number(right.dataset.position));
-  animateTodoPositions(previous, true);
+  const status = document.querySelector('[data-auto-organize-status]');
+  button.disabled = true;
+  if (status) {
+    status.textContent = 'Organizing and saving order...';
+    status.hidden = false;
+  }
+  try {
+    const response = await fetch('/tasks/organize', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'X-Live-Request': 'true' }
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.error || !Array.isArray(payload.tasks)) {
+      throw new Error(payload.error || 'Task order could not be saved.');
+    }
+    const positions = new Map(payload.tasks.map((task) => [String(task.id), task.position]));
+    list.querySelectorAll('.private-task').forEach((task) => {
+      const position = positions.get(task.dataset.taskId);
+      if (position !== undefined) task.dataset.position = String(position);
+    });
+    const previous = captureTodoPositions();
+    sortTodoDom((left, right) => Number(left.dataset.position) - Number(right.dataset.position));
+    animateTodoPositions(previous, true);
+    if (status) {
+      status.textContent = '';
+      status.hidden = true;
+    }
+  } catch (error) {
+    console.error('Could not organize and save Todo task order.', error);
+    if (status) status.textContent = error.message || 'Task order could not be saved.';
+  } finally {
+    button.disabled = false;
+  }
 }
 function waitForTodoAnimation(duration) { return new Promise((resolve) => window.setTimeout(resolve, duration)); }
 function todoLoadMoreControl() { return document.querySelector('[data-todo-load-more]'); }
@@ -628,16 +656,16 @@ function connectLiveTodo() {
   if (document.querySelector('[data-dashboard-todo-list]')) return;
   const list = todoList(); if (!list || typeof io !== 'function') return;
   liveState.socket?.disconnect(); liveState.socket = io(); liveState.socket.on('connect', () => liveState.socket.emit('todo:join'));
-  liveState.socket.on('todo:task-added', ({ task }) => { if (!task || list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`)) return; list.querySelector('.empty-panel')?.remove(); const previous = captureTaskListPositions(list); const sentinel = list.querySelector('[data-todo-load-more]'); list.insertAdjacentHTML('beforeend', todoTaskMarkup(task)); const row = list.querySelector(`:scope > [data-task-id="${CSS.escape(task.id)}"]`); if (!row) return; if (sentinel) sentinel.before(row); row.hidden = list.dataset.activeFilter === 'completed'; animateTaskListPositions(list, previous, { enterElement: row, rippleFrom: row }); bindLiveForms(row); bindLinkComposers(row); enhanceTodoTasks(); lucide.createIcons(); });
-  liveState.socket.on('todo:task-updated', ({ task }) => { const row = task && list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`); if (!row) return; row.outerHTML = todoTaskMarkup(task); const nextRow = list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`); bindLiveForms(nextRow); bindLinkComposers(nextRow); enhanceTodoTasks(); lucide.createIcons(); syncTodoSummary(); });
-  liveState.socket.on('todo:task-deleted', ({ taskId }) => { list.querySelector(`[data-task-id="${CSS.escape(taskId)}"]`)?.remove(); syncTodoSummary(); });
+  liveState.socket.on('todo:task-added', ({ task, todoPendingCount, todoTaskCount }) => { updateTodoPendingCount(list, todoPendingCount); updateTodoTaskCount(list, todoTaskCount); if (!task || list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`)) { syncTodoSummary(); return; } list.querySelector('.empty-panel')?.remove(); const previous = captureTaskListPositions(list); const sentinel = list.querySelector('[data-todo-load-more]'); list.insertAdjacentHTML('beforeend', todoTaskMarkup(task)); const row = list.querySelector(`:scope > [data-task-id="${CSS.escape(task.id)}"]`); if (!row) return; if (sentinel) sentinel.before(row); row.hidden = list.dataset.activeFilter === 'completed'; animateTaskListPositions(list, previous, { enterElement: row, rippleFrom: row }); bindLiveForms(row); bindLinkComposers(row); enhanceTodoTasks(row); lucide.createIcons(); syncTodoSummary(); });
+  liveState.socket.on('todo:task-updated', ({ task, todoPendingCount, todoTaskCount }) => { updateTodoPendingCount(list, todoPendingCount); updateTodoTaskCount(list, todoTaskCount); const row = task && list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`); if (!row) { syncTodoSummary(); return; } row.outerHTML = todoTaskMarkup(task); const nextRow = list.querySelector(`[data-task-id="${CSS.escape(task.id)}"]`); bindLiveForms(nextRow); bindLinkComposers(nextRow); enhanceTodoTasks(nextRow); lucide.createIcons(); syncTodoSummary(); });
+  liveState.socket.on('todo:task-deleted', ({ taskId, todoPendingCount, todoTaskCount }) => { updateTodoPendingCount(list, todoPendingCount); updateTodoTaskCount(list, todoTaskCount); list.querySelector(`[data-task-id="${CSS.escape(taskId)}"]`)?.remove(); syncTodoSummary(); });
   liveState.socket.on('todo:reordered', ({ tasks }) => { if (!tasks) return; const byId = new Map(tasks.map((task) => [task.id, task])); sortTodoDom((left, right) => byId.get(left.dataset.taskId).position - byId.get(right.dataset.taskId).position); });
 }
 function bindTodoControls() {
   bindLinkComposers();
   enhanceTodoTasks();
   document.querySelectorAll('[data-todo-filter]').forEach((link) => link.addEventListener('click', (event) => { event.preventDefault(); applyTodoFilter(link.dataset.todoFilter); history.replaceState({}, '', `/todo${link.dataset.todoFilter === 'all' ? '' : `?filter=${link.dataset.todoFilter}`}`); }));
-  document.querySelector('[data-auto-organize]')?.addEventListener('click', (event) => toggleFocusMode(event.currentTarget));
+  document.querySelector('[data-auto-organize]')?.addEventListener('click', (event) => void organizeTodoTasks(event.currentTarget));
   bindFocusMode();
   bindTodoPagination();
   bindTodoPriorityMenus();
@@ -729,7 +757,12 @@ async function submitLiveForm(form, animatedEntry = null) {
     if (payload.task) {
       const list = document.querySelector('[data-live-todo-list]'); if (list) {
         const existing = list.querySelector(`[data-task-id="${CSS.escape(payload.task.id)}"]`);
+        updateTodoPendingCount(list, payload.todoPendingCount);
+        updateTodoTaskCount(list, payload.todoTaskCount);
         if (!existing) {
+          if (payload.todoTaskCount === undefined && !list.matches('[data-dashboard-todo-list]')) {
+            updateTodoTaskCount(list, Number(list.dataset.taskCount) + 1);
+          }
           const empty = list.querySelector('.empty-panel'); empty?.remove();
           const previous = captureTaskListPositions(list);
           list.insertAdjacentHTML('beforeend', list.matches('[data-dashboard-todo-list]') ? dashboardTodoTaskMarkup(payload.task) : todoTaskMarkup(payload.task));
@@ -761,8 +794,14 @@ async function submitLiveForm(form, animatedEntry = null) {
       syncDashboardTodoCount();
     }
     if (payload.deleted && payload.taskId) {
-      document.querySelector(`[data-task-id="${CSS.escape(payload.taskId)}"]`)?.remove();
+      const deletedRow = document.querySelector(`[data-task-id="${CSS.escape(payload.taskId)}"]`);
+      const list = deletedRow?.closest('[data-live-todo-list]');
+      deletedRow?.remove();
+      updateTodoPendingCount(list, payload.todoPendingCount);
+      if (payload.todoTaskCount !== undefined) updateTodoTaskCount(list, payload.todoTaskCount);
+      else if (list && !list.matches('[data-dashboard-todo-list]')) updateTodoTaskCount(list, Math.max(0, Number(list.dataset.taskCount) - 1));
       syncDashboardTodoCount();
+      syncTodoSummary();
     }
     if (payload.deleted && payload.resourceId) document.querySelector(`[data-resource-id="${CSS.escape(payload.resourceId)}"]`)?.remove();
     if (payload.deleted && payload.itemId) document.querySelector(`[data-item-id="${CSS.escape(payload.itemId)}"]`)?.remove();
@@ -777,6 +816,7 @@ async function submitLiveForm(form, animatedEntry = null) {
     if (payload.reported) { document.querySelector(`[data-comment-id="${CSS.escape(payload.contentId || '')}"]`)?.remove(); showLiveSuccess(payload.successMessage || 'Report submitted.'); }
     if ((payload.reviewed || payload.removed) && payload.commentId) document.querySelector(`[data-comment-id="${CSS.escape(payload.commentId)}"]`)?.closest('.mod-card')?.remove();
     if (payload.todoPendingCount !== undefined) {
+      updateTodoPendingCount(document.querySelector('[data-live-todo-list]'), payload.todoPendingCount);
       const countTarget = document.querySelector('[data-live-todo-count]');
       if (countTarget) countTarget.textContent = payload.todoPendingCount;
     }
@@ -971,7 +1011,27 @@ function syncTodoSummary() {
   if (!list) return;
   const count = list.matches('[data-dashboard-todo-list]')
     ? list.querySelectorAll('.dashboard-todo-item:not(.is-done)').length
-    : list.querySelectorAll('.private-task:not(.is-done)').length;
+    : Number(list.dataset.pendingCount) || 0;
   if (summary) summary.textContent = `${count} thing${count === 1 ? '' : 's'} still in motion`;
   document.querySelectorAll('[data-live-todo-count], [data-dashboard-todo-count]').forEach((target) => { target.textContent = String(count); });
+  if (!list.matches('[data-dashboard-todo-list]')) {
+    const emptyState = list.querySelector('[data-todo-all-clear]');
+    const showAllClear = list.dataset.activeFilter === 'pending'
+      && Number(list.dataset.pendingCount) === 0
+      && Number(list.dataset.taskCount) > 0;
+    if (emptyState && showAllClear && emptyState.hidden) {
+      emptyState.hidden = false;
+      emptyState.classList.remove('is-arriving');
+      requestAnimationFrame(() => emptyState.classList.add('is-arriving'));
+    } else if (emptyState && !showAllClear) {
+      emptyState.hidden = true;
+      emptyState.classList.remove('is-arriving');
+    }
+  }
+}
+function updateTodoPendingCount(list, count) {
+  if (list && Number.isFinite(Number(count))) list.dataset.pendingCount = String(count);
+}
+function updateTodoTaskCount(list, count) {
+  if (list && Number.isFinite(Number(count))) list.dataset.taskCount = String(count);
 }

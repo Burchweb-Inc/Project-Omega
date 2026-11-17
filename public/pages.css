@@ -1137,6 +1137,72 @@
     margin: 0 3px
 }
 
+.todo-all-clear {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(170px, 250px) minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(14px, 3vw, 32px);
+    min-height: 100%;
+    padding: clamp(20px, 5vw, 42px);
+    border-radius: 10px;
+    background: linear-gradient(135deg, #f8f6e9, #e8f1e8);
+    color: #234744;
+    text-align: left
+}
+
+.todo-all-clear[hidden] {
+    display: none
+}
+
+.todo-all-clear img {
+    display: block;
+    width: 100%;
+    height: auto;
+    animation: todo-clear-art 4s ease-in-out infinite
+}
+
+.todo-all-clear h2,
+.todo-all-clear p {
+    margin: 0
+}
+
+.todo-all-clear h2 {
+    font: 600 clamp(23px, 3.2vw, 36px)/1.12 'Space Grotesk', sans-serif;
+    letter-spacing: -.035em
+}
+
+.todo-all-clear p {
+    max-width: 380px;
+    margin-top: 10px;
+    color: #526a61;
+    font-size: 15px;
+    line-height: 1.55
+}
+
+.todo-all-clear.is-arriving img {
+    animation: todo-clear-enter .85s cubic-bezier(.18, .72, .24, 1) both, todo-clear-art 4s .85s ease-in-out infinite
+}
+
+.todo-all-clear.is-arriving div {
+    animation: todo-clear-copy .7s .16s cubic-bezier(.18, .72, .24, 1) both
+}
+
+@keyframes todo-clear-enter {
+    from { opacity: 0; transform: translateY(24px) scale(.92) rotate(-3deg) }
+    to { opacity: 1; transform: translateY(0) scale(1) rotate(0) }
+}
+
+@keyframes todo-clear-copy {
+    from { opacity: 0; transform: translateX(18px) }
+    to { opacity: 1; transform: translateX(0) }
+}
+
+@keyframes todo-clear-art {
+    0%, 100% { transform: translateY(0) rotate(0) }
+    50% { transform: translateY(-7px) rotate(1deg) }
+}
+
 .todo-load-more {
     display: flex;
     min-height: 52px;
@@ -1894,6 +1960,23 @@ body.focus-mode-open .app-shell {
         gap: 8px
     }
 
+    .todo-all-clear {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        gap: 6px;
+        padding: 18px 16px;
+        text-align: center
+    }
+
+    .todo-all-clear img {
+        width: min(58vw, 210px)
+    }
+
+    .todo-all-clear p {
+        margin-top: 8px;
+        font-size: 13px
+    }
+
     .focus-mode {
         padding: 12px 14px max(12px, env(safe-area-inset-bottom))
     }
@@ -1952,6 +2035,12 @@ body.focus-mode-open .app-shell {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .todo-all-clear img,
+    .todo-all-clear.is-arriving img,
+    .todo-all-clear.is-arriving div {
+        animation: none !important
+    }
+
     .todo-loading-orbit,
     .focus-loading-mark,
     .focus-card-entering,

@@ -23,6 +23,7 @@ const searchUsers = require('./utils/search-users');
 const siteAdminUserPage = require('./utils/site-admin-user-page');
 const { DASHBOARD_FEED_PAGE_SIZE, dashboardFeedPage, sortDashboardFeedItems } = require('./utils/dashboard-feed');
 const { discoverFocusBackgrounds } = require('./utils/focus-backgrounds');
+const { organizeTasks } = require('./utils/todo-order');
 const registerRenderGateRoutes = require('./beta-tests/routes');
 const registerThemeRoutes = require('./themes/routes');
 
@@ -317,7 +318,11 @@ function notificationRoom(userId) { return `notifications:${userId}`; }
 function emitCourse(org, course, event, payload) { io.to(courseRoom(org.id, course.id)).emit(event, payload); }
 function emitOrg(org, event, payload) { io.to(orgRoom(org.id)).emit(event, payload); }
 function emitGroup(org, event, payload) { io.to(groupRoom(org.id)).emit(event, payload); }
-function emitTodo(userId, event, payload) { io.to(todoRoom(userId)).emit(event, payload); }
+function emitTodo(userId, event, payload) {
+  const user = users.find((entry) => entry.id === userId);
+  const todoPendingCount = (user?.tasks || []).filter((task) => !task.done).length;
+  io.to(todoRoom(userId)).emit(event, { ...payload, todoPendingCount, todoTaskCount: (user?.tasks || []).length });
+}
 function emitNotification(userId, notification) { io.to(notificationRoom(userId)).emit('notification:added', notification); }
 function groupPresencePayload(org, groupId) {
   const group = getBreakoutGroup(org, groupId);
@@ -1469,7 +1474,7 @@ app.post('/org/:id/items/:itemId/todo', requireUser, (request, response) => {
   const org = getOrg(request); const course = canAccess(org, request.user) ? org.courses.find((entry) => entry.items.some((entryItem) => entryItem.id === request.params.itemId)) : null; const item = course?.items.find((entry) => entry.id === request.params.itemId);
   let task;
   if (org && course && item) { request.user.tasks ||= []; task = request.user.tasks.find((entry) => entry.sourceId === item.id); if (!task) { task = normalizeTask({ id: id(), title: item.title, details: item.details, links: item.links, sourceId: item.id, source: `${course.name} · ${org.name}`, due: course.abDayEnabled ? courseItemDue(item, courseDayForUser(request.user, course)) : item.due, priority: 'Normal', done: false, position: request.user.tasks.length }); request.user.tasks.push(task); persistState(); emitCourse(org, course, 'task:added', { userId: request.user.id, task }); emitTodo(request.user.id, 'todo:task-added', { task }); } }
-  return sendMutation(request, response, { task: task || null, todoPendingCount: (request.user.tasks || []).filter((entry) => !entry.done).length }, `/org/${org?.id || ''}/course/${course?.id || ''}`);
+  return sendMutation(request, response, { task: task || null, todoPendingCount: (request.user.tasks || []).filter((entry) => !entry.done).length, todoTaskCount: (request.user.tasks || []).length }, `/org/${org?.id || ''}/course/${course?.id || ''}`);
 });
 
 app.post('/tasks/:taskId/toggle', requireUser, (request, response) => {
@@ -1483,7 +1488,7 @@ app.post('/tasks', requireUser, async (request, response) => {
     if (policyError) return sendMutation(request, response, { error: policyError }, '/todo');
     request.user.tasks ||= []; task = normalizeTask({ id: id(), title: request.body.title.trim(), details: String(request.body.details || '').trim(), links: await fetchLinkPreviews(`${request.body.title || ''}\n${request.body.details || ''}`), sourceId: null, source: 'Personal task', due: request.body.due || 'No date', priority: request.body.priority || 'Normal', done: false, position: request.user.tasks.length }); request.user.tasks.push(task); persistState(); emitTodo(request.user.id, 'todo:task-added', { task });
   }
-  return sendMutation(request, response, { task, todoPendingCount: (request.user.tasks || []).filter((entry) => !entry.done).length }, '/todo');
+  return sendMutation(request, response, { task, todoPendingCount: (request.user.tasks || []).filter((entry) => !entry.done).length, todoTaskCount: (request.user.tasks || []).length }, '/todo');
 });
 
 app.post('/tasks/:taskId/update', requireUser, async (request, response) => {
@@ -1510,7 +1515,7 @@ app.post('/tasks/:taskId/delete', requireUser, (request, response) => {
   request.user.tasks = tasks.filter((entry) => entry.id !== task.id);
   request.user.tasks.forEach((entry, index) => { entry.position = index; });
   persistState(); emitTodo(request.user.id, 'todo:task-deleted', { taskId: task.id });
-  return sendMutation(request, response, { deleted: true, taskId: task.id, todoPendingCount: request.user.tasks.filter((entry) => !entry.done).length }, '/todo');
+  return sendMutation(request, response, { deleted: true, taskId: task.id, todoPendingCount: request.user.tasks.filter((entry) => !entry.done).length, todoTaskCount: request.user.tasks.length }, '/todo');
 });
 
 app.post('/tasks/reorder', requireUser, (request, response) => {
@@ -1536,6 +1541,15 @@ app.post('/tasks/reorder', requireUser, (request, response) => {
   persistState();
   emitTodo(request.user.id, 'todo:reordered', { tasks: nextOrder.map(normalizeTask) });
   return sendMutation(request, response, { tasks: nextOrder }, '/todo');
+});
+
+app.post('/tasks/organize', requireUser, (request, response) => {
+  const tasks = organizeTasks(request.user.tasks || []);
+  tasks.forEach((task, index) => { task.position = index; });
+  request.user.tasks = tasks;
+  persistState();
+  emitTodo(request.user.id, 'todo:reordered', { tasks: tasks.map(normalizeTask) });
+  return sendMutation(request, response, { tasks: tasks.map(normalizeTask) }, '/todo');
 });
 
 app.post('/org/:id/items/:itemId/toggle', requireUser, (request, response) => {

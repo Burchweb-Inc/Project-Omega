@@ -31,6 +31,7 @@ test('Todo renders ten initial tasks and exposes focus mode', async () => {
 
   assert.equal((html.match(/<article class="private-task/g) || []).length, 10);
   assert.doesNotMatch(html, /Personal study goal/);
+  assert.match(html, /data-pending-count="12"/);
   assert.match(html, /data-offset="10" data-has-more="true"/);
   assert.match(html, /data-focus-mode/);
   assert.match(html, /data-focus-screen/);

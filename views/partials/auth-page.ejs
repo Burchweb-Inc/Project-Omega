@@ -22,7 +22,7 @@
       <a class="auth-back-link" href="/"><i data-lucide="arrow-left"></i> Back home</a>
     </header>
     <div class="auth-page-content">
-      <p class="auth-page-kicker"><%= snarkyTypePending ? 'One last step' : mode === 'signup' ? 'A place to begin' : 'Pick up where you left off' %></p>
+      <p class="auth-page-kicker"><%= snarkyTypePending ? 'One last step' : mode === 'signup' ? '' : '' %></p>
       <h1 id="auth-title"><%= snarkyTypePending ? 'Finish your profile.' : mode === 'signup' ? 'Build your desk.' : 'Welcome back.' %></h1>
       <p class="auth-page-lead"><%= snarkyTypePending ? 'Choose the LockIn details you want to use alongside your SnarkyType account.' : mode === 'signup' ? 'Create a calm, useful space for classes, deadlines, and shared work.' : 'Sign in to return to your classes, deadlines, and people.' %></p>
       <% if (error) { %>
