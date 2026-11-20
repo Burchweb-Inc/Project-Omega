@@ -696,6 +696,7 @@ function connectLiveTodo() {
 function bindTodoControls() {
   bindLinkComposers();
   enhanceTodoTasks();
+  startTodoAllClearRotation();
   document.querySelectorAll('[data-todo-filter]').forEach((link) => link.addEventListener('click', (event) => { event.preventDefault(); applyTodoFilter(link.dataset.todoFilter); history.replaceState({}, '', `/todo${link.dataset.todoFilter === 'all' ? '' : `?filter=${link.dataset.todoFilter}`}`); }));
   document.querySelector('[data-auto-organize]')?.addEventListener('click', (event) => void organizeTodoTasks(event.currentTarget));
   bindFocusMode();
@@ -1038,6 +1039,21 @@ function bindTaskCopyModal() {
   });
 }
 
+const todoAllClearQuotes = [
+  { title: 'Wow. Someone locked in!', message: 'Now take some time to do what you like. Go outside——GTA6 can wait' },
+  { title: 'The list is empty.', message: 'Somewhere a group chat just went quiet.' },
+  { title: 'All quiet on the western front.', message: 'Your notebook is closed and the stars have won.' },
+  { title: 'Mission accomplished.', message: 'Go have fun before the next battle starts.' },
+  { title: 'Locked in? More like locked out.', message: 'You\'re probably not going to touch this site for a while. We\'re ready.' },
+  { title: 'You did the thing.', message: 'The couch has been notified and it is honored.' }
+];
+let todoAllClearQuoteIndex = 0;
+let todoAllClearRotationTimer = null;
+function todoAllClearTitle() { return document.querySelector('[data-todo-all-clear-title]'); }
+function todoAllClearMessage() { return document.querySelector('[data-todo-all-clear-message]'); }
+function renderTodoAllClearQuote() { const quote = todoAllClearQuotes[todoAllClearQuoteIndex % todoAllClearQuotes.length]; if (todoAllClearTitle()) todoAllClearTitle().textContent = quote.title; if (todoAllClearMessage()) todoAllClearMessage().textContent = quote.message; }
+function rotateTodoAllClearQuote() { todoAllClearQuoteIndex = Math.floor(Math.random() * todoAllClearQuotes.length); renderTodoAllClearQuote(); }
+function startTodoAllClearRotation() { window.clearInterval(todoAllClearRotationTimer); todoAllClearQuoteIndex = Math.floor(Math.random() * todoAllClearQuotes.length); renderTodoAllClearQuote(); todoAllClearRotationTimer = window.setInterval(rotateTodoAllClearQuote, 60000); }
 function syncTodoSummary() {
   const list = document.querySelector('[data-live-todo-list]'); const summary = document.querySelector('[data-todo-summary]'); const countTarget = document.querySelector('[data-live-todo-count]');
   if (!list) return;

@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const ejs = require('ejs');
+const fs = require('node:fs');
+const path = require('node:path');
 
 function taskFixture(overrides = {}) {
   return {
@@ -61,6 +63,35 @@ test('dashboard personal todo shows pending tasks and celebrates a finished list
   const empty = await renderDashboard([]);
   assert.match(empty, /dashboard-todo-empty/, 'A personal todo without tasks should show the friendly empty state.');
   assert.doesNotMatch(empty, /todo-all-clear/, 'The all clear should not show without tasks.');
+});
+
+test('Todo all clear copy revolves through quirky quotes', async () => {
+  const tasks = [{ id: 'task-1', title: 'Study task', details: '', source: 'Personal task', due: 'No date', priority: 'Normal', done: true, position: 0, links: [] }];
+  const html = await ejs.renderFile('views/partials/todo.ejs', {
+    user: { tasks, settings: {} },
+    todoPageSize: 10,
+    todoDateTimezone: 'UTC',
+    todoDateLocale: 'en-US',
+    formatTaskDate: () => 'No date',
+    renderLinkedText: (text) => text,
+    integrationStatus: '',
+    taskSyncConfigured: false,
+    taskSyncMissingConfig: 'missing configuration',
+    googleTasksConnected: false,
+    googleTasksConfigured: false,
+    appleRemindersConnected: false,
+    appleRemindersUsername: ''
+  });
+
+  assert.match(html, /data-todo-all-clear/, 'A finished personal todo should celebrate with the all clear panel.');
+  assert.match(html, /data-todo-all-clear-title/, 'The all clear heading should expose a rotating copy hook.');
+  assert.match(html, /data-todo-all-clear-message/, 'The all clear message should expose a rotating copy hook.');
+  assert.match(html, /Wow\. Someone locked in!/, 'The all clear heading should start with the first rotating quote.');
+  assert.match(html, /Now take some time to do what you like/, 'The all clear message should start with the first rotating quote.');
+
+  const todoSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'todo.js'), 'utf8');
+  assert.match(todoSource, /Math\.random/, 'The all clear copy should revolve through random quirky quotes.');
+  assert.match(todoSource, /setInterval\(rotateTodoAllClearQuote, 60000\)/, 'The all clear copy should revolve every minute.');
 });
 
 test('Todo renders ten initial tasks and exposes focus mode', async () => {

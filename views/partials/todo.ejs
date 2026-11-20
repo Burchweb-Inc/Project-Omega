@@ -44,8 +44,8 @@
         <section class="todo-all-clear" data-todo-all-clear hidden aria-live="polite">
             <img src="/media/todo-all-clear.png" alt="A bright sun rising over green hills, with stars and confetti celebrating a finished task list">
             <div>
-                <h2>Look at you. All clear.</h2>
-                <p>You showed up for every task. Enjoy this little pocket of breathing room.</p>
+                <h2 data-todo-all-clear-title>Wow. Someone locked in!</h2>
+                <p data-todo-all-clear-message>Now take some time to do what you like. Go outside--GTA6 can wait</p>
             </div>
         </section>
         <div class="todo-load-more" data-todo-load-more <%= (user.tasks || []).length > (todoPageSize || 10) ? '' : 'hidden' %> role="status" aria-live="polite">
