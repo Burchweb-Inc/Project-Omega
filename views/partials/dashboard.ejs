@@ -290,16 +290,24 @@
               <div><h2>Personal Todo</h2><p><span data-dashboard-todo-count><%= (user.tasks || []).filter(task => !task.done).length %></span> still in motion</p></div>
               <a class="lui-icon-button" href="/todo" aria-label="Expand and open Personal Todo"><i data-lucide="arrow-up-right"></i></a>
             </div>
-            <div class="dashboard-todo-list" data-live-todo-list data-dashboard-todo-list>
-              <% (user.tasks || []).forEach(task => { %>
-                <article class="dashboard-todo-item <%= task.done ? 'is-done' : '' %>" data-task-id="<%= task.id %>">
+            <div class="dashboard-todo-list" data-live-todo-list data-dashboard-todo-list data-task-count="<%= (user.tasks || []).length %>" data-pending-count="<%= (user.tasks || []).filter(task => !task.done).length %>">
+              <% const dashboardTodoTasks = user.tasks || []; const dashboardTodoPending = dashboardTodoTasks.filter(task => !task.done); %>
+              <% if (dashboardTodoPending.length) { dashboardTodoPending.forEach(task => { %>
+                <article class="dashboard-todo-item" data-task-id="<%= task.id %>">
                   <form class="toggle-task-form" action="/tasks/<%= task.id %>/toggle" method="post" data-live-form>
-                    <button class="lui-check dashboard-todo-check" type="submit" aria-label="<%= task.done ? 'Mark incomplete' : 'Mark complete' %>: <%= task.title %>"><i data-lucide="check"></i></button>
+                    <button class="lui-check dashboard-todo-check" type="submit" aria-label="Mark complete: <%= task.title %>"><i data-lucide="check"></i></button>
                   </form>
                   <div><strong><%- renderLinkedText(task.title, task.links) %></strong><small><%= task.source %></small></div>
                 </article>
-              <% }) %>
-              <% if (!(user.tasks || []).length) { %><p class="dashboard-todo-empty">Your private queue is clear. Add a task from any class feed.</p><% } %>
+              <% }) } %>
+              <% if (!dashboardTodoTasks.length) { %><p class="dashboard-todo-empty">Your private queue is clear. Add a task from any class feed.</p><% } %>
+              <% if (dashboardTodoTasks.length && !dashboardTodoPending.length) { %><section class="todo-all-clear" data-todo-all-clear hidden aria-live="polite">
+                <img src="/media/todo-all-clear.png" alt="A bright sun rising over green hills, with stars and confetti celebrating a finished task list">
+                <div>
+                  <h2>Look at you. All clear.</h2>
+                  <p>You showed up for every task. Enjoy this little pocket of breathing room.</p>
+                </div>
+              </section><% } %>
             </div>
             <p class="sr-only" data-dashboard-todo-status role="status" aria-live="polite"></p>
             <a class="lui-button lui-button-primary dashboard-expand-todo" href="/todo">Open full Todo <i data-lucide="arrow-up-right"></i></a>

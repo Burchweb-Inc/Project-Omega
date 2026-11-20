@@ -19,17 +19,45 @@ function syncDashboardTodoCount() {
   if (!list) return;
   const count = list.querySelectorAll('.dashboard-todo-item:not(.is-done)').length;
   document.querySelectorAll('[data-dashboard-todo-count], [data-live-todo-count]').forEach((target) => { target.textContent = String(count); });
-  if (list.querySelector('.dashboard-todo-item')) list.querySelector('.dashboard-todo-empty')?.remove();
-  else if (!list.querySelector('.dashboard-todo-empty')) {
-    const empty = document.createElement('p');
-    empty.className = 'dashboard-todo-empty';
-    empty.textContent = 'Your private queue is clear. Add a task from any class feed.';
-    list.append(empty);
+  const taskCount = Number(list.dataset.taskCount) || 0;
+  const pendingCount = Number(list.dataset.pendingCount) || 0;
+  const emptyState = list.querySelector('.dashboard-todo-empty');
+  const allClear = list.querySelector('[data-todo-all-clear]');
+  const showAllClear = taskCount > 0 && pendingCount === 0;
+  if (allClear) {
+    if (showAllClear) {
+      if (emptyState) emptyState.remove();
+      if (allClear.hidden) {
+        allClear.hidden = false;
+        allClear.classList.remove('is-arriving');
+        requestAnimationFrame(() => allClear.classList.add('is-arriving'));
+      }
+    } else {
+      allClear.hidden = true;
+      allClear.classList.remove('is-arriving');
+    }
   }
+  const hasPendingRows = list.querySelectorAll('.dashboard-todo-item:not(.is-done)').length > 0;
+  if (taskCount > 0) {
+    if (showAllClear) {
+      list.querySelectorAll('.dashboard-todo-item').forEach((row) => row.remove());
+      if (emptyState) emptyState.remove();
+      return;
+    }
+    if (hasPendingRows && emptyState) emptyState.remove();
+    return;
+  }
+  if (emptyState) emptyState.remove();
+  const empty = document.createElement('p');
+  empty.className = 'dashboard-todo-empty';
+  empty.textContent = 'Your private queue is clear. Add a task from any class feed.';
+  list.append(empty);
 }
-function updateDashboardTodo(task) {
+function updateDashboardTodo(task, payload = {}) {
   const list = document.querySelector('[data-dashboard-todo-list]');
   if (!list || !task) return;
+  if (payload.todoTaskCount !== undefined) list.dataset.taskCount = String(payload.todoTaskCount);
+  if (payload.todoPendingCount !== undefined) list.dataset.pendingCount = String(payload.todoPendingCount);
   let row = list.querySelector(`[data-task-id="${CSS.escape(String(task.id))}"]`);
   const wasDone = row?.classList.contains('is-done');
   if (row) row.outerHTML = dashboardTodoTaskMarkup(task);
@@ -45,9 +73,13 @@ function updateDashboardTodo(task) {
   syncDashboardTodoCount();
   lucide.createIcons();
 }
-function removeDashboardTodo(taskId) {
+function removeDashboardTodo(taskId, payload = {}) {
   const list = document.querySelector('[data-dashboard-todo-list]');
   list?.querySelector(`[data-task-id="${CSS.escape(String(taskId || ''))}"]`)?.remove();
+  if (list) {
+    if (payload.todoTaskCount !== undefined) list.dataset.taskCount = String(payload.todoTaskCount);
+    if (payload.todoPendingCount !== undefined) list.dataset.pendingCount = String(payload.todoPendingCount);
+  }
   syncDashboardTodoCount();
 }
 function formatTodoDate(due) {
@@ -1009,24 +1041,42 @@ function bindTaskCopyModal() {
 function syncTodoSummary() {
   const list = document.querySelector('[data-live-todo-list]'); const summary = document.querySelector('[data-todo-summary]'); const countTarget = document.querySelector('[data-live-todo-count]');
   if (!list) return;
-  const count = list.matches('[data-dashboard-todo-list]')
+  const isDashboardList = list.matches('[data-dashboard-todo-list]');
+  const count = isDashboardList
     ? list.querySelectorAll('.dashboard-todo-item:not(.is-done)').length
     : Number(list.dataset.pendingCount) || 0;
+  const taskCount = Number(list.dataset.taskCount) || 0;
+  const pendingCount = Number(list.dataset.pendingCount) || 0;
+  const showAllClear = taskCount > 0 && pendingCount === 0;
   if (summary) summary.textContent = `${count} thing${count === 1 ? '' : 's'} still in motion`;
   document.querySelectorAll('[data-live-todo-count], [data-dashboard-todo-count]').forEach((target) => { target.textContent = String(count); });
-  if (!list.matches('[data-dashboard-todo-list]')) {
-    const emptyState = list.querySelector('[data-todo-all-clear]');
-    const showAllClear = list.dataset.activeFilter === 'pending'
-      && Number(list.dataset.pendingCount) === 0
-      && Number(list.dataset.taskCount) > 0;
-    if (emptyState && showAllClear && emptyState.hidden) {
+  const emptyState = list.querySelector('[data-todo-all-clear]');
+  if (emptyState) {
+    if (showAllClear && emptyState.hidden) {
       emptyState.hidden = false;
       emptyState.classList.remove('is-arriving');
       requestAnimationFrame(() => emptyState.classList.add('is-arriving'));
-    } else if (emptyState && !showAllClear) {
+    } else if (!showAllClear) {
       emptyState.hidden = true;
       emptyState.classList.remove('is-arriving');
     }
+  }
+  if (showAllClear) {
+    list.querySelectorAll('.private-task').forEach((row) => row.remove());
+  }
+  const emptyPanel = list.querySelector('.empty-panel');
+  if (!isDashboardList && taskCount === 0) {
+    list.querySelectorAll('.private-task').forEach((row) => row.remove());
+    if (emptyPanel) emptyPanel.classList.remove('hidden');
+    if (!emptyPanel) {
+      const panel = document.createElement('div');
+      panel.className = 'empty-panel';
+      panel.innerHTML = '<i data-lucide="inbox" aria-hidden="true"></i><h3>Your private queue is clear</h3><p>Add a task from any class feed.</p>';
+      list.append(panel);
+      if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+    }
+  } else if (emptyPanel) {
+    emptyPanel.classList.add('hidden');
   }
 }
 function updateTodoPendingCount(list, count) {

@@ -1224,7 +1224,9 @@ select {
 
 .empty-panel {
     display: grid;
-    place-items: center;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    justify-items: center;
     gap: 10px;
     min-height: 210px;
     padding: 25px;

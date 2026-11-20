@@ -398,6 +398,16 @@ async function userDateLocation(user, request) {
 }
 function normalizeLink(link) { const url = String(typeof link === 'string' ? link : link?.url || ''); let domain = url; try { domain = new URL(url).hostname; } catch (error) {} const fallbackImage = domain && domain !== url ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` : ''; return typeof link === 'string' ? { url, title: domain, description: '', image: fallbackImage, domain } : { url, title: link.title || domain, description: link.description || '', image: link.image || fallbackImage, domain: link.domain || domain }; }
 function normalizeLinks(links) { return (Array.isArray(links) ? links : []).filter((link) => link?.url).map(normalizeLink); }
+function taskLinkPreviewMeta(task) {
+  const title = `${task?.title || 'Study task'} — LockIn`;
+  const description = [task?.details || '', task?.due && task.due !== 'No date' ? `Due ${task.due}` : ''].filter(Boolean).join(' · ');
+  return { title, description };
+}
+async function taskLinkPreviews(task) {
+  const links = await fetchLinkPreviews(`${task?.title || ''}\n${task?.details || ''}`);
+  const { title, description } = taskLinkPreviewMeta(task);
+  return links.map((link) => ({ ...link, title, description }));
+}
 function submittedLinkUrls(value) { return [...new Set(String(value || '').match(/https?:\/\/[^\s<>"']+/gi) || [])].map((entry) => entry.replace(/[),.;!?]+$/, '')).filter((entry) => { try { const url = new URL(entry); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password; } catch (error) { return false; } }).slice(0, 5); }
 async function fetchLinkPreviews(value) {
   const links = submittedLinkUrls(value);
@@ -1331,7 +1341,7 @@ app.post('/org/:id/courses/:courseId/items', requireUser, async (request, respon
   if (dueDates.error) return sendMutation(request, response, { error: dueDates.error }, `/org/${request.params.id}/course/${request.params.courseId}`);
   const policyError = await contentPolicyError({ type: 'course-item', text: request.body.title });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${request.params.id}/course/${request.params.courseId}`);
-  const item = { id: id(), title: String(request.body.title || '').trim(), details: String(request.body.details || '').trim(), links: await fetchLinkPreviews(`${request.body.title || ''}\n${request.body.details || ''}`), type: request.body.type, ...dueDates, done: request.body.type !== 'Event' ? false : null, comments: [], verifiedBy: [], downvotedBy: [], createdBy: request.user.id, position: course.items.length, past: false };
+  const item = { id: id(), title: String(request.body.title || '').trim(), details: String(request.body.details || '').trim(), links: await taskLinkPreviews({ title: String(request.body.title || '').trim(), details: String(request.body.details || '').trim(), ...dueDates }), type: request.body.type, done: request.body.type !== 'Event' ? false : null, comments: [], verifiedBy: [], downvotedBy: [], createdBy: request.user.id, position: course.items.length, past: false };
   item.past = orgModel.isPastAssignment(org, item);
   if (!item.title) return sendMutation(request, response, { error: 'A title is required.' }, `/org/${org.id}/course/${course.id}`);
   course.items.push(item); saveOrg(org); emitCourse(org, course, 'course:item-created', { item, orgId: org.id, courseId: course.id });
@@ -1407,7 +1417,7 @@ app.post('/org/:id/items/:itemId/update', requireUser, async (request, response)
   if (dueDates.error) return sendMutation(request, response, { error: dueDates.error }, `/org/${org.id}/course/${course.id}`);
   const nextType = request.body.type || item.type; const policyError = nextType === 'Event' ? null : await contentPolicyError({ type: 'course-item', text: title });
   if (policyError) return sendMutation(request, response, { error: policyError }, `/org/${org.id}/course/${course.id}`);
-  item.title = title; item.details = String(request.body.details || '').trim(); item.links = await fetchLinkPreviews(`${title}\n${item.details}`); item.type = nextType; item.due = dueDates.due;
+  item.title = title; item.details = String(request.body.details || '').trim(); item.links = await taskLinkPreviews({ title, details: String(item.details || '').trim(), due: item.due }); item.type = nextType; item.due = dueDates.due;
   if (course.abDayEnabled) { item.dueA = dueDates.dueA; item.dueB = dueDates.dueB; } else { delete item.dueA; delete item.dueB; }
   item.past = orgModel.isPastAssignment(org, item);
   users.forEach((user) => { const task = (user.tasks || []).find((entry) => entry.sourceId === item.id && entry.linked !== false); if (task) { task.title = item.title; task.details = item.details; task.links = item.links; task.due = course.abDayEnabled ? courseItemDue(item, courseDayForUser(user, course)) : item.due; task.source = `${course.name} · ${org.name}`; task.importance = dueImportance(task.due); emitTodo(user.id, 'todo:task-updated', { task: normalizeTask(task) }); } });
@@ -1486,7 +1496,7 @@ app.post('/tasks', requireUser, async (request, response) => {
   if (request.body.title?.trim()) {
     const policyError = await contentPolicyError({ type: 'text', text: request.body.title });
     if (policyError) return sendMutation(request, response, { error: policyError }, '/todo');
-    request.user.tasks ||= []; task = normalizeTask({ id: id(), title: request.body.title.trim(), details: String(request.body.details || '').trim(), links: await fetchLinkPreviews(`${request.body.title || ''}\n${request.body.details || ''}`), sourceId: null, source: 'Personal task', due: request.body.due || 'No date', priority: request.body.priority || 'Normal', done: false, position: request.user.tasks.length }); request.user.tasks.push(task); persistState(); emitTodo(request.user.id, 'todo:task-added', { task });
+    request.user.tasks ||= []; task = normalizeTask({ id: id(), title: request.body.title.trim(), details: String(request.body.details || '').trim(), links: await taskLinkPreviews({ title: String(request.body.title || '').trim(), details: String(request.body.details || '').trim(), due: request.body.due || 'No date' }), sourceId: null, source: 'Personal task', due: request.body.due || 'No date', priority: request.body.priority || 'Normal', done: false, position: request.user.tasks.length }); request.user.tasks.push(task); persistState(); emitTodo(request.user.id, 'todo:task-added', { task });
   }
   return sendMutation(request, response, { task, todoPendingCount: (request.user.tasks || []).filter((entry) => !entry.done).length, todoTaskCount: (request.user.tasks || []).length }, '/todo');
 });
@@ -1498,7 +1508,7 @@ app.post('/tasks/:taskId/update', requireUser, async (request, response) => {
   if (!title) return sendMutation(request, response, { error: 'A title is required.' }, '/todo');
   const policyError = await contentPolicyError({ type: 'text', text: title });
   if (policyError) return sendMutation(request, response, { error: policyError }, '/todo');
-  task.title = title; task.details = String(request.body.details || '').trim(); task.links = await fetchLinkPreviews(`${title}\n${task.details}`); task.due = request.body.due || 'No date'; task.priority = ['Low', 'Normal', 'Medium', 'High'].includes(request.body.priority) ? request.body.priority : 'Normal';
+  task.title = title; task.details = String(request.body.details || '').trim(); task.links = await taskLinkPreviews({ title, details: String(task.details || '').trim(), due: task.due }); task.due = request.body.due || 'No date'; task.priority = ['Low', 'Normal', 'Medium', 'High'].includes(request.body.priority) ? request.body.priority : 'Normal';
   persistState(); emitTodo(request.user.id, 'todo:task-updated', { task: normalizeTask(task) });
   return sendMutation(request, response, { task: normalizeTask(task) }, '/todo');
 });

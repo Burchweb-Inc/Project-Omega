@@ -36,9 +36,9 @@
             </article>
             <% }) %>
                 <% if (!(user.tasks || []).length) { %>
-                    <div class="empty-panel"><i data-lucide="inbox"></i>
-                        <h3>Your queue is clear</h3>
-                        <p>Add a task from any course feed or create a private study goal.</p>
+                    <div class="empty-panel"><i data-lucide="inbox" aria-hidden="true"></i>
+                        <h3>Your private queue is clear</h3>
+                        <p>Add a task from any class feed.</p>
                     </div>
                     <% } %>
         <section class="todo-all-clear" data-todo-all-clear hidden aria-live="polite">

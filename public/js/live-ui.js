@@ -448,9 +448,9 @@ function connectLiveDashboard() {
     pagination.dataset.hasMore = String(Number(pagination.dataset.offset || 0) < Number(count?.textContent || 0));
     root.querySelector('[data-dashboard-feed-more]').hidden = pagination.dataset.hasMore !== 'true';
   });
-  liveState.socket.on('todo:task-added', ({ task }) => updateDashboardTodo(task));
-  liveState.socket.on('todo:task-updated', ({ task }) => updateDashboardTodo(task));
-  liveState.socket.on('todo:task-deleted', ({ taskId }) => removeDashboardTodo(taskId));
+  liveState.socket.on('todo:task-added', (payload) => updateDashboardTodo(payload?.task, payload));
+  liveState.socket.on('todo:task-updated', (payload) => updateDashboardTodo(payload?.task, payload));
+  liveState.socket.on('todo:task-deleted', (payload) => removeDashboardTodo(payload?.taskId, payload));
   liveState.socket.on('todo:reordered', ({ tasks }) => {
     const list = root.querySelector('[data-dashboard-todo-list]');
     if (!list || !Array.isArray(tasks)) return;
