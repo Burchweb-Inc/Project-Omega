@@ -14,16 +14,16 @@ function dashboardTodoTaskMarkup(task) {
   const source = todoTaskSource(task);
   return `<article class="dashboard-todo-item ${task.done ? 'is-done' : ''}" data-task-id="${escapeHtml(task.id)}"><form class="toggle-task-form" action="/tasks/${escapeHtml(task.id)}/toggle" method="post" data-live-form><button class="lui-check dashboard-todo-check" type="submit" aria-label="${task.done ? 'Mark incomplete' : 'Mark complete'}: ${escapeHtml(task.title)}"><i data-lucide="check"></i></button></form><div><strong>${linkedTaskTextMarkup(task.title, task.links)}</strong>${source ? `<small>${escapeHtml(source)}</small>` : ''}</div></article>`;
 }
+function todoCelebrationApplies(list) { return Boolean(list) && (list.matches('[data-dashboard-todo-list]') || list.dataset.activeFilter === 'pending'); }
 function syncDashboardTodoCount() {
-  const list = document.querySelector('[data-dashboard-todo-list]');
-  if (!list) return;
+  const list = document.querySelector('[data-dashboard-todo-list]'); if (!list) return;
   const count = list.querySelectorAll('.dashboard-todo-item:not(.is-done)').length;
   document.querySelectorAll('[data-dashboard-todo-count], [data-live-todo-count]').forEach((target) => { target.textContent = String(count); });
   const taskCount = Number(list.dataset.taskCount) || 0;
   const pendingCount = Number(list.dataset.pendingCount) || 0;
   const emptyState = list.querySelector('.dashboard-todo-empty');
   const allClear = list.querySelector('[data-todo-all-clear]');
-  const showAllClear = taskCount > 0 && pendingCount === 0;
+  const showAllClear = todoCelebrationApplies(list) && taskCount > 0 && pendingCount === 0;
   if (allClear) {
     if (showAllClear) {
       if (emptyState) emptyState.remove();
@@ -125,6 +125,7 @@ function applyTodoFilter(filter = 'all') {
   list.querySelectorAll('.private-task').forEach((task) => { task.hidden = filter === 'pending' ? task.classList.contains('is-done') : filter === 'completed' ? !task.classList.contains('is-done') : false; });
   list.dataset.activeFilter = filter; animateTodoPositions(previous);
   if (filter === 'pending') void loadPendingTasksIfNeeded();
+  syncTodoSummary();
 }
 async function organizeTodoTasks(button) {
   const list = todoList(); if (!list) return;
@@ -1063,7 +1064,7 @@ function syncTodoSummary() {
     : Number(list.dataset.pendingCount) || 0;
   const taskCount = Number(list.dataset.taskCount) || 0;
   const pendingCount = Number(list.dataset.pendingCount) || 0;
-  const showAllClear = taskCount > 0 && pendingCount === 0;
+  const showAllClear = todoCelebrationApplies(list) && taskCount > 0 && pendingCount === 0;
   if (summary) summary.textContent = `${count} thing${count === 1 ? '' : 's'} still in motion`;
   document.querySelectorAll('[data-live-todo-count], [data-dashboard-todo-count]').forEach((target) => { target.textContent = String(count); });
   const emptyState = list.querySelector('[data-todo-all-clear]');
@@ -1078,7 +1079,7 @@ function syncTodoSummary() {
     }
   }
   if (showAllClear) {
-    list.querySelectorAll('.private-task').forEach((row) => row.remove());
+    list.querySelectorAll('.private-task').forEach((row) => { row.hidden = true; });
   }
   const emptyPanel = list.querySelector('.empty-panel');
   if (!isDashboardList && taskCount === 0) {
