@@ -94,6 +94,14 @@ test('Todo all clear copy revolves through quirky quotes', async () => {
   assert.match(todoSource, /setInterval\(rotateTodoAllClearQuote, 60000\)/, 'The all clear copy should revolve every minute.');
 });
 
+test('Todo all clear celebrates only an empty pending queue', async () => {
+  const todoSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'todo.js'), 'utf8');
+  assert.match(todoSource, /function todoCelebrationApplies/, 'The all clear should sit behind a pending queue guard.');
+  assert.match(todoSource, /const showAllClear = todoCelebrationApplies\(list\) && taskCount > 0 && pendingCount === 0;/, 'The all clear should celebrate only once the pending queue is finished.');
+  assert.match(todoSource, /if \(filter === 'pending'\) void loadPendingTasksIfNeeded\(\);\s*syncTodoSummary\(\);/, 'Switching the todo filter should refresh the all clear state.');
+  assert.match(todoSource, /row\.hidden = true;/, 'Finishing the pending queue should park task rows instead of dropping them for other tabs.');
+});
+
 test('Todo renders ten initial tasks and exposes focus mode', async () => {
   const tasks = Array.from({ length: 12 }, (_, index) => ({
     id: `task-${index}`,
