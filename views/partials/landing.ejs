@@ -1,58 +1,170 @@
-<main class="landing-page">
-        <section class="landing-hero">
-            <canvas class="landing-shader" data-landing-shader aria-hidden="true"></canvas>
-            <div class="landing-noise" aria-hidden="true"></div>
-            <header class="landing-header">
-                <a class="landing-brand" href="/" aria-label="LockIn home"><img src="/media/logo-text.png" alt="LockIn"></a>
-                <nav class="landing-nav" aria-label="Landing page navigation">
-                    <a href="#why-lockin">Why LockIn</a>
-                    <a href="/about">About</a>
-                    <a href="/support">Support</a>
-                    <a class="landing-nav-button" href="/signup">Open your desk <i data-lucide="arrow-up-right"></i></a>
-                </nav>
+<main class="landing-page" data-landing-page>
+    <section class="landing-hero">
+        <canvas class="landing-shader" data-landing-shader aria-hidden="true"></canvas>
+        <div class="landing-noise" aria-hidden="true"></div>
+        <header class="landing-header">
+            <a class="landing-brand" href="/" aria-label="LockIn home" data-landing-reveal="drop"><img src="/media/logo-text.png" alt="LockIn"></a>
+            <nav class="landing-nav" aria-label="Landing page navigation">
+                <a href="#tour" data-landing-reveal="drop">How it works</a>
+                <a href="#collaboration" data-landing-reveal="drop">Study together</a>
+                <a href="#moderation" data-landing-reveal="drop">Moderation</a>
+                <a href="/about" data-landing-reveal="drop">About</a>
+                <a href="/support" data-landing-reveal="drop">Support</a>
+                <a class="landing-nav-button" href="/signup" data-landing-auth-link data-landing-reveal="pop"><span data-landing-auth-label>Sign up</span> <i data-lucide="arrow-up-right" aria-hidden="true"></i></a>
+            </nav>
+        </header>
+
+        <div class="landing-hero-grid">
+            <div class="landing-copy">
+                <h1 data-landing-reveal="left">The collaborative planner<br><em>for school.</em></h1>
+                <p class="landing-lead" data-landing-reveal="up">LockIn brings your classes, deadlines, and group work together, so the important stuff is easier to find.</p>
+                <div class="landing-actions">
+                    <a class="lui-button landing-action-primary" href="/signup" data-landing-reveal="pop">Get started <i data-lucide="arrow-up-right" aria-hidden="true"></i></a>
+                    <a class="landing-action-link" href="/login" data-landing-reveal="right">Already have an account? Sign in</a>
+                </div>
+            </div>
+            <figure class="landing-hero-visual" data-landing-reveal="right">
+                <img src="/media/landing/overview-screen.png" alt="LockIn overview with a class feed, course updates, and deadlines">
+            </figure>
+        </div>
+        <a class="landing-scroll-cue" href="#tour" data-landing-reveal="pop"><span>See how it comes together</span><i data-lucide="arrow-down" aria-hidden="true"></i></a>
+    </section>
+
+    <section class="landing-tour" id="tour" data-landing-tour aria-labelledby="landing-tour-title">
+        <div class="landing-tour-stage">
+            <div class="landing-tour-frame" role="img" aria-label="LockIn overview, course feed, personal Todo, and academic calendar screens." data-landing-reveal="left">
+                <div class="landing-tour-screens" aria-hidden="true">
+                    <img class="landing-tour-screen is-active" data-tour-screen src="/media/landing/overview-screen.png" alt="">
+                    <img class="landing-tour-screen" data-tour-screen src="/media/landing/course-feed.png" alt="">
+                    <img class="landing-tour-screen" data-tour-screen src="/media/landing/personal-todo.png" alt="">
+                    <img class="landing-tour-screen" data-tour-screen src="/media/landing/academic-calendar.png" alt="">
+                </div>
+            </div>
+            <p class="landing-tour-caption" data-tour-label aria-live="polite" aria-atomic="true" data-landing-reveal="right">Overview</p>
+        </div>
+
+        <div class="landing-tour-copy">
+            <header class="landing-tour-intro">
+                <h2 id="landing-tour-title" data-landing-reveal="up">The parts of a school day, connected.</h2>
+                <p data-landing-reveal="left">Move from classes to tasks to due dates without losing your place.</p>
             </header>
+            <article class="landing-tour-step is-active" data-tour-step data-tour-label="Overview" data-landing-reveal="left">
+                <div><h3>Start with a clear view.</h3><p>See updates across your groups and courses without opening every page.</p></div>
+            </article>
+            <article class="landing-tour-step" data-tour-step data-tour-label="Course feed" data-landing-reveal="right">
+                <div><h3>Keep class work in context.</h3><p>Deadlines, notes, questions, and confirmations stay with the course.</p><br><p>Collaborate with your peers to build your course's todo.</p></div>
+            </article>
+            <article class="landing-tour-step" data-tour-step data-tour-label="Personal Todo" data-landing-reveal="left">
+                <div><h3>Know what needs your attention.</h3><p>Keep personal tasks alongside class work, with the next step easy to find.</p><br><p>Copy tasks from your course feed to your personal todo list. Easy!</p></div>
+            </article>
+            <article class="landing-tour-step" data-tour-step data-tour-label="Calendar" data-landing-reveal="right">
+                <div><h3>See the dates that matter.</h3><p>Bring deadlines and events from your spaces into one calendar.</p></div>
+            </article>
+        </div>
+    </section>
 
-            <div class="landing-hero-grid">
-                <div class="landing-copy">
-                     <h1>The <em>collaborative</em> school planner.</h1>
-                    <p class="landing-lead">Classes, deadlines, project teams, and the details your LMS misses. One clear place, built by peers and kept human.</p>
-                    <div class="landing-actions">
-                        <a class="lui-button landing-action-primary" href="/signup">Build your desk <i data-lucide="arrow-up-right"></i></a>
-                        <a class="landing-action-link" href="/about">See what we stand for <i data-lucide="arrow-up-right"></i></a>
-                    </div>
-                    <div class="landing-trust"><span><i data-lucide="shield-check"></i> Strict moderation</span><span><i data-lucide="lock-keyhole"></i> Privacy by default</span><span><i data-lucide="heart-handshake"></i> Not-for-profit</span></div>
+    <section class="landing-collaboration" id="collaboration" aria-labelledby="landing-collaboration-title">
+        <div class="landing-collaboration-inner">
+            <div class="landing-collaboration-copy">
+                <h2 id="landing-collaboration-title" data-landing-reveal="left">A big room for everyone. Breakouts for the real work.</h2>
+                <p data-landing-reveal="up">Start together, split into small groups to make progress, then bring the conversation and ideas back to the whole space.</p>
+                <div class="landing-collaboration-points">
+                    <article data-landing-reveal="left">
+                        <i data-lucide="users-round" aria-hidden="true"></i>
+                        <div><h3>Meet in one shared space</h3><p>Keep the class, context, and updates together.</p></div>
+                    </article>
+                    <article data-landing-reveal="right">
+                        <i data-lucide="git-fork" aria-hidden="true"></i>
+                        <div><h3>Branch into breakouts</h3><p>Give each small group room to discuss and work.</p></div>
+                    </article>
+                    <article data-landing-reveal="left">
+                        <i data-lucide="corner-down-left" aria-hidden="true"></i>
+                        <div><h3>Bring the thinking back</h3><p>Reconnect around what everyone learned.</p></div>
+                    </article>
                 </div>
+                <a class="lui-button landing-collaboration-button" href="/signup" data-landing-reveal="pop">Start a study group <i data-lucide="arrow-up-right" aria-hidden="true"></i></a>
+            </div>
 
-                <div class="landing-stage" aria-label="LockIn study space principles">
-                    <div class="landing-stage-frame">
-                        <div class="landing-desk-art">
-                            <div class="desk-art-grid" aria-hidden="true"></div>
-                            <div class="desk-art-orbit orbit-large" aria-hidden="true"></div>
-                            <div class="desk-art-orbit orbit-small" aria-hidden="true"></div>
-                            <img src="/media/logo-text.png" alt="LockIn" class="desk-art-logo">
-                            <span class="desk-art-label label-top">A CLEAR PLACE<br><strong>TO BEGIN</strong></span>
-                            <span class="desk-art-label label-bottom">CLASSES / DEADLINES / PEOPLE</span>
-                            <span class="desk-art-mark" aria-hidden="true">+</span>
+            <figure class="landing-collaboration-visual" data-landing-reveal="right">
+                <img
+                    src="/media/landing/collab.png"
+                    alt="Students gathered around a laptop during a collaborative study session"
+                    loading="lazy"
+                    decoding="async">
+            </figure>
+        </div>
+    </section>
+
+    <section class="landing-moderation" id="moderation" aria-labelledby="landing-moderation-title">
+        <div class="landing-moderation-inner">
+            <div class="landing-moderation-copy">
+                <h2 id="landing-moderation-title" data-landing-reveal="left">A safer space takes both signals and judgment.</h2>
+                <p data-landing-reveal="up">AI-powered detection helps flag harmful language and unsafe links for a closer look. Human moderators review reports and context, then decide what happens next.</p>
+                <div class="landing-moderation-points">
+                    <article data-landing-reveal="left">
+                        <i data-lucide="scan-search" aria-hidden="true"></i>
+                        <div><h3>AI-powered detection</h3><p>Surface content that may need attention, so concerning patterns are easier to spot.</p></div>
+                    </article>
+                    <article data-landing-reveal="right">
+                        <i data-lucide="users-round" aria-hidden="true"></i>
+                        <div><h3>Human-led decisions</h3><p>People review reports with context and make the call on moderation.</p></div>
+                    </article>
+                </div>
+                <a class="landing-moderation-link" href="/about" data-landing-reveal="pop">Learn about LockIn <i data-lucide="arrow-up-right" aria-hidden="true"></i></a>
+            </div>
+
+            <figure class="landing-moderation-visual" data-landing-reveal="right">
+                <img
+                    src="/media/landing/collab.png"
+                    alt="Students working together around a laptop"
+                    loading="lazy"
+                    decoding="async">
+                <div class="landing-moderation-overlay" aria-hidden="true"></div>
+                <div class="landing-moderation-signal" aria-hidden="true"><span></span><span></span><span></span></div>
+                <div class="landing-moderation-flow" role="img" aria-label="Moderation workflow: AI detection flags a concern for a human moderator to review">
+                    <article class="landing-moderation-card landing-moderation-detection">
+                        <div class="landing-moderation-card-heading"><i data-lucide="scan-search" aria-hidden="true"></i><span>AI-powered detection</span></div>
+                        <div class="landing-moderation-scan">
+                            <span>Potential concern</span>
+                            <span class="landing-moderation-status"><i data-lucide="arrow-down-right" aria-hidden="true"></i> Sent for review</span>
                         </div>
-                        <div class="landing-stage-caption"><span>THE ROOM</span><strong>is yours to shape.</strong></div>
-                    </div>
-                    <div class="landing-float float-focus"><i data-lucide="book-open"></i><span>Focus<br><strong>together</strong></span></div>
-                    <div class="landing-float float-care"><i data-lucide="sparkles"></i><span>Make the<br><strong>in-between easier</strong></span></div>
-                    <span class="landing-stage-line line-top" aria-hidden="true"></span><span class="landing-stage-line line-bottom" aria-hidden="true"></span>
+                    </article>
+                    <div class="landing-moderation-connector" aria-hidden="true"><span></span></div>
+                    <article class="landing-moderation-card landing-moderation-human">
+                        <div class="landing-moderation-card-heading"><i data-lucide="user-round-check" aria-hidden="true"></i><span>Human moderator</span></div>
+                        <p>Review the report. Consider the context.</p>
+                    </article>
                 </div>
-            </div>
-            <div class="landing-scroll-cue"><span>Scroll to find your footing</span><i data-lucide="arrow-down"></i></div>
-        </section>
+            </figure>
+        </div>
+    </section>
 
-        <section class="landing-principles" id="why-lockin">
-            <div class="landing-section-intro"><h2>School is hard enough.<br><em>The tools should be kind.</em></h2></div>
-            <div class="landing-principle-list">
-                <article><span>01</span><i data-lucide="layout-dashboard"></i><h3>Everything in one clear room</h3><p>Keep classes, deadlines, resources, questions, and group work close enough to be useful.</p></article>
-                <article><span>02</span><i data-lucide="users-round"></i><h3>Shared work without the performance</h3><p>Coordinate with peers without feeds designed to keep you scrolling or performing online.</p></article>
-                <article><span>03</span><i data-lucide="shield-check"></i><h3>Care you can feel</h3><p>Strict moderation, privacy-minded infrastructure, and a product organized around usefulness.</p></article>
-            </div>
-        </section>
+    <section class="landing-approach" id="about-lockin">
+        <div class="landing-approach-heading">
+            <h2 data-landing-reveal="left">Built for studying together, not scrolling forever.</h2>
+            <p data-landing-reveal="up">LockIn keeps the focus on schoolwork and the people doing it.</p>
+        </div>
+        <div class="landing-approach-list">
+            <article data-landing-reveal="right"><span>01</span><div><h3>No ads</h3><p>A study space without advertising competing for your attention.</p></div></article>
+            <article data-landing-reveal="left"><span>02</span><div><h3>Shared by design</h3><p>Work with classmates around the courses and projects you already share.</p></div></article>
+            <article data-landing-reveal="right"><span>03</span><div><h3>People-first moderation</h3><p>Shared spaces are moderated to help keep them useful and respectful.</p></div></article>
+        </div>
+    </section>
 
-        <section class="landing-start" id="start"><div class="landing-start-copy"><h2>Start with a clear desk.</h2><p>Create your account and make the everyday coordination around school a little less noisy.</p><div class="landing-start-actions"><a class="lui-button lui-button-primary" href="/signup">Create your account <i data-lucide="arrow-up-right"></i></a><a class="landing-action-link" href="/login">Already have a desk? Sign in <i data-lucide="arrow-right"></i></a></div><div class="landing-start-note"><i data-lucide="wifi-off"></i><span>Ad-free and school-Wi-Fi friendly.</span></div></div></section>
-        <footer class="landing-footer"><span>LockIn</span><span>Peer-powered, ad-free, and built for school networks.</span><span><a href="/about">About</a><a href="/support">Support</a><a href="/privacy">Privacy</a></span></footer>
+    <section class="landing-start" id="start">
+        <div class="landing-start-copy">
+            <h2 data-landing-reveal="left">Get the school stuff out of scattered tabs.</h2>
+            <p data-landing-reveal="up">Stop juggling Canvas, Google Drive, Quizlet, and other tools. Paste your stuff here and organize it all in one place with your teammates.</p>
+        </div>
+        <div class="landing-start-actions">
+            <a class="lui-button lui-button-primary" href="/signup" data-landing-reveal="pop">Create your account <i data-lucide="arrow-up-right" aria-hidden="true"></i></a>
+            <a class="landing-action-link" href="/login" data-landing-reveal="right">Sign in <i data-lucide="arrow-right" aria-hidden="true"></i></a>
+        </div>
+    </section>
+
+    <footer class="landing-footer">
+        <span data-landing-reveal="left">LockIn</span>
+        <span data-landing-reveal="up">Peer-powered, ad-free, and built for school networks.</span>
+        <nav aria-label="Footer navigation"><a href="/about" data-landing-reveal="right">About</a><a href="/support" data-landing-reveal="up">Support</a><a href="/privacy" data-landing-reveal="left">Privacy</a><a href="/terms" data-landing-reveal="pop">Terms</a></nav>
+    </footer>
 </main>

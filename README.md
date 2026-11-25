@@ -7,9 +7,11 @@ A student-first EJS collaboration workspace for course feeds, peer verification,
 ```bash
 npm install
 npm start
+# or choose a port
+npm start 3130
 ```
 
-Then open `http://localhost:3000`. On startup, the app creates the ignored `data/` directory, SQLite database, and missing runtime keys. The 32-byte `data/.task-encryption-key` encrypts personal task payloads at rest with AES-256-GCM; `data/.build-id-key` supports build ID decoding. Both keys are created with owner-only permissions. Keep the data volume persistent in production: losing either key makes its associated stored data or historical build IDs unreadable.
+Then open `http://localhost:3000`, or use the port you selected. Without an argument, the app uses `PORT` if set, otherwise port 3000. On startup, the app creates the ignored `data/` directory, SQLite database, and missing runtime keys. The 32-byte `data/.task-encryption-key` encrypts personal task payloads at rest with AES-256-GCM; `data/.build-id-key` supports build ID decoding. Both keys are created with owner-only permissions. Keep the data volume persistent in production: losing either key makes its associated stored data or historical build IDs unreadable.
 
 ## Task integrations
 

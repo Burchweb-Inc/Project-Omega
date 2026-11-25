@@ -32,7 +32,7 @@ app.use(pino);
 
 const taskSyncConfig = taskSyncConfiguration(config);
 const TODO_TASK_PAGE_SIZE = 10;
-const port = Number(process.env.PORT) || 3000;
+const port = require('./server/port')(process.argv[2], process.env.PORT);
 const host = process.env.HOST || '0.0.0.0';
 const serviceWorkerVersion = 'lockin-sw-20261113-3';
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');

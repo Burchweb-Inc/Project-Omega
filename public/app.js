@@ -1,3 +1,11 @@
+if (document.body?.dataset.userAuthenticated === 'true') {
+  try {
+    localStorage.setItem('lockin-signed-in-before', 'true');
+  } catch (error) {
+    console.warn('[LockIn] Could not save this device sign-in history.', error);
+  }
+}
+
 function bindCreateGroupForm() {
   const form = document.querySelector('[data-create-group-form]');
   if (!form) return;
